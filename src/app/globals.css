@@ -1,348 +1,99 @@
 @import "tailwindcss/base";
-@import "tailwindcss/components";
-@import "tailwindcss/utilities";
+
+/* ── Kiva design system — ported 1:1 from the HTML design (kiva/assets/kiva.css), same cascade order ── */
+@import "../tailwind/kiva/base.css";
+@import "../tailwind/kiva/buttons.css";
+@import "../tailwind/kiva/tags.css";
+@import "../tailwind/kiva/header.css";
+@import "../tailwind/kiva/drawers.css";
+@import "../tailwind/kiva/search.css";
+@import "../tailwind/kiva/sections.css";
+@import "../tailwind/kiva/productCard.css";
+@import "../tailwind/kiva/forms.css";
+@import "../tailwind/kiva/boxes.css";
+@import "../tailwind/kiva/tabs.css";
+@import "../tailwind/kiva/stepper.css";
+@import "../tailwind/kiva/toastModal.css";
+@import "../tailwind/kiva/messenger.css";
+@import "../tailwind/kiva/footer.css";
+@import "../tailwind/kiva/reveal.css";
+@import "../tailwind/kiva/pager.css";
+@import "../tailwind/kiva/responsive.css";
+@import "../tailwind/kiva/multiSelect.css";
+@import "../tailwind/kiva/range.css";
+
+/* ── kiva-fe additions (data images, error/loading blocks, …) ── */
 @import "../tailwind/components.css";
 
-/* ── Kiva Color System ── */
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
-:root {
-	/* Primary scale — brand purple (lilac at the light end) */
-	--primary-50: #f3eefa;
-	--primary-100: #e4d9f3;
-	--primary-200: #d6c8eb;
-	--primary-300: #c8b6e2;
-	--primary-400: #b9a3db;
-	--primary-500: #8a6cbf;
-	--primary-600: #5b3e8c;
-	--primary-700: #4a3173;
-	--primary-800: #3e2a63;
-	--primary-900: #2a1f3d;
-	--primary-950: #1c142b;
-
-	/* Secondary scale — cream / sand accent */
-	--secondary-50: #fbf8f4;
-	--secondary-100: #f5ede3;
-	--secondary-200: #ecdfcd;
-	--secondary-300: #d9c4a8;
-	--secondary-400: #cdaa6e;
-	--secondary-500: #b8925a;
-	--secondary-600: #9a7646;
-	--secondary-700: #7d5e3a;
-	--secondary-800: #6b5333;
-	--secondary-900: #4d3c26;
-	--secondary-950: #2e2416;
-
-	/* Slate scale — ink-tinted neutral */
-	--slate-50: #f8f7fa;
-	--slate-100: #f1eff4;
-	--slate-200: #eae9ec;
-	--slate-300: #d4d2d8;
-	--slate-400: #bfbcc5;
-	--slate-500: #8c8696;
-	--slate-600: #665e73;
-	--slate-700: #4a4157;
-	--slate-800: #352b47;
-	--slate-900: #2a1f3d;
-	--slate-950: #1a1326;
-
-	/* Floating site header metrics — pages that start under the header offset by --site-top */
-	--ann-h: 38px;
-	--nav-h: 68px;
-	--nav-gap: 12px;
-	--site-top: calc(var(--ann-h) + var(--nav-gap) + var(--nav-h));
-}
-
-@media (max-width: 1023.98px) {
-	:root {
-		--nav-h: 60px;
-		--nav-gap: 8px;
-	}
-}
-
-/* Light theme (default) */
-:root,
-[data-theme="light"] {
-	--background: #ffffff;
-	--surface: #ffffff;
-	--surface-muted: #f7f4fb;
-	--surface-raised: #efe9f7;
-	--border: #e3dcec;
-	--border-strong: #d4d2d8;
-	--text: #2a1f3d;
-	--text-muted: #665e73;
-	--text-subtle: #8c8696;
-	--heading: #2a1f3d;
-	--primary: #5b3e8c;
-	--primary-hover: #4a3173;
-	--primary-active: #3e2a63;
-	--primary-fg: #ffffff;
-	--primary-subtle: #f3eefa;
-	--accent: #c8b6e2;
-	--accent-hover: #b9a3db;
-	--accent-fg: #2a1f3d;
-	--accent-subtle: #f3eefa;
-	--ring: #5b3e8c;
-}
-
-/* Dark theme */
-[data-theme="dark"] {
-	--background: #130e1b;
-	--surface: #1b1526;
-	--surface-muted: #181222;
-	--surface-raised: #261f33;
-	--border: #2e2640;
-	--border-strong: #403553;
-	--text: #f3f0f7;
-	--text-muted: #c4bccf;
-	--text-subtle: #8a8197;
-	--heading: #f3eefa;
-	--primary: #b9a3db;
-	--primary-hover: #c8b6e2;
-	--primary-active: #d6c8eb;
-	--primary-fg: #1c142b;
-	--primary-subtle: #241c35;
-	--accent: #c8b6e2;
-	--accent-hover: #d6c8eb;
-	--accent-fg: #1c142b;
-	--accent-subtle: #2a2140;
-	--ring: #b9a3db;
-}
-
-@keyframes kivaStepIn {
-	from {
-		opacity: 0;
-		transform: translateY(0.75rem);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
-.kiva-step-in {
-	animation: kivaStepIn 0.45s cubic-bezier(0.2, 0.75, 0.2, 1);
-}
-
-body {
-	background: var(--background);
-	color: var(--text);
-	font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-	-webkit-font-smoothing: antialiased;
-}
-
-/* ── Yekan Bakh — the only typeface of the Kiva design system (weights 100–800) ── */
+/* ── Yekan Bakh — licensed "EN" cut; weights follow each file's real usWeightClass
+   (Bold 700, Heavy 900, Fat 1000) so the design's 600/800 resolve to Bold/Heavy.
+   01–07 `.woff2` files are not valid WOFF2 and their `.woff` siblings are plain TrueType —
+   only Fat ships a real woff2 ── */
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
 	font-weight: 100;
 	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 01 Hairline.eot");
 	src:
-		url("../../public/fonts/Yekan Bakh EN 01 Hairline.eot?#iefix") format("embedded-opentype"),
-		url("../../public/fonts/Yekan Bakh EN 01 Hairline.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 01 Hairline.woff") format("woff");
+		url("../../public/fonts/Yekan Bakh EN 01 Hairline.woff") format("truetype");
 }
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
 	font-weight: 200;
 	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 02 Thin.eot");
 	src:
-		url("../../public/fonts/Yekan Bakh EN 02 Thin.eot?#iefix") format("embedded-opentype"),
-		url("../../public/fonts/Yekan Bakh EN 02 Thin.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 02 Thin.woff") format("woff");
+		url("../../public/fonts/Yekan Bakh EN 02 Thin.woff") format("truetype");
 }
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
 	font-weight: 300;
 	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 03 Light.eot");
 	src:
-		url("../../public/fonts/Yekan Bakh EN 03 Light.eot?#iefix") format("embedded-opentype"),
-		url("../../public/fonts/Yekan Bakh EN 03 Light.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 03 Light.woff") format("woff");
+		url("../../public/fonts/Yekan Bakh EN 03 Light.woff") format("truetype");
 }
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
 	font-weight: 400;
 	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 04 Regular.eot");
 	src:
-		url("../../public/fonts/Yekan Bakh EN 04 Regular.eot?#iefix") format("embedded-opentype"),
-		url("../../public/fonts/Yekan Bakh EN 04 Regular.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 04 Regular.woff") format("woff");
+		url("../../public/fonts/Yekan Bakh EN 04 Regular.woff") format("truetype");
 }
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
 	font-weight: 500;
 	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 05 Medium.eot");
 	src:
-		url("../../public/fonts/Yekan Bakh EN 05 Medium.eot?#iefix") format("embedded-opentype"),
-		url("../../public/fonts/Yekan Bakh EN 05 Medium.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 05 Medium.woff") format("woff");
+		url("../../public/fonts/Yekan Bakh EN 05 Medium.woff") format("truetype");
 }
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
-	font-weight: 600;
+	font-weight: 600 700;
 	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 06 Bold.eot");
 	src:
-		url("../../public/fonts/Yekan Bakh EN 06 Bold.eot?#iefix") format("embedded-opentype"),
-		url("../../public/fonts/Yekan Bakh EN 06 Bold.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 06 Bold.woff") format("woff");
+		url("../../public/fonts/Yekan Bakh EN 06 Bold.woff") format("truetype");
 }
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
-	font-weight: 700;
+	font-weight: 800 900;
 	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 07 Heavy.eot");
 	src:
-		url("../../public/fonts/Yekan Bakh EN 07 Heavy.eot?#iefix") format("embedded-opentype"),
-		url("../../public/fonts/Yekan Bakh EN 07 Heavy.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 07 Heavy.woff") format("woff");
+		url("../../public/fonts/Yekan Bakh EN 07 Heavy.woff") format("truetype");
 }
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
-	font-weight: 800;
+	font-weight: 1000;
 	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 08 Fat.eot");
 	src:
-		url("../../public/fonts/Yekan Bakh EN 08 Fat.eot?#iefix") format("embedded-opentype"),
 		url("../../public/fonts/Yekan Bakh EN 08 Fat.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 08 Fat.woff") format("woff");
-}
-@font-face {
-	font-family: yekanBakh;
-	font-style: normal;
-	font-weight: normal;
-	font-display: swap;
-	src: url("../../public/fonts/Yekan Bakh EN 04 Regular.eot");
-	src:
-		url("../../public/fonts/Yekan Bakh EN 04 Regular.eot?#iefix") format("embedded-opentype"),
-		url("../../public/fonts/Yekan Bakh EN 04 Regular.woff2") format("woff2"),
-		url("../../public/fonts/Yekan Bakh EN 04 Regular.woff") format("woff");
-}
-
-* {
-	margin: 0px;
-	padding: 0px;
-	font-family: yekanBakh !important;
-	box-sizing: border-box;
-	direction: rtl;
-}
-
-body {
-	overflow-x: hidden;
-}
-
-.dir-ltr,
-.dir-ltr * {
-	direction: ltr !important;
-}
-.dir-rtl,
-.dir-rtl * {
-	direction: rtl !important;
-}
-
-html {
-	scroll-behavior: smooth;
-}
-
-::selection {
-	background: var(--accent);
-	color: var(--accent-fg);
-}
-
-:focus-visible {
-	outline: 2px solid var(--ring);
-	outline-offset: 3px;
-	border-radius: 6px;
-}
-
-/* ── Kiva signature accents ── */
-.text-gradient {
-	background-image: linear-gradient(to left, var(--primary-600), var(--primary-400));
-	-webkit-background-clip: text;
-	background-clip: text;
-	color: transparent;
-}
-[data-theme="dark"] .text-gradient {
-	background-image: linear-gradient(to left, var(--primary-300), var(--primary-500));
-}
-
-.bg-dots {
-	background-image: radial-gradient(color-mix(in srgb, var(--primary) 22%, transparent) 1px, transparent 1.2px);
-	background-size: 22px 22px;
-}
-
-.glass {
-	background-color: color-mix(in srgb, var(--surface) 86%, transparent);
-	backdrop-filter: saturate(1.6) blur(18px);
-	-webkit-backdrop-filter: saturate(1.6) blur(18px);
-}
-
-@keyframes kiva-float {
-	0%, 100% { transform: translateY(0); }
-	50% { transform: translateY(-14px); }
-}
-.animate-float { animation: kiva-float 6s ease-in-out infinite; }
-
-@media (prefers-reduced-motion: reduce) {
-	.animate-float { animation: none; }
-	.kiva-step-in { animation: none; }
-}
-
-/* ── Jalali date-picker (react-multi-date-picker) — theme integration ── */
-.kiva-datepicker .rmdp-container {
-	width: 100%;
-}
-.rmdp-wrapper,
-.rmdp-calendar-container-mobile .rmdp-wrapper {
-	background-color: var(--surface);
-	color: var(--text);
-	border: 1px solid var(--border);
-	box-shadow: 0 30px 70px -24px rgba(42, 31, 61, 0.32);
-}
-.rmdp-wrapper .rmdp-top-class,
-.rmdp-header,
-.rmdp-panel {
-	background-color: var(--surface);
-	color: var(--text);
-}
-.rmdp-day,
-.rmdp-week-day,
-.rmdp-header-values,
-.rmdp-arrow-container i {
-	color: var(--text);
-}
-.rmdp-day.rmdp-deactive,
-.rmdp-day.rmdp-disabled {
-	color: var(--text-subtle);
-}
-.rmdp-day.rmdp-selected span:not(.highlight) {
-	background-color: var(--primary) !important;
-	color: var(--primary-fg) !important;
-	box-shadow: none !important;
-}
-.rmdp-day:not(.rmdp-disabled):not(.rmdp-day-hidden) span:hover {
-	background-color: color-mix(in srgb, var(--primary) 18%, transparent) !important;
-	color: var(--text) !important;
-}
-.rmdp-arrow {
-	border-color: var(--text-subtle);
-}
-.rmdp-arrow-container:hover {
-	background-color: var(--primary);
-	box-shadow: none;
-}
-.rmdp-arrow-container:hover .rmdp-arrow {
-	border-color: var(--primary-fg);
+		url("../../public/fonts/Yekan Bakh EN 08 Fat.woff") format("truetype");
 }

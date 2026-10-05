@@ -1,0 +1,23 @@
+/* ── Kiva design system · Search overlay (ported 1:1 from kiva/assets/kiva.css) ── */
+.kv-search{position:fixed;inset:0 0 auto;z-index:130;background:rgba(255,255,255,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:0 0 var(--r-xl) var(--r-xl);box-shadow:var(--shadow-lg);transform:translateY(-105%);transition:transform .55s var(--ease);padding:26px 0 30px;max-height:88vh;overflow:auto}
+.kv-search.on{transform:none}
+.kv-search-bar{display:flex;align-items:center;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:10px}
+.kv-search-bar svg{width:26px;height:26px;flex:none}
+.kv-search-bar input{flex:1;border:0;outline:0;font:inherit;font-size:22px;font-weight:600;background:transparent;color:var(--ink);min-width:0}
+.kv-search-bar input::placeholder{color:var(--ink-30)}
+.kv-search-hint{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:18px;font-size:13px}
+.kv-search-hint b{font-weight:600;color:var(--ink-50);margin-inline-end:4px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:var(--pill);background:#fff;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);transition:background .2s,border-color .2s,color .2s}
+.chip:hover{border-color:var(--ink)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.chip .swatch-dot{width:14px;height:14px}
+.kv-search-res{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:22px}
+.sres{display:flex;gap:12px;align-items:center;padding:10px;border-radius:var(--r);transition:background .2s;animation:fadeUp .4s var(--ease) both}
+.sres:hover{background:var(--lilac-50)}
+.sres .th{width:62px;height:62px;border-radius:var(--r-sm);background:var(--lilac-50);padding:4px;flex:none}
+.sres:hover .th{background:#fff}
+.sres h5{font-size:14px;font-weight:700}
+.sres p{font-size:12.5px;color:var(--ink-50)}
+.sres mark{background:var(--tag);color:inherit;border-radius:4px;padding:0 2px}
+.sres > svg{width:18px;height:18px;flex:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}

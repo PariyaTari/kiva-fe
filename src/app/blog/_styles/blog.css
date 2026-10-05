@@ -1,0 +1,47 @@
+/* ── blog.html page styles (ported 1:1), scoped to .pg-blog so pages never leak into each other ── */
+.pg-blog {
+	.page-hero{padding-bottom:40px}
+	.b-tools{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:24px;flex-wrap:wrap}
+	.b-cats{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+	.b-cats .chip{background:#fff;white-space:nowrap}
+	.b-cats .chip.on{background:var(--ink);color:#fff}
+	.b-search{position:relative;width:min(300px,100%)}
+	.b-search .input{border-radius:var(--pill);padding-inline-start:44px;background:#fff;border-color:transparent}
+	.b-search svg{position:absolute;right:16px;top:15px;width:20px;height:20px;color:var(--ink-50)}
+	.feat-post{display:grid;grid-template-columns:1.2fr 1fr;gap:0;border-radius:var(--r-xl);overflow:hidden;background:var(--ink);color:#fff;margin-top:40px;transition:transform .4s var(--ease)}
+	.feat-post:hover{transform:translateY(-4px)}
+	.feat-post .cv{aspect-ratio:1.5;overflow:hidden}
+	.feat-post .cv svg{width:100%;height:100%;transition:transform .8s var(--ease)}
+	.feat-post:hover .cv svg{transform:scale(1.05)}
+	.feat-post .tx{padding:40px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+	.feat-post .tx .tag{align-self:flex-start;background:var(--lilac);border-color:var(--lilac);color:var(--ink)}
+	.feat-post h2{font-size:clamp(1.4rem,2.4vw,2rem);line-height:1.5}
+	.feat-post p{color:rgba(255,255,255,.7)}
+	.feat-post .meta{font-size:12.5px;color:rgba(255,255,255,.5);display:flex;gap:14px}
+	.feat-post .go{display:inline-flex;align-items:center;gap:6px;color:var(--lilac);font-weight:700;margin-top:6px}
+	.feat-post .go svg{width:18px;height:18px;transition:transform .3s}
+	.feat-post:hover .go svg{transform:translateX(-5px)}
+	.posts{display:grid;grid-template-columns:repeat(3,1fr);gap:28px 22px;margin-top:44px}
+	.post{display:flex;flex-direction:column;gap:12px;border:1px solid var(--border);border-radius:var(--r-lg);padding:8px 8px 18px;background:#fff;transition:border-color .3s,box-shadow .3s}
+	.post:hover{border-color:var(--tag-border);box-shadow:0 22px 44px -28px rgba(42,31,61,.4)}
+	.post > :not(.cv){padding:0 10px}
+	.post .cv{aspect-ratio:1.5;border-radius:16px;overflow:hidden;position:relative}
+	.post .cv svg{width:100%;height:100%;transition:transform .7s var(--ease)}
+	.post:hover .cv svg{transform:scale(1.04)}
+	.post .cv .tag{position:absolute;top:12px;right:12px}
+	.post .meta{display:flex;gap:12px;font-size:12px;color:var(--ink-50)}
+	.post .meta span{display:inline-flex;align-items:center;gap:4px}
+	.post .meta svg{width:14px;height:14px}
+	.post h3{font-size:17px;line-height:1.6;transition:color .2s}
+	.post:hover h3{color:var(--purple)}
+	.post p{font-size:13.5px;color:var(--ink-70);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+	.no-post{grid-column:1/-1;text-align:center;padding:40px;color:var(--ink-50)}
+	@media (max-width:1000px){
+		.posts{grid-template-columns:repeat(2,1fr)}
+		.feat-post{grid-template-columns:1fr}
+		.feat-post .tx{padding:26px}
+	}
+	@media (max-width:760px){
+		.posts{grid-template-columns:1fr}
+	}
+}

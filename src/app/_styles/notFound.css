@@ -1,0 +1,13 @@
+/* ── 404.html page styles (ported 1:1), scoped to .pg-404 so pages never leak into each other ── */
+.pg-404 {
+	.nf{min-height:92vh;display:grid;place-items:center;padding:calc(var(--top) + 30px) 0 40px;background:var(--lilac-50);border-radius:0 0 44px 44px;text-align:center;overflow:hidden}
+	.nf .big{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;font-size:clamp(6rem,18vw,12rem);font-weight:900;line-height:1;color:var(--purple)}
+	.nf .big .o{width:.85em;height:.85em;display:inline-block;transform-origin:50% 10%}
+	.nf h1{font-size:clamp(1.5rem,3vw,2.2rem);margin:18px 0 8px}
+	.nf p{color:var(--ink-70);max-width:440px;margin:0 auto 26px}
+	.nf .acts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+	.nf .links{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:28px}
+	.nf .links a{background:#fff}
+}
+
+@keyframes sway{50%{transform:rotate(8deg)}}

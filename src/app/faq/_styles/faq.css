@@ -1,0 +1,35 @@
+/* ── faq.html page styles (ported 1:1), scoped to .pg-faq so pages never leak into each other ── */
+.pg-faq {
+	.page-hero{text-align:center;padding-bottom:70px}
+	.page-hero .crumbs{justify-content:center}
+	.page-hero p{margin-inline:auto}
+	.f-search{position:relative;max-width:560px;margin:26px auto 0}
+	.f-search .input{height:60px;border-radius:var(--pill);padding-inline-start:56px;font-size:15.5px;border-color:transparent;box-shadow:var(--shadow)}
+	.f-search svg{position:absolute;right:22px;top:19px;width:22px;height:22px;color:var(--ink-50)}
+	.f-wrap{display:grid;grid-template-columns:260px 1fr;gap:40px;align-items:start;padding-top:50px}
+	.f-cats{position:sticky;top:var(--sticky);display:grid;gap:4px}
+	.f-cats a{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r);font-weight:600;font-size:14px;color:var(--ink-70);transition:all .2s}
+	.f-cats a svg{width:20px;height:20px}
+	.f-cats a:hover{background:var(--lilac-50)}
+	.f-cats a.on{background:var(--ink);color:#fff}
+	.f-cats .c{margin-inline-start:auto;font-size:11.5px;opacity:.6}
+	.f-group{margin-bottom:44px;scroll-margin-top:var(--sticky)}
+	.f-group h2{font-size:20px;display:flex;align-items:center;gap:10px;margin-bottom:6px}
+	.f-group h2 .gi{width:40px;height:40px;border-radius:12px;background:var(--lilac-50);color:var(--purple);display:grid;place-items:center}
+	.f-group h2 .gi svg{width:20px;height:20px}
+	.f-group.sig h2 .gi{background:var(--purple);color:#fff}
+	.acc-a mark{background:var(--tag);color:inherit;border-radius:4px;padding:0 2px}
+	.acc-q mark{background:var(--tag);color:inherit;border-radius:4px;padding:0 2px}
+	.none{display:none;text-align:center;padding:40px;color:var(--ink-50)}
+	.still{display:grid;grid-template-columns:auto 1fr auto;gap:22px;align-items:center;background:var(--lilac-50);border-radius:var(--r-xl);padding:30px 34px;margin-top:20px}
+	.still .art{width:96px}
+	.still h3{font-size:20px}
+	.still p{color:var(--ink-70);font-size:14px}
+	.still .msgs{display:flex;gap:8px;flex-wrap:wrap}
+	@media (max-width:900px){
+		.f-wrap{grid-template-columns:1fr}
+		.f-cats{position:static;grid-auto-flow:column;grid-auto-columns:max-content;overflow-x:auto;scrollbar-width:none}
+		.f-cats a{white-space:nowrap}
+		.still{grid-template-columns:1fr;text-align:center;justify-items:center}
+	}
+}

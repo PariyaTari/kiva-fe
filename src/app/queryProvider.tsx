@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { isRetryAble } from "@/httpClient/utils/isRetryAble";
 import { useNotificationStore } from "@/store/notification.store";
 import { ResultError } from "@/types/result";
 import { QueryMeta } from "@/types/react-query";
@@ -30,10 +29,8 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
 						staleTime: 0,
 						gcTime: 0,
 						refetchOnWindowFocus: false,
-						retry: (failureCount, error) => {
-							if (failureCount >= 1) return false;
-							return isRetryAble(error?.code);
-						},
+						// no automatic retries — retrying is manual, from the error block (data-fetching standard)
+						retry: false,
 					},
 					mutations: {
 						retry: 0,
@@ -45,7 +42,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			{children}
-			<ReactQueryDevtools initialIsOpen={false} />
+			<ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
 		</QueryClientProvider>
 	);
 }

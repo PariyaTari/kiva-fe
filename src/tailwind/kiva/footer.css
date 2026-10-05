@@ -1,0 +1,34 @@
+/* ── Kiva design system · Footer (ported 1:1 from kiva/assets/kiva.css) ── */
+.kv-news-wrap{position:relative;z-index:2;margin-top:90px;margin-bottom:-90px}
+.kv-news{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:28px;background:var(--cream);border:1px solid var(--cream-border);border-radius:var(--r-xl);padding:30px 36px;overflow:hidden;position:relative}
+.kv-news .art{width:110px;height:110px;flex:none}
+.kv-news h3{font-size:21px}
+.kv-news p{color:#6b5a48;font-size:14px;margin-top:4px}
+.kv-news form{display:flex;gap:8px;width:min(420px,100%)}
+.kv-news .input{background:#fff;border-color:var(--cream-border);border-radius:var(--pill);height:52px;padding:0 22px}
+.kv-news .btn{height:52px}
+.kv-footer{background:var(--ink);color:rgba(255,255,255,.72);border-radius:var(--r-xl) var(--r-xl) 0 0;padding:150px 0 0;font-size:14px}
+.kv-footer a{transition:color .2s}
+.kv-footer a:hover{color:#fff}
+.ft-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1.3fr;gap:40px;padding-bottom:44px}
+.ft-brand img{height:34px;width:auto;margin-bottom:18px}
+.ft-brand .slogan{font-size:19px;font-weight:800;color:#fff;margin-bottom:10px}
+.ft-brand p{line-height:2;font-size:13.5px;max-width:320px}
+.kv-footer h4{color:#fff;font-size:15px;margin-bottom:16px}
+.ft-links{display:grid;gap:10px;font-size:13.5px}
+.ft-contact{display:grid;gap:14px}
+.ft-contact a,.ft-contact div{display:flex;align-items:center;gap:12px}
+.ft-contact .ci{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.07);display:grid;place-items:center;flex:none;color:var(--lilac)}
+.ft-contact .ci svg{width:18px;height:18px}
+.ft-contact small{display:block;font-size:11.5px;color:rgba(255,255,255,.45)}
+.ft-contact b{color:#fff;font-weight:600;font-size:14px}
+.ft-social{display:flex;gap:10px;margin-top:22px}
+.ft-social a{width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.07);display:grid;place-items:center;transition:background .25s,transform .3s var(--ease-bounce)}
+.ft-social a:hover{background:var(--lilac);transform:translateY(-3px)}
+.ft-social a svg{width:24px;height:24px}
+.ft-trust{display:flex;gap:12px;margin-top:6px}
+.trust{width:92px;height:100px;border-radius:var(--r);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--ink);font-size:10.5px;font-weight:700;text-align:center;line-height:1.5;transition:transform .3s var(--ease)}
+.trust:hover{transform:translateY(-3px)}
+.trust svg{width:44px;height:44px}
+.ft-bottom{border-top:1px solid rgba(255,255,255,.08);padding:20px 0;display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12.5px;color:rgba(255,255,255,.45)}
+.ft-bottom .heart{color:var(--lilac)}

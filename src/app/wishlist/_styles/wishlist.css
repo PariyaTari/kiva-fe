@@ -1,0 +1,34 @@
+/* ── wishlist.html page styles (ported 1:1), scoped to .pg-wishlist so pages never leak into each other ── */
+.pg-wishlist {
+	.hero-row{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+	.hero-row .art{width:140px;flex:none;margin-bottom:-14px}
+	.w-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:36px 0 22px;flex-wrap:wrap}
+	.w-bar .cnt{color:var(--ink-50)}
+	.w-bar .cnt b{color:var(--ink);font-size:17px}
+	.w-bar .acts{display:flex;gap:8px}
+	.wcard{position:relative}
+	.wcard .rm{position:absolute;top:-8px;right:-8px;z-index:5;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;border:2px solid #fff;display:grid;place-items:center;cursor:pointer;opacity:0;transform:scale(.6);transition:all .3s var(--ease-bounce)}
+	.wcard:hover .rm{opacity:1;transform:none}
+	.wcard .rm svg{width:14px;height:14px}
+	.wcard.out{animation:wout .45s var(--ease) forwards}
+	.price-drop{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--success);margin-top:4px}
+	.price-drop svg{width:14px;height:14px}
+	.gate{text-align:center;padding:60px 20px;max-width:520px;margin:40px auto 0}
+	.gate .art{width:180px;margin:0 auto 12px}
+	.gate h2{font-size:24px;margin-bottom:8px}
+	.gate p{color:var(--ink-50);margin-bottom:22px}
+	.share-box{display:flex;align-items:center;gap:16px;margin-top:50px}
+	.share-box .ic{width:52px;height:52px;border-radius:16px;background:#fff;border:1px solid var(--cream-border);display:grid;place-items:center;color:#8a6a3f;flex:none}
+	.share-box .ic svg{width:24px;height:24px}
+	.share-box b{display:block}
+	.share-box p{font-size:13px;color:#6b5a48}
+	.share-box .btn{margin-inline-start:auto}
+	@media (max-width:760px){
+		.hero-row .art{display:none}
+		.wcard .rm{opacity:1;transform:none}
+		.share-box{flex-wrap:wrap}
+		.share-box .btn{margin:0;width:100%}
+	}
+}
+
+@keyframes wout{to{opacity:0;transform:scale(.85)}}

@@ -1,20 +1,15 @@
 import { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
 
-/** Mirrors the design-system buttons: `.btn-primary`, `.btn-dark`, `.btn-soft`, `.btn-outline`, `.btn-white`. */
-export type ButtonVariant =
-	| "primary"
-	| "dark"
-	| "soft"
-	| "outline"
-	| "white"
-	| "ghost"
-	| "danger";
+/** Design-system buttons: `.btn-primary`, `.btn-dark`, `.btn-outline`, `.btn-soft`, `.btn-white`, `.btn-ghost-light`, `.btn-link`. */
+export type ButtonVariant = "primary" | "dark" | "outline" | "soft" | "white" | "ghost-light" | "link";
 
+/** `md` is the base `.btn` (48px). */
 export type ButtonSize = "sm" | "md" | "lg";
 
 type ButtonBaseProps = {
 	variant?: ButtonVariant;
 	size?: ButtonSize;
+	/** `.btn.loading` — spinner instead of the label, clicks blocked. */
 	isLoading?: boolean;
 	fullWidth?: boolean;
 	iconStart?: ReactNode;

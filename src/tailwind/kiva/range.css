@@ -1,0 +1,14 @@
+/* ── Kiva design system · Dual range (ported 1:1 from kiva/assets/kiva.css) ── */
+.range{position:relative;height:30px;transform:scaleX(-1)}
+.range .rail,.range .fill{position:absolute;top:13px;height:4px;border-radius:4px}
+.range .rail{left:0;right:0;background:var(--tag)}
+.range .fill{background:var(--purple)}
+.range input{position:absolute;inset:0;width:100%;height:30px;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none;direction:ltr}
+.range input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:24px;height:24px;border-radius:50%;background:#fff;border:2px solid var(--purple);box-shadow:0 3px 10px rgba(91,62,140,.3);cursor:grab;transition:transform .2s}
+.range input::-webkit-slider-thumb:active{transform:scale(1.15);cursor:grabbing}
+.range input::-moz-range-thumb{pointer-events:auto;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--purple);box-shadow:0 3px 10px rgba(91,62,140,.3);cursor:grab}
+.range input::-webkit-slider-runnable-track{background:none}
+.range input::-moz-range-track{background:none}
+
+/* hide the cart-drawer count tag while the cart is empty */
+#kvCartCount:empty{display:none}

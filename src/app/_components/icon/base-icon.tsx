@@ -1,25 +1,16 @@
-"use client";
-
 import { svgIcon } from "./icon.types";
 
-export const BaseIcon: React.FC<svgIcon> = ({
-	color = "currentColor",
-	width = 24,
-	height = 24,
-	strokeWidth = "1.7",
-	viewBox = "0 0 24 24",
-	children,
-	...rest
-}) => {
+/**
+ * The SVG shell every line icon shares — same attributes as the design's `icon()` helper.
+ * No width/height on purpose: the design CSS sizes icons by context (`.btn svg{width:18px}` …).
+ */
+export const BaseIcon: React.FC<svgIcon> = ({ children, ...rest }) => {
 	return (
 		<svg
-			xmlns="http://www.w3.org/2000/svg"
+			viewBox="0 0 24 24"
 			fill="none"
-			stroke={color}
-			width={width}
-			height={height}
-			strokeWidth={strokeWidth}
-			viewBox={viewBox}
+			stroke="currentColor"
+			strokeWidth="1.7"
 			strokeLinecap="round"
 			strokeLinejoin="round"
 			aria-hidden="true"

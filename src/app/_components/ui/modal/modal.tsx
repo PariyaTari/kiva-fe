@@ -1,75 +1,55 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { IconClose } from "@/app/_components/icon/icons";
+import { ReactNode, useEffect, useState } from "react";
+import { Icon } from "@/app/_components/icon/icons";
 
 type ModalProps = {
 	open: boolean;
 	onClose: () => void;
-	title?: string;
 	children: ReactNode;
+	/** Box width in px (`width:min(Wpx,100%)`); the design default is 520. */
 	width?: number;
 };
 
-export default function Modal({ open, onClose, title, children, width = 520 }: ModalProps) {
+/** Exit transition length of `.modal-box` in the design. */
+const LEAVE_MS = 400;
+
+/** Design-system `.modal` — mounted on open, `.on` toggled a frame later so the CSS transition runs. */
+export default function Modal({ open, onClose, children, width }: ModalProps) {
+	const [mounted, setMounted] = useState(open);
+	const [entered, setEntered] = useState(false);
+
+	// sync during render: mount as soon as it opens, drop the "entered" flag as soon as it closes
+	if (open && !mounted) setMounted(true);
+	if (!open && entered) setEntered(false);
+
+	useEffect(() => {
+		if (open) {
+			const frame = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
+			return () => cancelAnimationFrame(frame);
+		}
+		const timer = setTimeout(() => setMounted(false), LEAVE_MS);
+		return () => clearTimeout(timer);
+	}, [open]);
+
 	useEffect(() => {
 		if (!open) return;
 		const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
 		document.addEventListener("keydown", onKey);
-		document.body.style.overflow = "hidden";
-		return () => {
-			document.removeEventListener("keydown", onKey);
-			document.body.style.overflow = "";
-		};
+		return () => document.removeEventListener("keydown", onKey);
 	}, [open, onClose]);
 
+	if (!mounted) return null;
+
 	return (
-		<AnimatePresence>
-			{open && (
-				<div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-					<motion.div
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0 }}
-						onClick={onClose}
-						className="absolute inset-0 bg-primary-900/40 backdrop-blur-[6px]"
-					/>
-					<motion.div
-						role="dialog"
-						aria-modal="true"
-						aria-label={title}
-						initial={{ opacity: 0, scale: 0.97, y: 24 }}
-						animate={{ opacity: 1, scale: 1, y: 0 }}
-						exit={{ opacity: 0, scale: 0.97, y: 24 }}
-						transition={{ duration: 0.45, ease: [0.2, 0.75, 0.2, 1] }}
-						style={{ maxWidth: width }}
-						className="kiva-scroll relative z-10 max-h-[calc(100vh-32px)] w-full overflow-auto rounded-3xl border border-theme-border bg-surface shadow-kiva-lg"
-					>
-						{title ? (
-							<div className="flex items-center justify-between gap-4 border-b border-theme-border px-6 py-4 sm:px-7">
-								<h3 className="text-[19px] font-bold text-theme-heading">{title}</h3>
-								<button
-									onClick={onClose}
-									aria-label="بستن"
-									className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full text-theme-text transition-colors hover:bg-surface-muted"
-								>
-									<IconClose width={22} height={22} />
-								</button>
-							</div>
-						) : (
-							<button
-								onClick={onClose}
-								aria-label="بستن"
-								className="absolute left-3.5 top-3.5 grid h-[42px] w-[42px] place-items-center rounded-full text-theme-text transition-colors hover:bg-surface-muted"
-							>
-								<IconClose width={22} height={22} />
-							</button>
-						)}
-						<div className="p-6 sm:p-7">{children}</div>
-					</motion.div>
-				</div>
-			)}
-		</AnimatePresence>
+		<div className={open && entered ? "modal on" : "modal"}>
+			<div className="modal-bg" onClick={onClose} />
+			<div className="modal-box" role="dialog" aria-modal="true" style={width ? { width: `min(${width}px,100%)` } : undefined}>
+				<button type="button" className="icon-btn modal-x" onClick={onClose} aria-label="بستن">
+					<Icon name="close" />
+				</button>
+				{children}
+			</div>
+		</div>
 	);
 }

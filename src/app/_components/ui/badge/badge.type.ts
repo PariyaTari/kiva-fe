@@ -1,22 +1,12 @@
 import { HTMLAttributes, ReactNode } from "react";
-
-/** The design-system tag tones — the backend `Tone` enum, lower-cased (`SALE` → `"sale"`). */
-export type BadgeTone =
-	| "default"
-	| "sale"
-	| "warn"
-	| "success"
-	| "cream"
-	| "dark"
-	| "glass"
-	| "danger";
+import { Tone } from "@/types/catalog.type";
 
 export type BadgeSize = "md" | "lg";
 
 export type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
-	tone?: BadgeTone;
+	/** The API `Tone` (`SALE`, `WARN`, …) — maps to `.tag-sale`, `.tag-warn`, …; `DEFAULT` is the plain `.tag`. */
+	tone?: Tone;
 	size?: BadgeSize;
-	dot?: boolean;
 	iconStart?: ReactNode;
 	children?: ReactNode;
 };

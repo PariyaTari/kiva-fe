@@ -1,35 +1,12 @@
-import classNames from "classnames";
 import { LogoProps } from "./logo.type";
 
-/** "kiva" wordmark outline (public/images/logo/kiva-logo-*.svg), drawn with `currentColor`. */
-const WORDMARK_PATH =
-	"M14.5,12.5 L14.5,95.5 Q14.5,97.364 13.182,98.682 Q11.864,100 10,100 Q8.136,100 6.818,98.682 Q5.5,97.364 5.5,95.5 L5.5,12.5 Q5.5,10.636 6.818,9.318 Q8.136,8 10,8 Q11.864,8 13.182,9.318 Q14.5,10.636 14.5,12.5 Z M52.496,48.244 Q38.007,57.903 25.908,71.938 Q24.691,73.35 22.832,73.488 Q20.974,73.625 19.562,72.408 Q18.15,71.191 18.012,69.332 Q17.875,67.474 19.092,66.062 Q31.993,51.097 47.504,40.756 Q49.055,39.722 50.883,40.087 Q52.71,40.453 53.744,42.004 Q54.778,43.555 54.413,45.383 Q54.047,47.21 52.496,48.244 Z M36.175,55.014 Q50.139,69.831 55.401,94.564 Q55.789,96.387 54.775,97.95 Q53.76,99.514 51.936,99.901 Q50.113,100.289 48.55,99.274 Q46.986,98.26 46.599,96.436 Q41.861,74.169 29.625,61.186 Q28.347,59.83 28.402,57.967 Q28.457,56.104 29.814,54.825 Q31.17,53.547 33.033,53.602 Q34.896,53.657 36.175,55.014 Z M84.5,44.5 L84.5,95.5 Q84.5,97.364 83.182,98.682 Q81.864,100 80,100 Q78.136,100 76.818,98.682 Q75.5,97.364 75.5,95.5 L75.5,44.5 Q75.5,42.636 76.818,41.318 Q78.136,40 80,40 Q81.864,40 83.182,41.318 Q84.5,42.636 84.5,44.5 Z M108.184,42.845 L126.11,88.156 Q127.127,90.16 128,91.126 Q128.873,90.159 129.89,88.156 L147.816,42.845 Q148.501,41.111 150.212,40.371 Q151.922,39.63 153.655,40.316 Q155.389,41.001 156.129,42.712 Q156.87,44.422 156.184,46.155 L138.184,91.655 Q138.112,91.837 138.025,92.012 Q133.781,100.5 128,100.5 Q122.219,100.5 117.975,92.012 Q117.888,91.837 117.816,91.655 L99.816,46.155 Q99.13,44.422 99.871,42.712 Q100.611,41.001 102.345,40.316 Q104.078,39.63 105.788,40.371 Q107.499,41.111 108.184,42.845 Z M226,70 Q226,83.255 216.627,92.627 Q207.255,102 194,102 Q180.745,102 171.373,92.627 Q162,83.255 162,70 Q162,56.745 171.373,47.373 Q180.745,38 194,38 Q207.255,38 216.627,47.373 Q226,56.745 226,70 Z M217,70 Q217,60.473 210.263,53.737 Q203.527,47 194,47 Q184.473,47 177.737,53.737 Q171,60.473 171,70 Q171,79.527 177.737,86.263 Q184.473,93 194,93 Q203.527,93 210.263,86.263 Q217,79.527 217,70 Z M226,44.5 L226,95.5 Q226,97.364 224.682,98.682 Q223.364,100 221.5,100 Q219.636,100 218.318,98.682 Q217,97.364 217,95.5 L217,44.5 Q217,42.636 218.318,41.318 Q219.636,40 221.5,40 Q223.364,40 224.682,41.318 Q226,42.636 226,44.5 Z";
+const SRC = {
+	primary: "/images/logo/kiva-logo-primary.svg",
+	white: "/images/logo/kiva-logo-white.svg",
+};
 
-/** The "k" glyph of the square app mark (src/app/icon.svg). */
-const MARK_PATH =
-	"M14.5,12.5 L14.5,95.5 Q14.5,100 10,100 Q5.5,100 5.5,95.5 L5.5,12.5 Q5.5,8 10,8 Q14.5,8 14.5,12.5 Z M52.496,48.244 Q38.007,57.903 25.908,71.938 Q22.9,75.4 19.562,72.408 Q16.2,69.4 19.092,66.062 Q31.993,51.097 47.504,40.756 Q51.3,38.3 53.744,42.004 Q56.2,45.8 52.496,48.244 Z M36.175,55.014 Q50.139,69.831 55.401,94.564 Q56.3,99 51.936,99.901 Q47.5,100.8 46.599,96.436 Q41.861,74.169 29.625,61.186 Q26.6,57.9 29.814,54.825 Q33.1,51.8 36.175,55.014 Z";
-
-export default function Logo({ withWordmark = true, tone = "brand", className = "", markClassName = "" }: LogoProps) {
-	if (!withWordmark) {
-		return (
-			<span className={classNames("inline-flex shrink-0", className)}>
-				<svg viewBox="0 0 64 64" role="img" aria-label="کیوا" className={markClassName || "h-10 w-10"}>
-					<rect width="64" height="64" rx="16" className="fill-primary-600" />
-					<g transform="translate(14 8) scale(.52)">
-						<path fill="#ffffff" d={MARK_PATH} />
-					</g>
-					<circle cx="47" cy="22" r="4.5" className="fill-secondary-300" />
-				</svg>
-			</span>
-		);
-	}
-
-	return (
-		<span className={classNames("inline-flex shrink-0", tone === "white" ? "text-white" : "text-brand", className)}>
-			<svg viewBox="5.5 8 220.5 94" role="img" aria-label="کیوا" className={classNames("w-auto", markClassName || "h-7")}>
-				<path fill="currentColor" fillRule="nonzero" d={WORDMARK_PATH} />
-				<circle cx="80" cy="24" r="5.94" className="fill-secondary-300" />
-			</svg>
-		</span>
-	);
+/** The «kiva» wordmark as the design uses it (`<img>`); its height comes from the surrounding CSS. */
+export default function Logo({ tone = "primary", className, style }: LogoProps) {
+	// eslint-disable-next-line @next/next/no-img-element -- static brand SVG, sized by the design CSS
+	return <img src={SRC[tone]} alt="کیوا" className={className} style={style} />;
 }

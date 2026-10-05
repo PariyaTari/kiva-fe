@@ -6,11 +6,12 @@ export type SelectOption = {
 };
 
 export type SelectProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, "size"> & {
-	label?: string;
-	error?: string;
-	hint?: string;
-	isRequired?: boolean;
-	iconStart?: ReactNode;
+	label?: ReactNode;
+	labelNote?: string;
+	error?: string | false | null;
+	hint?: ReactNode;
+	/** First empty option («انتخاب استان»). */
 	placeholder?: string;
 	options: SelectOption[];
+	wrapperClassName?: string;
 };

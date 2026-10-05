@@ -1,0 +1,63 @@
+/* ── login.html page styles (ported 1:1), scoped to .pg-login so pages never leak into each other ── */
+.pg-login {
+	.auth{min-height:100vh;padding:calc(var(--top) + 40px) 0 80px;background:var(--lilac-50)}
+	.auth-grid{display:grid;grid-template-columns:1fr 470px;gap:40px;align-items:center}
+	.auth-art{position:relative;min-height:520px}
+	.auth-art h2{font-size:clamp(1.8rem,3.4vw,2.7rem);line-height:1.45;margin-bottom:14px}
+	.auth-art h2 em{font-style:normal;color:var(--purple)}
+	.auth-art > p{color:var(--ink-70);max-width:440px}
+	.benefits{display:grid;gap:12px;margin-top:28px;max-width:420px}
+	.benefit{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 18px}
+	.benefit .bi{width:44px;height:44px;border-radius:14px;background:var(--lilac-50);color:var(--purple);display:grid;place-items:center;flex:none}
+	.benefit .bi svg{width:22px;height:22px}
+	.benefit b{display:block;font-size:14px}
+	.benefit span{font-size:12.5px;color:var(--ink-50)}
+	.art-bags{position:absolute;left:0;bottom:-30px;width:250px;pointer-events:none}
+	.art-bags .float{animation-duration:7s}
+	.auth-card{background:#fff;border-radius:var(--r-xl);border:1px solid var(--border);box-shadow:var(--shadow-lg);padding:38px 36px;position:relative;overflow:hidden}
+	.auth-card .logo{height:30px;margin-bottom:26px}
+	.astep{display:none}
+	.astep.on{display:block;animation:fadeUp .5s var(--ease)}
+	.astep h1{font-size:23px;margin-bottom:6px}
+	.astep > p{color:var(--ink-50);font-size:14px;margin-bottom:24px}
+	.phone-in{position:relative}
+	.phone-in .input{height:60px;font-size:20px;font-weight:700;letter-spacing:.08em;padding-inline-start:20px;padding-inline-end:70px;direction:ltr;text-align:left;border-radius:var(--r)}
+	.phone-in .pre{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;color:var(--ink-50);font-size:13px;font-weight:600}
+	.phone-in .pre svg{width:20px;height:20px}
+	.otp{display:flex;gap:10px;justify-content:center;direction:ltr;margin:6px 0 16px}
+	.otp input{width:58px;height:66px;border-radius:var(--r);border:1.5px solid var(--line-2);text-align:center;font:inherit;font-size:26px;font-weight:800;color:var(--ink);transition:border-color .2s,box-shadow .2s,transform .2s;background:#fff}
+	.otp input:focus{outline:0;border-color:var(--purple);box-shadow:0 0 0 4px rgba(91,62,140,.12);transform:translateY(-2px)}
+	.otp input.filled{border-color:var(--tag-border);background:var(--lilac-50)}
+	.otp.err input{border-color:var(--danger);animation:otpShake .4s}
+	.otp.ok input{border-color:var(--success);background:var(--success-bg)}
+	.sent-to{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--lilac-50);border-radius:var(--r);padding:10px 14px;margin-bottom:22px;font-size:13.5px}
+	.sent-to b{direction:ltr;font-size:15px;letter-spacing:.04em}
+	.sent-to button{background:none;border:0;color:var(--purple);font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:13px}
+	.sent-to button svg{width:15px;height:15px}
+	.timer{display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--ink-50);margin-bottom:18px}
+	.timer .ring{width:26px;height:26px}
+	.timer .ring circle{transition:stroke-dashoffset 1s linear}
+	.timer button{background:none;border:0;color:var(--purple);font-weight:700;cursor:pointer;font-size:13.5px}
+	.terms{font-size:12px;color:var(--ink-50);text-align:center;margin-top:18px}
+	.terms a{color:var(--purple)}
+	.adone{text-align:center;padding:20px 0}
+	.adone .ck{width:86px;height:86px;border-radius:50%;background:var(--success-bg);color:var(--success);display:grid;place-items:center;margin:0 auto 16px;animation:pop2 .6s var(--ease-bounce)}
+	.adone .ck svg{width:42px;height:42px;stroke-dasharray:30;stroke-dashoffset:30;animation:draw .6s .3s forwards}
+	.demo{font-size:11.5px;color:var(--ink-50);text-align:center;margin-top:10px}
+	@media (max-width:960px){
+		.auth-grid{grid-template-columns:1fr}
+		.auth-art{min-height:0;text-align:center}
+		.auth-art > p,.benefits{margin-inline:auto}
+		.art-bags,.benefits{display:none}
+		.auth{background:var(--lilac-50)}
+	}
+	@media (max-width:760px){
+		.auth-card{padding:28px 20px}
+		.otp{gap:7px}
+		.otp input{width:50px;height:58px;font-size:22px}
+	}
+}
+
+@keyframes otpShake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@keyframes pop2{from{transform:scale(0)}}
+@keyframes draw{to{stroke-dashoffset:0}}

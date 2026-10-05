@@ -1,124 +1,74 @@
 "use client";
 
-import { ComponentType, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
+import { useQuery } from "@tanstack/react-query";
 import Logo from "@/app/_components/common/logo/logo";
-import { svgIcon } from "@/app/_components/icon/icon.types";
-import { isNavActive, MAIN_NAV, MOBILE_EXTRA_NAV } from "@/app/_components/site/nav";
-import { MessengerKey, SOCIAL_LINKS } from "@/config/site";
-import {
-	IconBale,
-	IconChevronLeft,
-	IconClose,
-	IconInstagram,
-	IconRubika,
-	IconTelegram,
-} from "@/app/_components/icon/icons";
+import { Icon } from "@/app/_components/icon/icons";
+import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
+import { CategoryIcon } from "@/app/_components/site/megaMenu/megaMenu";
+import { MAIN_NAV, MOBILE_EXTRA_NAV } from "@/app/_components/site/nav";
+import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
+import { useUiStore } from "@/store/ui.store";
+import { SocialLink } from "@/types/siteConfig.type";
+import { withMappedError } from "@/utils/withMappedError";
 
-const SOCIAL_ICONS: Record<MessengerKey, ComponentType<svgIcon>> = {
-	rubika: IconRubika,
-	bale: IconBale,
-	telegram: IconTelegram,
-	instagram: IconInstagram,
-};
+/** `#kvMenu` — the right drawer below 900px: search, category circles, every link, messengers. */
+export default function MobileMenu({ social }: { social: SocialLink[] }) {
+	const panel = useUiStore((s) => s.panel);
+	const open = useUiStore((s) => s.open);
+	const closeAll = useUiStore((s) => s.closeAll);
 
-type MobileMenuProps = {
-	open: boolean;
-	onClose: () => void;
-};
-
-/** Below `lg` the main menu and the header shortcuts move into this right-hand drawer. */
-export default function MobileMenu({ open, onClose }: MobileMenuProps) {
-	const pathname = usePathname();
-
-	useEffect(() => {
-		if (!open) return;
-		const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-		document.addEventListener("keydown", onKey);
-		return () => document.removeEventListener("keydown", onKey);
-	}, [open, onClose]);
+	const categories = useQuery({
+		queryKey: ["site", "categories"],
+		queryFn: () => withMappedError(() => SiteEndpoints.listCategories()),
+	});
 
 	return (
-		<AnimatePresence>
-			{open && (
-				<>
-					<motion.div
-						key="overlay"
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0 }}
-						onClick={onClose}
-						className="fixed inset-0 z-[110] bg-primary-900/30 backdrop-blur-sm lg:hidden"
-					/>
-					<motion.aside
-						key="drawer"
-						aria-label="منو"
-						initial={{ x: "105%" }}
-						animate={{ x: 0 }}
-						exit={{ x: "105%" }}
-						transition={{ duration: 0.5, ease: [0.2, 0.75, 0.2, 1] }}
-						className="fixed inset-y-0 right-0 z-[120] flex w-[min(420px,92vw)] flex-col rounded-l-3xl bg-surface shadow-kiva-lg lg:hidden"
-					>
-						<div className="flex items-center justify-between border-b border-theme-border px-[22px] py-5">
-							<Link href="/" onClick={onClose} aria-label="کیوا - صفحه اصلی">
-								<Logo markClassName="h-[26px]" />
-							</Link>
-							<button
-								onClick={onClose}
-								aria-label="بستن منو"
-								className="grid h-[42px] w-[42px] place-items-center rounded-full text-theme-text transition-colors hover:bg-surface-raised"
-							>
-								<IconClose width={22} height={22} />
-							</button>
-						</div>
-
-						<nav aria-label="منوی موبایل" className="kiva-scroll flex-1 overflow-y-auto px-[22px] py-3">
-							{[...MAIN_NAV, ...MOBILE_EXTRA_NAV].map((item) => {
-								const active = isNavActive(pathname, item.href);
-								const Icon = item.icon;
-								return (
-									<Link
-										key={item.href}
-										href={item.href}
-										onClick={onClose}
-										aria-current={active ? "page" : undefined}
-										className={classNames(
-											"flex items-center gap-3 border-b border-theme-border px-1 py-3.5 text-base font-semibold transition-colors",
-											active ? "text-brand" : "text-theme-text hover:text-brand",
-										)}
-									>
-										{Icon && <Icon width={20} height={20} className="shrink-0 text-theme-text-subtle" />}
-										<span className="flex-1">{item.label}</span>
-										<IconChevronLeft width={18} height={18} className="shrink-0 text-theme-text-subtle" />
-									</Link>
-								);
-							})}
-						</nav>
-
-						<div className="flex justify-center gap-2 border-t border-theme-border px-[22px] py-[18px]">
-							{SOCIAL_LINKS.map((social) => {
-								const Icon = SOCIAL_ICONS[social.key];
-								return (
-									<a
-										key={social.key}
-										href={social.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										aria-label={social.label}
-										title={social.label}
-										className="grid h-[46px] w-[46px] place-items-center rounded-full text-theme-text transition-colors hover:bg-surface-raised hover:text-brand"
-									>
-										<Icon width={26} height={26} />
-									</a>
-								);
-							})}
-						</div>
-					</motion.aside>
-				</>
-			)}
-		</AnimatePresence>
+		<aside className={classNames("drawer right", { on: panel === "menu" })} id="kvMenu" aria-label="منو" aria-hidden={panel !== "menu"}>
+			<div className="drawer-head">
+				<Logo style={{ height: 26 }} />
+				<button type="button" className="icon-btn" aria-label="بستن" onClick={closeAll}>
+					<Icon name="close" />
+				</button>
+			</div>
+			<div className="drawer-body">
+				<button
+					type="button"
+					className="input"
+					onClick={() => open("search")}
+					style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-50)", cursor: "pointer", textAlign: "right" }}
+				>
+					<Icon name="search" /> جستجوی کیف، رنگ، دسته‌بندی…
+				</button>
+				<div className="m-cats">
+					{categories.data?.map((c) => (
+						<Link key={c.slug} href={`/products?category=${c.slug}`} onClick={closeAll}>
+							<span className="ic">
+								<CategoryIcon category={c} />
+							</span>
+							{c.name}
+						</Link>
+					))}
+				</div>
+				<nav className="m-nav">
+					{[...MAIN_NAV, ...MOBILE_EXTRA_NAV].map((item) => (
+						<Link key={item.href} href={item.href} onClick={closeAll}>
+							{item.label}
+							<Icon name="left" />
+						</Link>
+					))}
+				</nav>
+			</div>
+			<div className="drawer-foot">
+				<div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+					{social.map((s) => (
+						<a key={s.channel} className="icon-btn" href={s.url} target="_blank" rel="noopener" aria-label={s.name} style={{ width: 46, height: 46 }}>
+							<MessengerIcon channel={s.channel} />
+						</a>
+					))}
+				</div>
+			</div>
+		</aside>
 	);
 }
