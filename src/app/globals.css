@@ -30,14 +30,14 @@
 
 /* ── Yekan Bakh — licensed "EN" cut; weights follow each file's real usWeightClass
    (Bold 700, Heavy 900, Fat 1000) so the design's 600/800 resolve to Bold/Heavy.
-   01–07 `.woff2` files are not valid WOFF2 and their `.woff` siblings are plain TrueType —
-   only Fat ships a real woff2 ── */
+   Every weight ships a real `.woff2`; the `.woff` siblings are plain TrueType, kept as fallback ── */
 @font-face {
 	font-family: yekanBakh;
 	font-style: normal;
 	font-weight: 100;
 	font-display: swap;
 	src:
+		url("../../public/fonts/Yekan Bakh EN 01 Hairline.woff2") format("woff2"),
 		url("../../public/fonts/Yekan Bakh EN 01 Hairline.woff") format("truetype");
 }
 @font-face {
@@ -46,6 +46,7 @@
 	font-weight: 200;
 	font-display: swap;
 	src:
+		url("../../public/fonts/Yekan Bakh EN 02 Thin.woff2") format("woff2"),
 		url("../../public/fonts/Yekan Bakh EN 02 Thin.woff") format("truetype");
 }
 @font-face {
@@ -54,6 +55,7 @@
 	font-weight: 300;
 	font-display: swap;
 	src:
+		url("../../public/fonts/Yekan Bakh EN 03 Light.woff2") format("woff2"),
 		url("../../public/fonts/Yekan Bakh EN 03 Light.woff") format("truetype");
 }
 @font-face {
@@ -62,6 +64,7 @@
 	font-weight: 400;
 	font-display: swap;
 	src:
+		url("../../public/fonts/Yekan Bakh EN 04 Regular.woff2") format("woff2"),
 		url("../../public/fonts/Yekan Bakh EN 04 Regular.woff") format("truetype");
 }
 @font-face {
@@ -70,6 +73,7 @@
 	font-weight: 500;
 	font-display: swap;
 	src:
+		url("../../public/fonts/Yekan Bakh EN 05 Medium.woff2") format("woff2"),
 		url("../../public/fonts/Yekan Bakh EN 05 Medium.woff") format("truetype");
 }
 @font-face {
@@ -78,6 +82,7 @@
 	font-weight: 600 700;
 	font-display: swap;
 	src:
+		url("../../public/fonts/Yekan Bakh EN 06 Bold.woff2") format("woff2"),
 		url("../../public/fonts/Yekan Bakh EN 06 Bold.woff") format("truetype");
 }
 @font-face {
@@ -86,6 +91,7 @@
 	font-weight: 800 900;
 	font-display: swap;
 	src:
+		url("../../public/fonts/Yekan Bakh EN 07 Heavy.woff2") format("woff2"),
 		url("../../public/fonts/Yekan Bakh EN 07 Heavy.woff") format("truetype");
 }
 @font-face {

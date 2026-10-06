@@ -19,6 +19,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5500", "--directory", "D:\\pariya\\kiva"],
       "port": 5500
+    },
+    {
+      "name": "kiva-actions-design",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5600", "--directory", "D:\\pariya"],
+      "port": 5600
     }
   ]
 }
