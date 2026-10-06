@@ -7,6 +7,9 @@ import { FALLBACK_CONFIG, SUPPORT_HOURS_SUMMARY } from "@/config/site";
 import { SiteConfig, TrustBadge } from "@/types/siteConfig.type";
 import { formatDate } from "@/utils/format";
 
+/** Jalali year of the copyright line — read once per load, not on every render. */
+const YEAR = formatDate(Date.now(), { year: "numeric" });
+
 function TrustArt({ type }: { type: TrustBadge["type"] }) {
 	return type === "SAMANDEHI" ? (
 		<svg viewBox="0 0 48 48" aria-hidden="true">
@@ -117,7 +120,7 @@ export default function Footer({ config }: { config: SiteConfig }) {
 					<div className="ft-bottom">
 						{/* static pages render the year at build time; the client may be past Nowruz */}
 						<span suppressHydrationWarning>
-							© {formatDate(Date.now(), { year: "numeric" })} {brand.name} — تمامی حقوق محفوظ است.
+							© {YEAR} {brand.name} — تمامی حقوق محفوظ است.
 						</span>
 						<span>{brand.slogan.replace(/\.$/, "")}</span>
 					</div>

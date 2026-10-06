@@ -1,6 +1,6 @@
 import { httpClient } from "@/httpClient/HttpClient";
 import { ColorKey } from "@/types/catalog.type";
-import { Wishlist, WishlistAddToCartResponse, WishlistIds, WishlistShare, WishlistToggleResponse } from "../_types/wishlist.type";
+import { SharedWishlist, Wishlist, WishlistAddToCartResponse, WishlistIds, WishlistShare, WishlistToggleResponse } from "../_types/wishlist.type";
 
 /** Pure request functions — no React Query concepts live here (see data-fetching standard). All need a signed-in user. */
 export const WishlistEndpoints = {
@@ -37,6 +37,12 @@ export const WishlistEndpoints = {
 
 	share: async () => {
 		const res = await httpClient.call<WishlistShare>({ method: "POST", url: "me/wishlist/share" });
+		return res.data;
+	},
+
+	/** Public — the page behind a shared link (`/wishlist/shared/{token}`). */
+	getShared: async (token: string) => {
+		const res = await httpClient.call<SharedWishlist>({ method: "GET", url: `wishlists/shared/${encodeURIComponent(token)}` });
 		return res.data;
 	},
 };

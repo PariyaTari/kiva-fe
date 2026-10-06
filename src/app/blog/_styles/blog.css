@@ -36,6 +36,11 @@
 	.post:hover h3{color:var(--purple)}
 	.post p{font-size:13.5px;color:var(--ink-70);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 	.no-post{grid-column:1/-1;text-align:center;padding:40px;color:var(--ink-50)}
+	/* covers arrive as <img> (the design drew inline SVG) — same box, same hover zoom */
+	.feat-post .cv img{transition:transform .8s var(--ease)}
+	.feat-post:hover .cv img{transform:scale(1.05)}
+	.post .cv img{transition:transform .7s var(--ease)}
+	.post:hover .cv img{transform:scale(1.04)}
 	@media (max-width:1000px){
 		.posts{grid-template-columns:repeat(2,1fr)}
 		.feat-post{grid-template-columns:1fr}

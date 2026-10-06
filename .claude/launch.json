@@ -3,9 +3,22 @@
   "configurations": [
     {
       "name": "kiva-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "-p", "3100"],
+      "port": 3100
+    },
+    {
+      "name": "kiva-mock",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--watch", "mock/server.mjs"],
+      "env": { "MOCK_FE_ORIGIN": "http://localhost:3100" },
+      "port": 8080
+    },
+    {
+      "name": "kiva-design",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "D:\\pariya\\kiva"],
+      "port": 5500
     }
   ]
 }

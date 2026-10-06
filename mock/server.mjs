@@ -4,8 +4,9 @@
  *
  *   npm run mock        → http://localhost:8080/api/v1
  *
- * Env: MOCK_PORT (8080) · MOCK_FE_ORIGIN (http://localhost:3000, used for the fake payment redirect) · MOCK_DELAY (ms, 180)
+ * Env: MOCK_PORT (8080) · MOCK_FE_ORIGIN (http://localhost:3000, where the fake bank returns to) · MOCK_DELAY (ms, 180)
  * OTP: any 5-digit code works except 00000 (→ OTP_INVALID).
+ * Payments: `payment.redirect` opens a fake bank page (`/mock-gateway/:id`) with «پرداخت موفق» / «انصراف».
  */
 import http from "node:http";
 import { randomUUID } from "node:crypto";
@@ -419,6 +420,7 @@ const MSGR_NAME = { RUBIKA: "روبیکا", TELEGRAM: "تلگرام", BALE: "ب�
 const STEPS = [["PLACED", "ثبت شد", "check"], ["PHOTO_SENT", "عکس ارسال شد", "camera"], ["SHIPPED", "تحویل پست شد", "truck"], ["DELIVERED", "تحویل شد", "home"]];
 const isReserved = (o) => o.reserve && o.status === 0 && o.placedAt + 4 * DAY > Date.now();
 function statusOf(o) {
+	if (o.paid === false) return { status: "PENDING_PAYMENT", statusLabel: "در انتظار پرداخت", statusTone: "WARN" };
 	if (isReserved(o)) return { status: "RESERVED", statusLabel: "رزرو شده", statusTone: "CREAM" };
 	return [
 		{ status: "PROCESSING", statusLabel: "در حال آماده‌سازی", statusTone: "WARN" },
@@ -465,7 +467,7 @@ function orderSummary(o) {
 			status: o.mediaViews.length ? "SENT" : "WAITING", channel: o.messenger, channelName: MSGR_NAME[o.messenger],
 			count: o.mediaViews.length, hasVideo: o.mediaViews.includes("v"), sentAt: o.mediaViews.length ? iso(o.placedAt + 0.9 * DAY) : null,
 		},
-		actions: { canCancel: o.status < 2, canRequestChange: o.status === 1, canApproveMedia: o.status === 1, canReturn: o.status === 3, canPay: false, canAddToReservation: isReserved(o), canReview: o.status === 3 },
+		actions: { canCancel: o.status < 2, canRequestChange: o.status === 1, canApproveMedia: o.status === 1, canReturn: o.status === 3, canPay: o.paid === false, canAddToReservation: isReserved(o), canReview: o.status === 3 },
 	};
 }
 function orderDetail(o) {
@@ -486,7 +488,9 @@ function orderDetail(o) {
 			discountCode: o.totals.code ? "KIVA10" : null, codeDiscount: o.totals.code, shippingCost: o.totals.ship,
 			shippingFreeReason: o.totals.ship ? null : "THRESHOLD", giftWrapCost: 0, payable: o.totals.total, refunded: 0, currency: "IRT",
 		},
-		payment: { gateway: o.gateway, gatewayName: D.GATEWAYS.find((g) => g.code === o.gateway).name, status: "SUCCEEDED", referenceId: String(201843917 + o.placedAt % 1000), paidAt: iso(o.placedAt), cardMask: "6037-99**-****-1234" },
+		payment: o.paid === false
+			? { gateway: o.gateway, gatewayName: D.GATEWAYS.find((g) => g.code === o.gateway).name, status: "PENDING", referenceId: null, paidAt: null, cardMask: null }
+			: { gateway: o.gateway, gatewayName: D.GATEWAYS.find((g) => g.code === o.gateway).name, status: "SUCCEEDED", referenceId: String(201843917 + o.placedAt % 1000), paidAt: iso(o.placedAt), cardMask: "6037-99**-****-1234" },
 		preShipmentMediaDetail: {
 			status: o.mediaViews.length ? "SENT" : "WAITING", channel: o.messenger, channelName: MSGR_NAME[o.messenger], phone: o.messengerPhone, note: o.note,
 			sentAt: o.mediaViews.length ? iso(o.placedAt + 0.9 * DAY) : null,
@@ -783,7 +787,7 @@ route("GET", "/search/suggest", (ctx) => {
 		query: ctx.query.q, normalizedQuery: q,
 		products: found.slice(0, limit).map((p) => {
 			const k = p.colors.find((c) => q.includes(D.COLOR_BY_KEY[c].name)) || null;
-			return { id: p.id, slug: p.slug, name: p.n, nameHighlighted: hl(p.n), categoryName: catOf(p).name, categoryHighlighted: hl(catOf(p).name), price: priceInfo(p), matchedColorKey: k, imageUrl: img(p, k || p.colors[0]), url: `/product/${p.slug}${k ? `?color=${k}` : ""}` };
+			return { id: p.id, slug: p.slug, name: p.n, nameHighlighted: hl(p.n), categoryName: catOf(p).name, price: priceInfo(p), matchedColorKey: k, imageUrl: img(p, k || p.colors[0]), url: `/product/${p.slug}${k ? `?color=${k}` : ""}` };
 		}),
 		categories: D.CATEGORIES.filter((c) => c.name.includes(q)).map(catRef),
 		colors: D.COLORS.filter((c) => q.includes(c.name)),
@@ -890,8 +894,7 @@ route("POST", "/orders", (ctx) => {
 	if (b.newAddress) {
 		const errors = validateAddressInput(b.newAddress, "newAddress.");
 		if (errors.length) validation(errors);
-		address = toAddress(b.newAddress, ++ADDR_SEQ);
-		if (b.saveNewAddress !== false) { if (!u.addresses.length) address.isDefault = true; u.addresses.push(address); }
+		address = toAddress(b.newAddress, ADDR_SEQ + 1);
 	} else {
 		address = u.addresses.find((a) => a.id === Number(b.addressId)) || fail(422, "ADDRESS_NOT_FOUND", "آدرس انتخاب‌شده پیدا نشد.");
 	}
@@ -904,6 +907,8 @@ route("POST", "/orders", (ctx) => {
 	if (b.reserve != null) c.reserve = !!b.reserve;
 	const view = cartView(c, ctx);
 	if (b.expectedPayable != null && Number(b.expectedPayable) !== view.totals.payable) fail(409, "PRICE_CHANGED", `مبلغ سفارش به ${price(view.totals.payable)} تومان تغییر کرد.`, { meta: { payable: view.totals.payable } });
+	// every check passed — only now does anything stick (a real backend does this in one transaction)
+	if (b.newAddress && b.saveNewAddress !== false) { ADDR_SEQ++; if (!u.addresses.length) address.isDefault = true; u.addresses.push(address); }
 	if (m.saveAsDefault !== false) { u.defaultMessenger = m.channel; u.defaultMessengerPhone = toEn(m.phone); }
 	const order = {
 		code: `KV-${String(Date.now() % 1000000).padStart(6, "0")}`, placedAt: Date.now(), status: 0, reserve: c.reserve,
@@ -911,27 +916,45 @@ route("POST", "/orders", (ctx) => {
 		messenger: m.channel, messengerPhone: toEn(m.phone), shippingMethod: c.shippingMethod,
 		totals: { full: view.totals.itemsCompareAtTotal, prodOff: view.totals.productDiscount, code: view.totals.codeDiscount, ship: view.totals.shippingCost, total: view.totals.payable },
 		trackingCode: "", mediaViews: [], address: addressSnapshot(address), gateway: b.paymentGateway || "ZARINPAL", note: m.note || null,
+		// unpaid until the (fake) bank says so; a fully discounted order is paid right away
+		paid: view.totals.payable === 0,
 	};
 	u.orders.unshift(order);
 	c.items = []; c.code = null; c.reserve = false;
-	const paymentId = rid("pay");
-	payments.set(paymentId, { orderCode: order.code, phone: u.phone, gateway: order.gateway, amount: order.totals.total, paidAt: Date.now() });
 	ctx.status = 201;
-	const res = {
-		order: orderSummary(order),
-		payment: { paymentId, gateway: order.gateway, amount: order.totals.total, redirect: { url: `${FE_ORIGIN}/checkout/result?paymentId=${paymentId}`, method: "GET", fields: {} }, expiresAt: iso(Date.now() + 15 * 60e3) },
-	};
+	const res = { order: orderSummary(order), payment: order.paid ? null : startPayment(order, u, order.gateway) };
+	if (key) idempotency.set(key, res);
+	return res;
+});
+/** A new PENDING transaction that leaves for the fake bank page (`/mock-gateway/:id`). */
+function startPayment(o, u, gateway) {
+	const paymentId = rid("pay");
+	payments.set(paymentId, { orderCode: o.code, phone: u.phone, gateway, amount: o.totals.total, status: "PENDING", paidAt: null });
+	return { paymentId, gateway, amount: o.totals.total, redirect: { url: `${ORIGIN}/mock-gateway/${paymentId}`, method: "GET", fields: {} }, expiresAt: iso(Date.now() + 15 * 60e3) };
+}
+const myPayment = (ctx) => {
+	const u = needUser(ctx);
+	const pay = payments.get(ctx.params.paymentId);
+	if (!pay || pay.phone !== u.phone) fail(404, "PAYMENT_NOT_FOUND", "این پرداخت پیدا نشد.");
+	return { u, pay, o: u.orders.find((x) => x.code === pay.orderCode) };
+};
+route("POST", "/payments/:paymentId/retry", (ctx) => {
+	const { u, pay, o } = myPayment(ctx);
+	if (o.paid !== false) fail(422, "ORDER_ALREADY_PAID", "این سفارش قبلاً پرداخت شده.");
+	const key = ctx.req.headers["idempotency-key"];
+	if (key && idempotency.has(key)) return idempotency.get(key);
+	ctx.status = 201;
+	const res = startPayment(o, u, ctx.body?.gateway || pay.gateway);
 	if (key) idempotency.set(key, res);
 	return res;
 });
 route("GET", "/payments/:paymentId", (ctx) => {
-	const u = needUser(ctx);
-	const pay = payments.get(ctx.params.paymentId);
-	if (!pay || pay.phone !== u.phone) fail(404, "PAYMENT_NOT_FOUND", "این پرداخت پیدا نشد.");
-	const o = u.orders.find((x) => x.code === pay.orderCode);
+	const { pay, o } = myPayment(ctx);
+	const ok = pay.status === "SUCCEEDED";
 	return {
-		paymentId: ctx.params.paymentId, status: "SUCCEEDED", amount: pay.amount, gateway: pay.gateway, referenceId: "201843917", cardMask: "6037-99**-****-1234",
-		paidAt: iso(pay.paidAt), failureReason: null, canRetry: false,
+		paymentId: ctx.params.paymentId, status: pay.status, amount: pay.amount, gateway: pay.gateway,
+		referenceId: ok ? "201843917" : null, cardMask: ok ? "6037-99**-****-1234" : null, paidAt: ok ? iso(pay.paidAt) : null,
+		failureReason: pay.status === "CANCELLED" ? "تراکنش توسط کاربر لغو شد" : null, canRetry: !ok && o.paid === false,
 		order: { code: o.code, status: statusOf(o).status, reserved: o.reserve, consolidatedInto: null },
 		nextSteps: [
 			o.reserve ? "سفارشت تا ۴ روز رزرو می‌مونه؛ هر خریدی داشتی به همین سفارش اضافه می‌شه." : "سفارشت در حال آماده‌سازیه.",
@@ -994,7 +1017,8 @@ route("GET", "/tracking/daily", (ctx) => {
 	const t = new Date(`${date}T12:00:00+03:30`).getTime();
 	const q = toEn(ctx.query.q || "").trim();
 	const all = dayShipments(t);
-	const list = all.filter((x) => !q || x.phoneLast4.includes(q) || x._name.startsWith(q) || x.city.includes(q)).map(({ _name, ...x }) => x);
+	// the full first name is only for matching — it never leaves the server
+	const list = all.filter((x) => !q || x.phoneLast4.includes(q) || x._name.startsWith(q) || x.city.includes(q)).map((x) => { const rest = { ...x }; delete rest._name; return rest; });
 	const friday = tehranWeekday(t) === "Fri";
 	return {
 		date, label: jdate(t, { weekday: "long", day: "numeric", month: "long", year: "numeric" }), isNonShippingDay: friday,
@@ -1137,7 +1161,11 @@ route("POST", "/me/wishlist/add-to-cart", (ctx) => {
 route("POST", "/me/wishlist/share", (ctx) => {
 	const u = needUser(ctx);
 	u.share = u.share || { token: rid("wl"), createdAt: iso(Date.now()) };
-	return { ...u.share, url: `${FE_ORIGIN}/w/${u.share.token}` };
+	return { ...u.share, url: `${FE_ORIGIN}/wishlist/shared/${u.share.token}` };
+});
+route("GET", "/wishlists/shared/:token", (ctx) => {
+	const u = [...users.values()].find((x) => x.share?.token === ctx.params.token) || fail(404, "NOT_FOUND", "این لیست پیدا نشد یا دیگه به اشتراک گذاشته نمی‌شه.");
+	return { ownerDisplayName: u.firstName || "دوست کیوا", items: u.wishlist.map((w) => summary(getP(w.productId), ctx, w.colorKey)) };
 });
 
 // blog
@@ -1189,6 +1217,35 @@ function sendMedia(res, path, query) {
 	return false;
 }
 
+/** Stand-in for the bank: `/mock-gateway/:id` shows the amount; `/ok` or `/cancel` settles it and returns to the FE result page. */
+function sendGateway(res, path) {
+	const m = path.match(/^\/mock-gateway\/(\w+)(?:\/(ok|cancel))?$/);
+	if (!m) return false;
+	const pay = payments.get(m[1]);
+	if (!pay) { res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }); res.end("این پرداخت پیدا نشد."); return true; }
+	if (m[2]) {
+		if (pay.status === "PENDING") {
+			pay.status = m[2] === "ok" ? "SUCCEEDED" : "CANCELLED";
+			if (pay.status === "SUCCEEDED") {
+				pay.paidAt = Date.now();
+				const o = getUserByPhone(pay.phone)?.orders.find((x) => x.code === pay.orderCode);
+				if (o) { o.paid = true; o.placedAt = Date.now(); }
+			}
+		}
+		res.writeHead(302, { Location: `${FE_ORIGIN}/checkout/result?paymentId=${m[1]}` });
+		res.end();
+		return true;
+	}
+	const name = D.GATEWAYS.find((g) => g.code === pay.gateway)?.name ?? pay.gateway;
+	res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+	res.end(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>درگاه آزمایشی — ${esc(name)}</title>
+<style>body{font-family:Tahoma,sans-serif;background:#F3EEFA;display:grid;place-items:center;min-height:100vh;margin:0}main{background:#fff;border-radius:20px;padding:32px;width:min(380px,90vw);text-align:center;box-shadow:0 20px 50px -30px rgba(91,62,140,.6)}
+h1{font-size:18px}p{color:#6b6280}b{font-size:22px;display:block;margin:12px 0 24px}a{display:block;padding:14px;border-radius:12px;text-decoration:none;font-weight:700;margin-top:10px}.ok{background:#5B3E8C;color:#fff}.no{border:1.5px solid #ddd;color:#2A1F3D}</style></head>
+<body><main><h1>درگاه آزمایشی ${esc(name)}</h1><p>سفارش ${esc(pay.orderCode)} — فقط برای محیط توسعه</p><b>${price(pay.amount)} تومان</b>
+<a class="ok" href="/mock-gateway/${m[1]}/ok">پرداخت موفق</a><a class="no" href="/mock-gateway/${m[1]}/cancel">انصراف از پرداخت</a></main></body></html>`);
+	return true;
+}
+
 const server = http.createServer(async (req, res) => {
 	const url = new URL(req.url, ORIGIN);
 	const cors = {
@@ -1200,6 +1257,7 @@ const server = http.createServer(async (req, res) => {
 	};
 	if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
 	if (url.pathname.startsWith("/media/") && sendMedia(res, url.pathname, Object.fromEntries(url.searchParams))) return;
+	if (url.pathname.startsWith("/mock-gateway/") && sendGateway(res, url.pathname)) return;
 
 	const send = (status, body, headers = {}, type = "application/json; charset=utf-8") => {
 		res.writeHead(status, { ...cors, ...headers, ...(body === undefined ? {} : { "Content-Type": type }) });

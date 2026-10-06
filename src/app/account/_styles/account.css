@@ -132,7 +132,8 @@
 	.msg-chip input:checked + span{border-color:var(--purple);background:var(--lilac-50)}
 	@media (max-width:1000px){
 		.acc{grid-template-columns:1fr}
-		.side{position:static}
+		/* deviation: the design's grid item kept the menu's full width as its minimum, so the menu never scrolled and the page grew to ~1100px on phones */
+		.side{position:static;min-width:0}
 		.snav{grid-auto-flow:column;grid-auto-columns:max-content;overflow-x:auto;scrollbar-width:none}
 		.snav a,.snav button{white-space:nowrap}
 		.ucard{display:none}

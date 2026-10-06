@@ -27,6 +27,12 @@ export interface Wishlist {
 	share?: WishlistShare | null;
 }
 
+/** `GET /wishlists/shared/{token}` — someone else's list (public, read-only). */
+export interface SharedWishlist {
+	ownerDisplayName?: string;
+	items: ProductSummary[];
+}
+
 export interface WishlistIds {
 	productIds: number[];
 	count: number;
