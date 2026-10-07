@@ -1,5 +1,5 @@
 /** Mirrors the product page contract (kiva-openapi.yml · Product, Reviews). */
-import { Breadcrumb, Color, ColorKey, MediaAsset, Perk, PriceInfo, ProductRef, ProductSummary, RatingSummary, SeoMeta, StockInfo, Tone } from "@/types/catalog.type";
+import { Breadcrumb, Color, ColorKey, MediaAsset, Perk, PriceInfo, ProductSummary, RatingSummary, SeoMeta, StockInfo, Tone } from "@/types/catalog.type";
 import { PageMeta } from "@/types/pageinate";
 import { Review } from "@/types/review.type";
 
@@ -70,23 +70,6 @@ export interface ProductDetail extends ProductSummary {
 	stockAlert?: { subscribed: boolean; alertId?: number | null } | null;
 	shareUrl?: string;
 	seo?: SeoMeta;
-}
-
-export interface CreateStockAlertPayload {
-	/** Without it the alert fires for any colour. */
-	variantId?: number | null;
-	/** Required for guests. */
-	phone?: string;
-}
-
-export interface StockAlert {
-	id: number;
-	product?: ProductRef;
-	variantId?: number | null;
-	phoneMasked?: string;
-	status: "ACTIVE" | "NOTIFIED" | "CANCELLED";
-	/** «هر وقت موجود شد، بهت پیامک می‌دیم». */
-	message?: string;
 }
 
 export interface MessengerLink {

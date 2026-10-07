@@ -1,7 +1,8 @@
 import { httpClient } from "@/httpClient/HttpClient";
 import { ColorKey, ProductSummary } from "@/types/catalog.type";
-import { CreateReviewPayload, Review } from "@/types/review.type";
-import { CreateStockAlertPayload, ProductDetail, ProductInquiry, ReviewListResponse, StockAlert } from "../_types/product.type";
+import { CreateReviewPayload, Review, ReviewHelpfulVote } from "@/types/review.type";
+import { CreateStockAlertPayload, StockAlert } from "@/types/stockAlert.type";
+import { ProductDetail, ProductInquiry, ReviewListResponse } from "../_types/product.type";
 
 /** Pure request functions — no React Query concepts live here (see data-fetching standard). */
 export const ProductEndpoints = {
@@ -34,6 +35,12 @@ export const ProductEndpoints = {
 
 	createReview: async (productId: number, payload: CreateReviewPayload) => {
 		const res = await httpClient.call<Review>({ method: "POST", url: `products/${productId}/reviews`, data: payload });
+		return res.data;
+	},
+
+	/** «این نظر مفید بود؟» — signed-in users; a second vote replaces the first. */
+	voteReviewHelpful: async (reviewId: number, helpful: boolean) => {
+		const res = await httpClient.call<ReviewHelpfulVote>({ method: "PUT", url: `reviews/${reviewId}/helpful`, data: { helpful } });
 		return res.data;
 	},
 };

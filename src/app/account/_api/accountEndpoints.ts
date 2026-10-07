@@ -13,6 +13,7 @@ import {
 	PreShipmentMedia,
 	ReturnRequest,
 } from "@/types/order.type";
+import { StockAlert } from "@/types/stockAlert.type";
 import { User } from "@/types/user.type";
 import {
 	AccountDashboard,
@@ -114,6 +115,16 @@ export const AccountEndpoints = {
 		// a 50MB video over a slow mobile link takes minutes; the tile shows progress and can cancel
 		const res = await httpClient.call<MediaAsset>({ method: "POST", url: "me/uploads", data, onUploadProgress: onProgress, signal, timeout: 10 * 60_000 });
 		return res.data;
+	},
+
+	// ── «موجود شد خبرم کن» ──
+	getStockAlerts: async () => {
+		const res = await httpClient.call<StockAlert[]>({ method: "GET", url: "me/stock-alerts" });
+		return res.data;
+	},
+
+	deleteStockAlert: async (alertId: number) => {
+		await httpClient.call<void>({ method: "DELETE", url: `me/stock-alerts/${alertId}` });
 	},
 
 	getTracking: async () => {

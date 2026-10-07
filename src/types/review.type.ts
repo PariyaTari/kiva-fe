@@ -34,6 +34,12 @@ export interface Review {
 	isMine?: boolean;
 }
 
+/** Answer of `PUT /reviews/{id}/helpful` — the new count and the shopper's vote. */
+export interface ReviewHelpfulVote {
+	helpfulCount: number;
+	myVote: boolean | null;
+}
+
 export interface CreateReviewPayload {
 	rating: number;
 	/** Empty → «کاربر کیوا». */

@@ -17,6 +17,7 @@ import { formatDate } from "@/utils/format";
 import { ReviewListResponse } from "../../_types/product.type";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
 import ReviewForm from "../reviewForm/reviewForm";
+import ReviewHelpful from "../reviewHelpful/reviewHelpful";
 
 type ReviewsProps = {
 	productId: number;
@@ -111,6 +112,7 @@ export default function Reviews({ productId, slug, reviews }: ReviewsProps) {
 								{r.reply.text}
 							</div>
 						)}
+						{r.status === "APPROVED" && !r.isMine && <ReviewHelpful review={r} productId={productId} />}
 					</div>
 				))}
 			</div>

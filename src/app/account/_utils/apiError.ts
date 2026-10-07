@@ -15,6 +15,7 @@ export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
 	TOKEN_EXPIRED: REREAD,
 	ORDER_NOT_FOUND: REREAD, // gone from the list since it was drawn
 	ADDRESS_NOT_FOUND: REREAD,
+	STOCK_ALERT_NOT_FOUND: REREAD, // cancelled meanwhile (another tab)
 	PRODUCT_NOT_FOUND: FINAL, // change request: the bag left the catalogue
 	VALIDATION_ERROR: CLIENT_BUG,
 	RATE_LIMITED: TRANSPORT,
@@ -29,5 +30,7 @@ export const isPaymentExpiredError = (e: ResultError | null | undefined) => e?.c
 export const isGatewayUnavailableError = (e: ResultError | null | undefined) => e?.code === "PAYMENT_GATEWAY_UNAVAILABLE";
 /** Shipped meanwhile — «دیگه نمی‌شه لغوش / تغییرش داد». */
 export const isTooLateError = (e: ResultError | null | undefined) => e?.code === "ORDER_NOT_CANCELLABLE" || e?.code === "CHANGE_REQUEST_NOT_ALLOWED";
+/** Re-subscribing from «برگردون»: already on / back in stock meanwhile — an info toast, not an error (as on the product page). */
+export const isStockAlertAnswer = (e: ResultError | null | undefined) => e?.code === "STOCK_ALERT_EXISTS" || e?.code === "PRODUCT_IN_STOCK";
 /** The return page's closed state. */
 export const isNotReturnableError = (e: ResultError | null | undefined) => e?.code === "ORDER_NOT_RETURNABLE" || e?.code === "RETURN_WINDOW_EXPIRED";

@@ -88,12 +88,15 @@ const badges = (p) => {
 	else if (p.stock < 5) b.push({ code: "LOW_STOCK", label: `فقط ${fa(p.stock)} عدد`, tone: "DANGER", icon: null });
 	return b;
 };
-const reviewsOf = (p) => D.REVIEW_SAMPLES.slice(0, 3 + (p.id % 3)).map((r, i) => ({
-	id: p.id * 100 + i + 1, productId: p.id, authorName: r.n, authorInitial: r.n[0], rating: r.r, title: null, text: r.t,
+// review id → (phone → helpful); the sample count (3 + i) stands for other shoppers' «آره»
+const helpfulVotes = new Map();
+const votesOf = (id) => [...(helpfulVotes.get(id)?.values() ?? [])];
+const reviewsOf = (p, ctx) => D.REVIEW_SAMPLES.slice(0, 3 + (p.id % 3)).map((r, i, _, id = p.id * 100 + i + 1) => ({
+	id, productId: p.id, authorName: r.n, authorInitial: r.n[0], rating: r.r, title: null, text: r.t,
 	createdAt: iso(Date.now() - r.daysAgo * DAY), status: "APPROVED", statusLabel: "منتشر شده", isVerifiedBuyer: true,
 	purchasedColor: color(p.colors[i % p.colors.length]),
 	reply: r.reply ? { text: r.reply, authorName: "کیوا", createdAt: iso(Date.now() - (r.daysAgo - 1) * DAY) } : null,
-	helpfulCount: 3 + i, myHelpfulVote: null, media: [], isMine: false,
+	helpfulCount: 3 + i + votesOf(id).filter(Boolean).length, myHelpfulVote: (ctx?.user && helpfulVotes.get(id)?.get(ctx.user.phone)) ?? null, media: [], isMine: false,
 }));
 const ratingSummary = (p) => {
 	const rs = reviewsOf(p);
@@ -313,6 +316,11 @@ function seedUser(u) {
 	returned.returns.push(rt);
 	u.returns.push(rt);
 	u.wishlist = [3, 7, 12].map((id) => ({ productId: id, addedAt: now - 9 * DAY, colorKey: null, priceAtAdd: getP(id).old || getP(id).price }));
+	stockAlerts.push(
+		{ id: ++ALERT_SEQ, phone: u.phone, productId: 5, variantId: variantId(getP(5), "lilac"), status: "ACTIVE", createdAt: now - 6 * DAY, notifiedAt: null },
+		{ id: ++ALERT_SEQ, phone: u.phone, productId: 14, variantId: null, status: "ACTIVE", createdAt: now - 2 * DAY, notifiedAt: null },
+		{ id: ++ALERT_SEQ, phone: u.phone, productId: 9, variantId: variantId(getP(9), "caramel"), status: "NOTIFIED", createdAt: now - 12 * DAY, notifiedAt: now - DAY },
+	);
 	u.reviews = [
 		{ id: ++REVIEW_SEQ, productId: 1, rating: 5, text: "کیف دقیقاً همونی بود که توی عکس قبل از ارسال دیدم. چرمش هم خیلی نرمه.", createdAt: now - 16 * DAY, status: "APPROVED", reply: "ممنون از نظر قشنگت امیدواریم سال‌ها همراهت باشه." },
 		{ id: ++REVIEW_SEQ, productId: 4, rating: 4, text: "رنگ کاراملی‌ش فوق‌العاده‌ست، فقط بند بلندش کمی سفته.", createdAt: now - 3 * DAY, status: "APPROVED", reply: "بند چرمی بعد از چند بار استفاده نرم‌تر می‌شه. اگه خواستی، با پشتیبانی در تماس باش تا بند جایگزین برات بفرستیم." },
@@ -882,10 +890,43 @@ route("POST", "/products/:id/stock-alerts", (ctx) => {
 	if (!validPhone(phone)) validation([{ field: "phone", code: "PHONE_INVALID", message: "موبایل معتبر وارد کن" }]);
 	if (p.stock) fail(422, "PRODUCT_IN_STOCK", "این محصول همین الان موجوده!");
 	if (stockAlerts.some((a) => a.phone === phone && a.productId === p.id && a.status === "ACTIVE")) fail(409, "STOCK_ALERT_EXISTS", "قبلاً ثبت کردی؛ هر وقت موجود شد بهت پیامک می‌دیم.");
-	const a = { id: ++ALERT_SEQ, phone, productId: p.id, variantId: ctx.body?.variantId ?? null, status: "ACTIVE", createdAt: Date.now() };
+	const a = { id: ++ALERT_SEQ, phone, productId: p.id, variantId: ctx.body?.variantId ?? null, status: "ACTIVE", createdAt: Date.now(), notifiedAt: null };
 	stockAlerts.push(a);
 	ctx.status = 201;
-	return { id: a.id, product: { id: p.id, slug: p.slug, name: p.n, imageUrl: img(p, p.colors[0]) }, variantId: a.variantId, color: null, channel: "SMS", phoneMasked: `${phone.slice(0, 4)}***${phone.slice(-4)}`, status: "ACTIVE", createdAt: iso(a.createdAt), notifiedAt: null, message: "هر وقت موجود شد، بهت پیامک می‌دیم" };
+	return alertView(a);
+});
+// a subscription → `StockAlert` (colour from the variant; `null` = any colour)
+function alertView(a) {
+	const p = getP(a.productId);
+	const k = a.variantId ? variantById(a.variantId)?.k ?? null : null;
+	return {
+		id: a.id, product: { id: p.id, slug: p.slug, sku: `KV-${1000 + p.id}`, name: p.n, imageUrl: img(p, k || p.colors[0]), colorKey: k },
+		variantId: a.variantId, color: k ? color(k) : null, channel: "SMS", phoneMasked: `${a.phone.slice(0, 4)}***${a.phone.slice(-4)}`,
+		status: a.status, createdAt: iso(a.createdAt), notifiedAt: a.notifiedAt ? iso(a.notifiedAt) : null,
+		message: a.status === "NOTIFIED" ? "موجود شد و پیامکش رو برات فرستادیم" : "هر وقت موجود شد، بهت پیامک می‌دیم",
+	};
+}
+route("GET", "/me/stock-alerts", (ctx) => {
+	const u = needUser(ctx);
+	return stockAlerts.filter((a) => a.phone === u.phone && a.status !== "CANCELLED").sort((a, b) => b.createdAt - a.createdAt).map(alertView);
+});
+route("DELETE", "/me/stock-alerts/:id", (ctx) => {
+	const u = needUser(ctx);
+	const a = stockAlerts.find((x) => x.id === Number(ctx.params.id) && x.phone === u.phone && x.status !== "CANCELLED") || fail(404, "STOCK_ALERT_NOT_FOUND", "این اطلاع‌رسانی پیدا نشد.");
+	a.status = "CANCELLED";
+	ctx.status = 204;
+});
+route("PUT", "/reviews/:id/helpful", (ctx) => {
+	const u = needUser(ctx);
+	const id = Number(ctx.params.id);
+	const p = getP(Math.floor(id / 100));
+	const review = p && reviewsOf(p).find((r) => r.id === id);
+	if (!review) fail(404, "REVIEW_NOT_FOUND", "این نظر پیدا نشد.");
+	if (typeof ctx.body?.helpful !== "boolean") validation([{ field: "helpful", code: "REQUIRED", message: "رأیت رو انتخاب کن" }]);
+	if (!helpfulVotes.has(id)) helpfulVotes.set(id, new Map());
+	helpfulVotes.get(id).set(u.phone, ctx.body.helpful);
+	const now = reviewsOf(p, ctx).find((r) => r.id === id);
+	return { helpfulCount: now.helpfulCount, myVote: now.myHelpfulVote };
 });
 route("GET", "/products/:id/inquiry", (ctx) => {
 	const p = findProduct(ctx.params.id);
@@ -900,7 +941,7 @@ route("GET", "/products/:id/inquiry", (ctx) => {
 route("GET", "/products/:id/reviews", (ctx) => {
 	const p = findProduct(ctx.params.id);
 	const mine = ctx.user ? pendingReviews.filter((r) => r.productId === p.id && r.phone === ctx.user.phone).map((r) => ({ ...r.view, isMine: true })) : [];
-	let list = reviewsOf(p);
+	let list = reviewsOf(p, ctx);
 	if (ctx.query.rating) list = list.filter((r) => r.rating === Number(ctx.query.rating));
 	return { summary: ratingSummary(p), ...paginate([...mine, ...list], ctx.query, 20) };
 });

@@ -16,6 +16,8 @@ const NAV: { href: string; icon: IconName; label: string; count?: CountKey }[] =
 	{ href: "/account/tracking", icon: "truck", label: "کدهای رهگیری" },
 	{ href: "/account/addresses", icon: "pin", label: "آدرس‌ها", count: "addresses" },
 	{ href: "/account/wishlist", icon: "heart", label: "علاقه‌مندی‌ها", count: "wishlist" },
+	// not in the design: the product page's «موجود شد خبرم کن» subscriptions (`/me/stock-alerts`)
+	{ href: "/account/stock-alerts", icon: "bell", label: "موجود شد خبرم کن" },
 	{ href: "/account/reviews", icon: "chat", label: "نظرات من" },
 	{ href: "/account/profile", icon: "user", label: "اطلاعات شخصی" },
 ];

@@ -130,6 +130,16 @@
 	.msg-chip span{display:flex;align-items:center;gap:8px;padding:8px 16px 8px 12px;border-radius:var(--pill);border:1.5px solid var(--line-2);font-weight:600;font-size:13.5px;transition:all .25s}
 	.msg-chip span svg{width:24px;height:24px}
 	.msg-chip input:checked + span{border-color:var(--purple);background:var(--lilac-50)}
+	/* «موجود شد خبرم کن» (`/account/stock-alerts`) — not in the design: the «نظرات من» card (`.my-rv`) with a footer row */
+	.st-alert .h small{display:flex;align-items:center;gap:6px}
+	.st-alert .sw{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.12);display:inline-block}
+	.al-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
+	.al-foot p{font-size:13px;line-height:1.9;color:var(--ink-70)}
+	.al-foot p svg{display:inline-block;width:16px;height:16px;color:var(--purple);vertical-align:-3px;margin-inline-end:2px}
+	.al-foot .ph{display:inline-block;color:var(--ink-50);font-size:12px;white-space:nowrap;padding-inline-start:8px;border-inline-start:1px solid var(--line-2);margin-inline-start:8px}
+	.al-foot .acts{display:flex;gap:8px;margin-inline-start:auto}
+	.al-foot .del:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
+	.al-foot .btn-white.loading::after{border-color:rgba(91,62,140,.25);border-top-color:var(--purple)}
 	@media (max-width:1000px){
 		.acc{grid-template-columns:1fr}
 		/* deviation: the design's grid item kept the menu's full width as its minimum, so the menu never scrolled and the page grew to ~1100px on phones */

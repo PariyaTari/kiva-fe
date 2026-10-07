@@ -110,7 +110,7 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 			withMappedError(() => ProductEndpoints.createStockAlert(productId, { variantId })),
 		onSuccess: (alert) => {
 			queryClient.invalidateQueries({ queryKey: ["product", "detail", slug] });
-			toast(alert.message ?? "هر وقت موجود شد، بهت پیامک می‌دیم", { icon: "bell" });
+			toast(alert.message ?? "هر وقت موجود شد، بهت پیامک می‌دیم", { icon: "bell", action: { label: "همه‌ی اطلاع‌رسانی‌ها", href: "/account/stock-alerts" } });
 		},
 		// «already subscribed» / «it's in stock» are answers, not failures
 		onError: (error: ResultError) =>
