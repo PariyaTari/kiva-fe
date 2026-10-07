@@ -39,7 +39,7 @@ export default function FaqView() {
 		return () => clearTimeout(t);
 	}, [term]);
 
-	// the whole list drives the side menu (its counts stay put while searching)
+	// the whole list drives the side menu (its counts stay put while searching); prefetched on the server (`faq/page.tsx`)
 	const all = useQuery({
 		queryKey: ["faq", ""],
 		queryFn: ({ signal }) => withMappedError(() => FaqEndpoints.getFaq("", signal)),

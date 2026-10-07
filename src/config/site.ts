@@ -48,6 +48,8 @@ export const FALLBACK_CONFIG: SiteConfig = {
 				{ label: "رزرو ۴ روزه", url: "/faq#reserve" },
 				{ label: "شرایط ارسال", url: "/faq#shipping" },
 				{ label: "بازگشت کالا", url: "/faq#return" },
+				// not in the design footer — the terms page has to be one click away from every page (e-Namad)
+				{ label: "قوانین و حریم خصوصی", url: "/pages/terms" },
 			],
 		},
 	],

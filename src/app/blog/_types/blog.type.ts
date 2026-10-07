@@ -1,5 +1,5 @@
 /** Mirrors the backend blog contract (kiva-openapi.yml · Blog). */
-import { Breadcrumb, MediaAsset, ProductSummary } from "@/types/catalog.type";
+import { Breadcrumb, MediaAsset, ProductSummary, SeoMeta } from "@/types/catalog.type";
 import { MessengerLink } from "@/app/product/_types/product.type";
 import { PageMeta } from "@/types/pageinate";
 
@@ -60,7 +60,7 @@ export interface BlogPostDetail extends BlogPostSummary {
 	shareUrl?: string;
 	shareLinks?: MessengerLink[];
 	helpfulStats?: { helpfulCount: number; notHelpfulCount: number };
-	seo?: { title?: string; description?: string };
+	seo?: SeoMeta;
 	updatedAt?: string;
 }
 

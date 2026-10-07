@@ -1,9 +1,11 @@
 import "../../_styles/wishlist.css";
 import type { Metadata } from "next";
+import { NO_INDEX } from "@/utils/seo";
 import SharedWishlistView from "../../_components/sharedWishlistView/sharedWishlistView";
 
 export const metadata: Metadata = {
 	title: "لیست علاقه‌مندی",
+	robots: NO_INDEX,
 };
 
 /** `/wishlist/shared/{token}` — the public link `POST /me/wishlist/share` hands out (`WishlistShare.url`). */

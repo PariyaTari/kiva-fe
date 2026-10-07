@@ -101,7 +101,8 @@ export const AccountEndpoints = {
 
 	/** The invoice PDF of a paid order. */
 	downloadInvoice: async (code: OrderCode) => {
-		const res = await httpClient.call<Blob>({ method: "GET", url: orderUrl(code, "/invoice"), responseType: "blob" });
+		// the PDF is rendered on demand — give it longer than an ordinary request
+		const res = await httpClient.call<Blob>({ method: "GET", url: orderUrl(code, "/invoice"), responseType: "blob", timeout: 60_000 });
 		return res.data;
 	},
 
@@ -110,7 +111,8 @@ export const AccountEndpoints = {
 		const data = new FormData();
 		data.append("file", file);
 		data.append("purpose", purpose);
-		const res = await httpClient.call<MediaAsset>({ method: "POST", url: "me/uploads", data, onUploadProgress: onProgress, signal });
+		// a 50MB video over a slow mobile link takes minutes; the tile shows progress and can cancel
+		const res = await httpClient.call<MediaAsset>({ method: "POST", url: "me/uploads", data, onUploadProgress: onProgress, signal, timeout: 10 * 60_000 });
 		return res.data;
 	},
 

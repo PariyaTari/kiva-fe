@@ -6,12 +6,15 @@ import { Icon } from "@/app/_components/icon/icons";
 import { IconName } from "@/app/_components/icon/icon.types";
 import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import { BagKey } from "@/app/_components/shop/bagArt/bagArt.type";
+import { pageMetadata } from "@/utils/seo";
 import PhotosTile from "./_components/photosTile/photosTile";
 import StatCounters from "./_components/statCounters/statCounters";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
 	title: "درباره ما",
-};
+	description: "کیوا از یه دغدغه ساده شروع شد: چیزی که آنلاین می‌خریم، همونی باشه که به دستمون می‌رسه. قبل از ارسال، عکس کیف خودت رو برات می‌فرستیم.",
+	path: "/about",
+});
 
 const VALUES: { icon: IconName; title: string; text: string }[] = [
 	{ icon: "camera", title: "شفافیت کامل", text: "عکس و ویدیوی واقعی، بدون فیلتر. و قبل از ارسال، عکس کیف خودت." },

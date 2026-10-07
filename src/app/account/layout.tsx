@@ -1,5 +1,12 @@
 import "./_styles/account.css";
 import "./_styles/orderActions.css";
+import type { Metadata } from "next";
+import { NO_INDEX } from "@/utils/seo";
+
+// personal pages — every `/account/*` route inherits it
+export const metadata: Metadata = {
+	robots: NO_INDEX,
+};
 
 /**
  * Account — design `account.html` (panels in `(panel)/`, inside the side-menu shell) and the order-action

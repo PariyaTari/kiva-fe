@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { notFound, usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +31,12 @@ import VideoModal from "../videoModal/videoModal";
 /** How long «به سبد اضافه شد» stays on the add button (design). */
 const ADDED_FLASH_MS = 1600;
 
+const subscribeHash = (onChange: () => void) => {
+	window.addEventListener("hashchange", onChange);
+	return () => window.removeEventListener("hashchange", onChange);
+};
+const isReviewsHash = () => window.location.hash === "#reviews";
+
 type ProductViewProps = {
 	slug: string;
 	/** `?color=` of the link (product cards, search) — the colour the page opens with. */
@@ -51,13 +57,16 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 	const [view, setView] = useState(0);
 	const [swapKey, setSwapKey] = useState(0);
 	const [qty, setQty] = useState(1);
-	// `#reviews` links (account → «نظر بده») open on the reviews tab; content is client-only, so no hydration concern
-	const [tab, setTab] = useState<ProductTab>(() => (typeof window !== "undefined" && window.location.hash === "#reviews" ? "rev" : "desc"));
+	// `#reviews` links (account → «نظر بده») open on the reviews tab; the hash is read after hydration (the server never sees it)
+	const linkedToReviews = useSyncExternalStore(subscribeHash, isReviewsHash, () => false);
+	const [pickedTab, setTab] = useState<ProductTab | null>(null);
+	const tab = pickedTab ?? (linkedToReviews ? "rev" : "desc");
 	const [modal, setModal] = useState<"ask" | "video" | null>(null);
 	const [added, setAdded] = useState(false);
 	const buyRef = useRef<HTMLDivElement>(null);
 
-	// wishlist / stock-alert state comes with the token → wait for the session
+	// wishlist / stock-alert state comes with the token → wait for the session before asking. The server prefetch
+	// (`product/[slug]/page.tsx`, same key) fills it as a guest for the HTML; once the session is read it is asked again.
 	const product = useQuery({
 		queryKey: ["product", "detail", slug],
 		queryFn: () => withMappedError(() => ProductEndpoints.getProduct(slug)),
@@ -70,11 +79,12 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 		if (data) document.title = data.seo?.title ?? `${data.name} | کیوا`;
 	}, [data]);
 
+	const hasData = !!data;
 	useEffect(() => {
-		if (!data || window.location.hash !== "#reviews") return;
+		if (!hasData || !linkedToReviews) return;
 		const timer = setTimeout(() => document.getElementById("tabsWrap")?.scrollIntoView(), 100);
 		return () => clearTimeout(timer);
-	}, [data]);
+	}, [hasData, linkedToReviews]);
 
 	useEffect(() => {
 		if (!added) return;
@@ -109,7 +119,8 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 
 	if (product.error?.statusCode === 404) notFound();
 
-	if (!hydrated || product.isLoading) return <ProductSkeleton />;
+	// no data yet: still reading the session, or the first request is out (server-prefetched data renders right away)
+	if (!data && (!hydrated || product.isLoading)) return <ProductSkeleton />;
 
 	const productError = toErrorView(ERROR_BEHAVIOUR, product.error, "دریافت اطلاعات محصول با خطا مواجه شد.");
 	if (productError)

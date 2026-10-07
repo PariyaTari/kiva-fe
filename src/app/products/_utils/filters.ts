@@ -2,6 +2,11 @@ import { ProductFilters, ProductSort } from "../_types/products.type";
 
 export const DEFAULT_SORT: ProductSort = "newest";
 
+/** Cards per request — the client grid and the server prefetch must ask for the same page. */
+export const PAGE_SIZE = 24;
+
+export const SHOP_SUBTITLE = "همه‌ی کیف‌ها با عکس و ویدیوی واقعی؛ رنگت رو انتخاب کن تا عکس همون رنگ رو ببینی.";
+
 export const EMPTY_FILTERS: ProductFilters = {
 	q: "",
 	category: [],
@@ -57,3 +62,15 @@ export function toSearch(filters: ProductFilters, sort: ProductSort): string {
 }
 
 export const sameFilters = (a: ProductFilters, b: ProductFilters) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * The indexable URL of a listing: a single category (`?category=shoulder`) or «تخفیف‌دارها» (`?onSale=true`) are
+ * landing pages of their own; every other combination (colours, price, sort, search) points back to `/products`.
+ */
+export function canonicalSearch(filters: ProductFilters): string {
+	const narrowed = filters.q || filters.color.length || filters.minPrice != null || filters.maxPrice != null || filters.inStock;
+	if (narrowed) return "";
+	if (filters.category.length === 1 && !filters.onSale) return `?category=${encodeURIComponent(filters.category[0])}`;
+	if (!filters.category.length && filters.onSale) return "?onSale=true";
+	return "";
+}

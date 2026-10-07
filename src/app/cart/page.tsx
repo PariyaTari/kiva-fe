@@ -2,10 +2,12 @@ import "./_styles/cart.css";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Icon } from "@/app/_components/icon/icons";
+import { NO_INDEX } from "@/utils/seo";
 import CartView from "./_components/cartView/cartView";
 
 export const metadata: Metadata = {
 	title: "سبد خرید",
+	robots: NO_INDEX,
 };
 
 /** Cart — design `cart.html`. */

@@ -3,11 +3,14 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Icon } from "@/app/_components/icon/icons";
 import BagArt from "@/app/_components/shop/bagArt/bagArt";
+import { pageMetadata } from "@/utils/seo";
 import ContactView from "./_components/contactView/contactView";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
 	title: "تماس با ما",
-};
+	description: "سؤالی درباره کیف‌ها، سفارش یا ارسال داری؟ پشتیبانی کیوا در پیام‌رسان‌ها، تلفن و ایمیل؛ معمولاً کمتر از یک ساعت جواب می‌دیم.",
+	path: "/contact",
+});
 
 /** Contact — design `contact.html`. `?topic=OTHER` (the error block's «گزارش به پشتیبانی») preselects the topic. */
 export default async function ContactPage({ searchParams }: { searchParams: Promise<{ topic?: string | string[] }> }) {

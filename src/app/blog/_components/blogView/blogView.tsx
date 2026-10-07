@@ -15,10 +15,10 @@ import { formatDate } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { BlogEndpoints } from "../../_api/blogEndpoints";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
+import { PAGE_SIZE } from "../../_utils/blogList";
 import PostCard, { postHref } from "../postCard/postCard";
 
 const DEBOUNCE_MS = 150;
-const PAGE_SIZE = 9;
 
 /** `blog.html` — hero with category chips + search, the editor's pick, the post grid and paging. */
 export default function BlogView() {
@@ -36,6 +36,7 @@ export default function BlogView() {
 		return () => clearTimeout(t);
 	}, [term]);
 
+	// both keys are prefetched on the server for the first page (`blog/page.tsx`)
 	const categories = useQuery({
 		queryKey: ["blog", "categories"],
 		queryFn: () => withMappedError(() => BlogEndpoints.getCategories()),

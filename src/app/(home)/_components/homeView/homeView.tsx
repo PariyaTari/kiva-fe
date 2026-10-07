@@ -18,6 +18,7 @@ import TestimonialsSection from "../testimonialsSection/testimonialsSection";
 
 /** Home page body — one aggregate request (`GET /home`) feeds every section. */
 export default function HomeView() {
+	// same key as the server prefetch in `(home)/page.tsx`
 	const home = useQuery({
 		queryKey: ["home", "page"],
 		queryFn: () => withMappedError(() => HomeEndpoints.getHome()),
@@ -56,7 +57,7 @@ export default function HomeView() {
 			<CategoryGrid categories={data.categories} />
 			<NewArrivals products={data.newArrivals} />
 			<PromoBanners promos={data.promos} />
-			{data.sale && <SaleSection sale={data.sale} />}
+			{data.sale && <SaleSection sale={data.sale} receivedAt={home.dataUpdatedAt} />}
 			<TestimonialsSection testimonials={data.testimonials} />
 			<HowItWorks steps={data.howItWorks} />
 		</>

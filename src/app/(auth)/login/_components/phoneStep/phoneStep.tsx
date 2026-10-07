@@ -83,7 +83,7 @@ export default function PhoneStep({ initialPhone, onSent }: PhoneStepProps) {
 				دریافت کد تأیید <Icon name="arrow" />
 			</button>
 			<p className="terms">
-				ورودت به معنی پذیرش <Link href="/faq">قوانین و حریم خصوصی</Link> کیواست.
+				ورودت به معنی پذیرش <Link href="/pages/terms">قوانین و حریم خصوصی</Link> کیواست.
 			</p>
 		</form>
 	);

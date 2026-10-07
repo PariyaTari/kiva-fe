@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import classNames from "classnames";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
@@ -20,15 +20,11 @@ import { withMappedError } from "@/utils/withMappedError";
 import { ProductsEndpoints } from "../../_api/productsEndpoints";
 import { AppliedFilter, ProductFilters, ProductSort } from "../../_types/products.type";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
-import { EMPTY_FILTERS, parseFilters, SORT_OPTIONS, toSearch } from "../../_utils/filters";
+import { EMPTY_FILTERS, PAGE_SIZE, parseFilters, SHOP_SUBTITLE, SORT_OPTIONS, toSearch } from "../../_utils/filters";
 import FiltersPanel from "../filtersPanel/filtersPanel";
-
-const PAGE_SIZE = 24;
-const SUBTITLE = "همه‌ی کیف‌ها با عکس و ویدیوی واقعی؛ رنگت رو انتخاب کن تا عکس همون رنگ رو ببینی.";
 
 /** Shop — filters & sort live in the URL (`/products?category=…&color=…&sort=…`). */
 export default function ProductsView() {
-	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const { filters, sort } = useMemo(() => parseFilters(new URLSearchParams(searchParams.toString())), [searchParams]);
@@ -36,6 +32,7 @@ export default function ProductsView() {
 	const shop = useRef<HTMLDivElement>(null);
 	const hydrated = useHydrated();
 
+	// same key as the server prefetch in `products/page.tsx`
 	const products = useQuery({
 		queryKey: ["products", "list", { ...filters, sort }],
 		queryFn: () => withMappedError(() => ProductsEndpoints.listProducts({ ...filters, sort, page: 1, size: PAGE_SIZE, includeFacets: true })),
@@ -64,7 +61,9 @@ export default function ProductsView() {
 		};
 	}, [sheetOpen]);
 
-	const navigate = (next: ProductFilters, nextSort: ProductSort = sort) => router.replace(`${pathname}${toSearch(next, nextSort)}`, { scroll: false });
+	// a shallow URL update (useSearchParams follows it): the grid re-queries here — a router navigation would also
+	// re-render the page on the server and prefetch the same list there first
+	const navigate = (next: ProductFilters, nextSort: ProductSort = sort) => window.history.replaceState(null, "", `${pathname}${toSearch(next, nextSort)}`);
 
 	const apply = (next: ProductFilters) => {
 		navigate(next);
@@ -108,7 +107,7 @@ export default function ProductsView() {
 								<span id="crumbLast">{crumb}</span>
 							</nav>
 							<h1 id="pageTitle">{title}</h1>
-							<p id="pageSub">{products.data?.subtitle ?? SUBTITLE}</p>
+							<p id="pageSub">{products.data?.subtitle ?? SHOP_SUBTITLE}</p>
 						</div>
 						<div className="art float">
 							<BagArt type="tote" color="lilac" variant={2} />

@@ -284,7 +284,7 @@ export default function CheckoutView() {
 							messenger={ctx.messengers.find((m) => m.channel === messenger) ?? null}
 							reserveOn={!!ctx.reservation?.available && !!ctx.reservation.enabled}
 							holdDays={ctx.reservation?.holdDays ?? 4}
-							termsUrl={ctx.termsUrl || "/faq"}
+							termsUrl={ctx.termsUrl || "/pages/terms"}
 							paying={place.isPending || redirecting}
 							onPay={pay}
 						/>

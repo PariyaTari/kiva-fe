@@ -3,10 +3,12 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Icon } from "@/app/_components/icon/icons";
 import BagArt from "@/app/_components/shop/bagArt/bagArt";
+import { NO_INDEX } from "@/utils/seo";
 import WishlistView from "./_components/wishlistView/wishlistView";
 
 export const metadata: Metadata = {
 	title: "علاقه‌مندی‌ها",
+	robots: NO_INDEX,
 };
 
 /** Wishlist — design `wishlist.html`. */

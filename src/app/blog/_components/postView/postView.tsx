@@ -32,6 +32,7 @@ export default function PostView({ slug }: { slug: string }) {
 	const [activeAnchor, setActiveAnchor] = useState<string | null>(null);
 	const [vote, setVote] = useState<boolean | null>(null);
 
+	// same key as the server prefetch in `blog/[slug]/page.tsx`
 	const post = useQuery({
 		queryKey: ["blog", "post", slug],
 		queryFn: () => withMappedError(() => BlogEndpoints.getPost(slug)),

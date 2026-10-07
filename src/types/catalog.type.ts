@@ -161,6 +161,8 @@ export interface SeoMeta {
 	canonicalUrl?: string;
 	ogImageUrl?: string;
 	noIndex?: boolean;
+	/** schema.org data (Product/Offer/AggregateRating or Article), printed as-is. */
+	jsonLd?: Record<string, unknown>;
 }
 
 export interface Perk {

@@ -15,6 +15,27 @@
       "port": 8080
     },
     {
+      "name": "kiva-mock-8081",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--watch", "mock/server.mjs"],
+      "env": { "MOCK_PORT": "8081", "MOCK_FE_ORIGIN": "http://localhost:3100" },
+      "port": 8081
+    },
+    {
+      "name": "kiva-dev-8081",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "-p", "3100"],
+      "env": { "NEXT_PUBLIC_API_URL": "http://localhost:8081/api/v1/", "NEXT_PUBLIC_SITE_URL": "http://localhost:3100" },
+      "port": 3100
+    },
+    {
+      "name": "kiva-prod-8081",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "start", "-p", "3100"],
+      "env": { "NEXT_PUBLIC_API_URL": "http://localhost:8081/api/v1/", "NEXT_PUBLIC_SITE_URL": "http://localhost:3100" },
+      "port": 3100
+    },
+    {
       "name": "kiva-design",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5500", "--directory", "D:\\pariya\\kiva"],

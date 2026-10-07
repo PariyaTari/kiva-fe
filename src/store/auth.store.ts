@@ -9,7 +9,7 @@ type AuthState = {
 	/** `false` until the persisted session was read on the client — gate auth-dependent UI/queries on it. */
 	hydrated: boolean;
 	setSession: (tokens: AuthTokens, user: User) => void;
-	setTokens: (tokens: AuthTokens) => void;
+	setTokens: (tokens: Pick<AuthTokens, "accessToken" | "refreshToken">) => void;
 	setUser: (user: User) => void;
 	clear: () => void;
 };
@@ -40,6 +40,20 @@ export const useAuthStore = create<AuthState>()(
 		},
 	),
 );
+
+/**
+ * The tokens as last saved by any tab. Tabs share one localStorage but each keeps its own copy in
+ * memory, so after another tab rotated the (single-use) refresh token this is the only fresh copy.
+ */
+export function readPersistedTokens(): Pick<AuthTokens, "accessToken" | "refreshToken"> | null {
+	try {
+		const raw = localStorage.getItem(useAuthStore.persist.getOptions().name ?? "kiva-auth");
+		const state = raw ? (JSON.parse(raw) as { state?: Partial<AuthState> }).state : null;
+		return state?.accessToken && state.refreshToken ? { accessToken: state.accessToken, refreshToken: state.refreshToken } : null;
+	} catch {
+		return null;
+	}
+}
 
 /** Display name the design greets with («سلام سارا» / «دوست عزیز»). */
 export function displayNameOf(user: User | null): string {

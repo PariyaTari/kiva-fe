@@ -254,6 +254,8 @@ const categoryView = (c) => {
 // ───────────────────────────── state ─────────────────────────────
 const users = new Map(); // phone → user
 const access = new Map(); // accessToken → phone
+const accessExpiry = new Map(); // accessToken → ms; past it the token answers 401 TOKEN_EXPIRED (then the FE refreshes)
+const ACCESS_TTL = 900; // seconds — `expiresIn`
 const refresh = new Map(); // refreshToken → phone
 const carts = new Map(); // cartId → cart
 const payments = new Map(); // paymentId → { orderCode, phone, gateway, amount, paidAt }
@@ -340,8 +342,8 @@ const userView = (u) => {
 };
 function issueTokens(u) {
 	const at = rid("at"), rt = rid("rt");
-	access.set(at, u.phone); refresh.set(rt, u.phone);
-	return { accessToken: at, refreshToken: rt, tokenType: "Bearer", expiresIn: 900, refreshExpiresIn: 2592000 };
+	access.set(at, u.phone); accessExpiry.set(at, Date.now() + ACCESS_TTL * 1000); refresh.set(rt, u.phone);
+	return { accessToken: at, refreshToken: rt, tokenType: "Bearer", expiresIn: ACCESS_TTL, refreshExpiresIn: 2592000 };
 }
 const needUser = (ctx) => ctx.user || fail(401, "UNAUTHORIZED", "اول وارد حساب کاربریت شو.");
 
@@ -676,7 +678,7 @@ const siteConfig = () => ({
 	trustBadges: [{ type: "ENAMAD", label: "نماد اعتماد الکترونیکی", imageUrl: null, linkUrl: "#" }, { type: "SAMANDEHI", label: "نشان ساماندهی", imageUrl: null, linkUrl: "#" }],
 	footerLinks: [
 		{ group: "فروشگاه", links: [...D.CATEGORIES.slice(0, 5).map((c) => ({ label: c.name, url: `/products?category=${c.slug}` })), { label: "تخفیف‌دارها", url: "/products?onSale=true" }] },
-		{ group: "راهنمای خرید", links: [{ label: "پیگیری سفارش", url: "/track" }, { label: "کدهای رهگیری روزانه", url: "/track#daily" }, { label: "سوالات متداول", url: "/faq" }, { label: "رزرو ۴ روزه", url: "/faq#reserve" }, { label: "شرایط ارسال", url: "/faq#shipping" }, { label: "بازگشت کالا", url: "/faq#return" }] },
+		{ group: "راهنمای خرید", links: [{ label: "پیگیری سفارش", url: "/track" }, { label: "کدهای رهگیری روزانه", url: "/track#daily" }, { label: "سوالات متداول", url: "/faq" }, { label: "رزرو ۴ روزه", url: "/faq#reserve" }, { label: "شرایط ارسال", url: "/faq#shipping" }, { label: "بازگشت کالا", url: "/faq#return" }, { label: "قوانین و حریم خصوصی", url: "/pages/terms" }] },
 	],
 	features: { wishlistShare: true, reviewMedia: false, giftWrap: false },
 });
@@ -750,6 +752,37 @@ route("GET", "/faq", (ctx) => {
 	return { groups, totalMatches: total, emptyMessage: total ? null : "سوالی با این کلمه پیدا نکردیم؛ از پشتیبانی بپرس" };
 });
 route("GET", "/contact/topics", () => D.CONTACT_TOPICS);
+// static CMS pages (`/pages/{slug}` — [پیشنهادی]); `termsUrl` of checkout points here
+const STATIC_PAGES = {
+	terms: {
+		title: "قوانین و حریم خصوصی",
+		updatedAt: "2026-09-20T08:00:00Z",
+		description: "شرایط خرید از کیوا، ارسال، رزرو ۴ روزه، بازگشت کالا و این‌که با اطلاعاتت چه می‌کنیم.",
+		content: [
+			"<p>با ثبت سفارش در کیوا این شرایط رو می‌پذیری. سعی کردیم کوتاه و روشن بنویسیمشون؛ اگه جایی سؤال داشتی، پشتیبانی همیشه جوابگوست.</p>",
+			"<h2>سفارش و پرداخت</h2>",
+			"<ul><li>قیمت‌ها به <b>تومان</b> و شامل مالیات بر ارزش افزوده‌اند.</li><li>سفارش بعد از پرداخت موفق ثبت می‌شه؛ پرداخت ناتمام تا ۱۵ دقیقه نگه داشته می‌شه و بعد منقضی می‌شه.</li><li>اگه مبلغی کم شد ولی سفارش ثبت نشد، حداکثر تا ۷۲ ساعت به کارتت برمی‌گرده.</li></ul>",
+			"<h2>عکس قبل از ارسال</h2>",
+			"<p>قبل از بسته‌بندی، عکس و ویدیوی <b>همون کیفی که برات می‌فرستیم</b> رو توی پیام‌رسانی که انتخاب کردی و توی حسابت می‌فرستیم. تا وقتی تأیید نکنی یا مهلت پاسخ تموم نشه، ارسال نمی‌شه.</p>",
+			"<h2>رزرو ۴ روزه</h2>",
+			"<p>رزرو اختیاریه: کیف پرداخت‌شده تا ۴ روز پیش ما می‌مونه و خریدهای بعدیت به همون آدرس با <b>یک هزینه ارسال</b> کنارش قرار می‌گیرن.</p>",
+			"<h2>بازگشت کالا</h2>",
+			"<ol><li>تا ۷ روز بعد از تحویل می‌تونی درخواست مرجوعی ثبت کنی.</li><li>کیف باید سالم، استفاده‌نشده و با برچسب و بسته‌بندی اصلی باشه.</li><li>اگه کیف با عکسی که دیدی فرق داشت یا آسیب دیده بود، هزینه‌ی ارسال برگشت با کیواست.</li></ol>",
+			"<h2>حریم خصوصی</h2>",
+			"<p>شماره موبایل، نشانی و اطلاعات سفارش فقط برای پردازش و ارسال سفارش و پشتیبانی استفاده می‌شن و <b>به هیچ شخص ثالثی فروخته نمی‌شن</b>. اطلاعات پرداخت مستقیم در درگاه بانک وارد می‌شه و کیوا اون‌ها رو نمی‌بینه.</p>",
+			"<p>پیامک‌های تبلیغاتی فقط با اجازه‌ی خودت فرستاده می‌شن و از <a href=\"/account/profile\">اطلاعات شخصی</a> حسابت قابل خاموش کردنه.</p>",
+			"<blockquote>هرچی ببینی، همون می‌رسه.</blockquote>",
+		].join(""),
+	},
+};
+route("GET", "/pages/:slug", (ctx) => {
+	const page = STATIC_PAGES[ctx.params.slug] || fail(404, "PAGE_NOT_FOUND", "این صفحه پیدا نشد.");
+	return {
+		slug: ctx.params.slug, title: page.title, content: page.content, updatedAt: page.updatedAt,
+		seo: { title: `${page.title} | کیوا`, description: page.description, canonicalUrl: `https://kiva.ir/pages/${ctx.params.slug}` },
+	};
+});
+
 route("POST", "/contact/messages", (ctx) => {
 	const b = ctx.body || {};
 	const errors = [];
@@ -800,6 +833,11 @@ route("POST", "/auth/logout", (ctx) => {
 	needUser(ctx);
 	refresh.delete(ctx.body?.refreshToken);
 	access.delete(ctx.token);
+	ctx.status = 204;
+});
+// test aid (not in the spec): expire every access token now, to watch the FE rotate them (e.g. with two tabs open)
+route("POST", "/__mock/expire-access-tokens", (ctx) => {
+	for (const at of accessExpiry.keys()) accessExpiry.set(at, 0);
 	ctx.status = 204;
 });
 
@@ -985,7 +1023,7 @@ const checkoutContext = (ctx) => {
 		cart, addresses: u.addresses.map(addressView), selectedAddressId: def ? def.id : null,
 		messengers: D.MESSENGERS, selectedMessenger: u.defaultMessenger, messengerPhone: u.defaultMessengerPhone || u.phone,
 		shippingOptions: cart.shippingOptions, reservation: cart.reservation, consolidation: cart.consolidation,
-		paymentGateways: D.GATEWAYS, giftWrap: { available: false, price: 0 }, termsUrl: "/faq",
+		paymentGateways: D.GATEWAYS, giftWrap: { available: false, price: 0 }, termsUrl: "/pages/terms",
 	};
 };
 route("GET", "/checkout", (ctx) => checkoutContext(ctx));
@@ -1591,7 +1629,7 @@ const server = http.createServer(async (req, res) => {
 	const ctx = {
 		req, headers: {}, status: 200, token, query: Object.fromEntries(url.searchParams),
 		params: Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(path.match(r.re)[i + 1])])),
-		user: token && access.has(token) ? users.get(access.get(token)) : null,
+		user: token && access.has(token) && accessExpiry.get(token) > Date.now() ? users.get(access.get(token)) : null,
 	};
 	await new Promise((ok) => setTimeout(ok, DELAY));
 	try {

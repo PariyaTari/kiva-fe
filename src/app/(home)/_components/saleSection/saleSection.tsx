@@ -6,7 +6,7 @@ import Countdown from "../countdown/countdown";
 import { Campaign } from "../../_types/home.type";
 
 /** Active campaign — countdown + the most-discounted in-stock bags. */
-export default function SaleSection({ sale }: { sale: Campaign }) {
+export default function SaleSection({ sale, receivedAt }: { sale: Campaign; receivedAt: number }) {
 	return (
 		<section className="section" id="sale" aria-labelledby="saleT">
 			<div className="container">
@@ -19,7 +19,7 @@ export default function SaleSection({ sale }: { sale: Campaign }) {
 							<h2 id="saleT">محصولات تخفیف‌خورده</h2>
 							<p>{sale.subtitle}</p>
 						</div>
-						<Countdown endsAt={sale.endsAt} serverTime={sale.serverTime} />
+						<Countdown endsAt={sale.endsAt} serverTime={sale.serverTime} receivedAt={receivedAt} />
 					</div>
 					<div className="p-grid" id="saleGrid">
 						{sale.products.map((p, i) => (
