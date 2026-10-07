@@ -76,7 +76,7 @@ export default function CartSummary({ cart, signedIn, totalRef, onCheckout }: Ca
 						)}
 					</b>
 				</div>
-				{reservation.enabled && (
+				{reservation.available && reservation.enabled && (
 					<div className="sum-row">
 						<span>رزرو {toPersianDigits(reservation.holdDays)} روزه</span>
 						<b className="tag tag-cream">فعال</b>

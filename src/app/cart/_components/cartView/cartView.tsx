@@ -105,9 +105,10 @@ export default function CartView() {
 							</div>
 						</div>
 
-						<ShippingOptions options={data.shippingOptions} selected={data.shippingMethod} />
+						<ShippingOptions options={data.shippingOptions} selected={data.shippingMethod} lockedTo={data.consolidation?.shippingMethod} />
 
-						{data.reservation.available && <ReserveBox reservation={data.reservation} />}
+						{/* optional, beside the shipping method; hidden only when reserving is off site-wide */}
+						{data.reservation.unavailableReason !== "RESERVATION_DISABLED" && <ReserveBox reservation={data.reservation} consolidation={data.consolidation} />}
 
 						<DiscountCode discount={data.discount} />
 					</div>

@@ -1,5 +1,5 @@
 import { generateID } from "@/utils/generateId";
-import { PaymentRedirect } from "../_types/checkout.type";
+import { PaymentRedirect } from "@/types/order.type";
 
 /** Leaves for the bank page: a plain navigation for GET, an auto-submitted form for POST gateways (Saman/Mellat). */
 export function redirectToGateway({ url, method, fields }: PaymentRedirect) {

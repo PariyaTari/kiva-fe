@@ -1,6 +1,6 @@
 import { httpClient } from "@/httpClient/HttpClient";
-import { PaymentGatewayCode } from "@/types/order.type";
-import { CheckoutContext, PaymentInit, PaymentResult, PlaceOrderPayload, PlaceOrderResponse } from "../_types/checkout.type";
+import { PaymentGatewayCode, PaymentInit } from "@/types/order.type";
+import { CheckoutContext, PaymentResult, PlaceOrderPayload, PlaceOrderResponse } from "../_types/checkout.type";
 
 /** Pure request functions — no React Query concepts live here (see data-fetching standard). */
 export const CheckoutEndpoints = {

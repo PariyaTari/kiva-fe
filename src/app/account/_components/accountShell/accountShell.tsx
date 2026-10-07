@@ -1,13 +1,14 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuthEndpoints } from "@/app/(auth)/_api/authEndpoints";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
 import Loading from "@/app/_components/common/loading/loading";
 import { Icon } from "@/app/_components/icon/icons";
+import { useRequireLogin } from "@/hooks/useRequireLogin";
 import { displayNameOf, useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { toErrorView } from "@/utils/apiError";
@@ -24,16 +25,13 @@ import AccountStats from "../accountStats/accountStats";
  */
 export default function AccountShell({ children }: { children: ReactNode }) {
 	const router = useRouter();
-	const pathname = usePathname();
 	const queryClient = useQueryClient();
 	const hydrated = useAuthStore((s) => s.hydrated);
 	const signedIn = useAuthStore((s) => !!s.accessToken);
 	const storedUser = useAuthStore((s) => s.user);
 	const [leaving, setLeaving] = useState(false);
 
-	useEffect(() => {
-		if (hydrated && !signedIn && !leaving) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-	}, [hydrated, signedIn, leaving, pathname, router]);
+	useRequireLogin(!leaving);
 
 	// the counters live here; panels invalidate ["me", "dashboard"] after changes that move them
 	const dashboard = useQuery({

@@ -1,5 +1,5 @@
 /** Mirrors the backend account contract (kiva-openapi.yml · Account, Orders, Reviews). */
-import { ShippingMethodCode } from "@/types/cart.type";
+import { Cart, ShippingMethodCode } from "@/types/cart.type";
 import { OrderCode, OrderSummary, PhotoMessengerChannel, ReservationInfo } from "@/types/order.type";
 import { PageMeta } from "@/types/pageinate";
 import { Review } from "@/types/review.type";
@@ -67,3 +67,13 @@ export interface MyReviewListResponse {
 	meta: PageMeta;
 	counts?: { total: number; pending: number; approved: number };
 }
+
+/** `POST /me/orders/{code}/reorder` — same shape as «افزودن همه به سبد» of the wishlist. */
+export interface ReorderResponse {
+	cart: Cart;
+	addedCount: number;
+	skipped: { productId: number; name: string; reason: "OUT_OF_STOCK" | "UNAVAILABLE" | "ALREADY_AT_MAX" }[];
+	message: string;
+}
+
+export type UploadPurpose = "RETURN_EVIDENCE" | "REVIEW_PHOTO";

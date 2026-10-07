@@ -1,8 +1,31 @@
 import { httpClient } from "@/httpClient/HttpClient";
 import { Address, AddressInput } from "@/types/address.type";
-import { OrderCode, OrderDetail } from "@/types/order.type";
+import { MediaAsset } from "@/types/catalog.type";
+import {
+	CancelOrderPayload,
+	CancelOrderResponse,
+	CreateReturnPayload,
+	MediaFeedbackPayload,
+	OrderCode,
+	OrderDetail,
+	PaymentGatewayCode,
+	PaymentInit,
+	PreShipmentMedia,
+	ReturnRequest,
+} from "@/types/order.type";
 import { User } from "@/types/user.type";
-import { AccountDashboard, MyReviewListResponse, OrderListFilter, OrderListResponse, TrackingDayGroup, UpdateProfilePayload } from "../_types/account.type";
+import {
+	AccountDashboard,
+	MyReviewListResponse,
+	OrderListFilter,
+	OrderListResponse,
+	ReorderResponse,
+	TrackingDayGroup,
+	UpdateProfilePayload,
+	UploadPurpose,
+} from "../_types/account.type";
+
+const orderUrl = (code: OrderCode, rest = "") => `me/orders/${encodeURIComponent(code)}${rest}`;
 
 /** Pure request functions — no React Query concepts live here (see data-fetching standard). All need a signed-in user. */
 export const AccountEndpoints = {
@@ -28,7 +51,66 @@ export const AccountEndpoints = {
 	},
 
 	getOrder: async (code: OrderCode) => {
-		const res = await httpClient.call<OrderDetail>({ method: "GET", url: `me/orders/${encodeURIComponent(code)}` });
+		const res = await httpClient.call<OrderDetail>({ method: "GET", url: orderUrl(code) });
+		return res.data;
+	},
+
+	/** Pre-shipment photos with the answer deadline (`feedbackDeadline`) and the shopper's answer. */
+	getOrderMedia: async (code: OrderCode) => {
+		const res = await httpClient.call<PreShipmentMedia>({ method: "GET", url: orderUrl(code, "/media") });
+		return res.data;
+	},
+
+	// ── order actions (shown by `OrderSummary.actions`) ──
+	/** A new transaction for an unpaid order; the same `Idempotency-Key` for a resend of the same attempt. */
+	payOrder: async (code: OrderCode, idempotencyKey: string, gateway: PaymentGatewayCode) => {
+		const res = await httpClient.call<PaymentInit>({
+			method: "POST",
+			url: orderUrl(code, "/payments"),
+			data: { gateway },
+			headers: { "Idempotency-Key": idempotencyKey },
+		});
+		return res.data;
+	},
+
+	/** Puts the order's items that are still in stock back in the cart. */
+	reorder: async (code: OrderCode) => {
+		const res = await httpClient.call<ReorderResponse>({ method: "POST", url: orderUrl(code, "/reorder") });
+		return res.data;
+	},
+
+	cancelOrder: async (code: OrderCode, payload: CancelOrderPayload) => {
+		const res = await httpClient.call<CancelOrderResponse>({ method: "POST", url: orderUrl(code, "/cancel"), data: payload });
+		return res.data;
+	},
+
+	sendMediaFeedback: async (code: OrderCode, payload: MediaFeedbackPayload) => {
+		const res = await httpClient.call<OrderDetail>({ method: "POST", url: orderUrl(code, "/media-feedback"), data: payload });
+		return res.data;
+	},
+
+	createReturn: async (code: OrderCode, payload: CreateReturnPayload) => {
+		const res = await httpClient.call<ReturnRequest>({ method: "POST", url: orderUrl(code, "/returns"), data: payload });
+		return res.data;
+	},
+
+	getReturns: async () => {
+		const res = await httpClient.call<ReturnRequest[]>({ method: "GET", url: "me/returns" });
+		return res.data;
+	},
+
+	/** The invoice PDF of a paid order. */
+	downloadInvoice: async (code: OrderCode) => {
+		const res = await httpClient.call<Blob>({ method: "GET", url: orderUrl(code, "/invoice"), responseType: "blob" });
+		return res.data;
+	},
+
+	/** Multipart upload (return evidence, review photos); `signal` lets a removed tile stop its upload. */
+	uploadFile: async (file: File, purpose: UploadPurpose, onProgress?: (percent: number) => void, signal?: AbortSignal) => {
+		const data = new FormData();
+		data.append("file", file);
+		data.append("purpose", purpose);
+		const res = await httpClient.call<MediaAsset>({ method: "POST", url: "me/uploads", data, onUploadProgress: onProgress, signal });
 		return res.data;
 	},
 

@@ -1,16 +1,10 @@
 import "./_styles/account.css";
-import type { Metadata } from "next";
-import AccountShell from "./_components/accountShell/accountShell";
+import "./_styles/orderActions.css";
 
-export const metadata: Metadata = {
-	title: "حساب کاربری",
-};
-
-/** Account — design `account.html`; each side-menu panel is its own route under `/account/*`. */
+/**
+ * Account — design `account.html` (panels in `(panel)/`, inside the side-menu shell) and the order-action
+ * pages of `kiva-order-actions` (the return page has the checkout-like layout, without the menu).
+ */
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
-	return (
-		<div className="pg-account">
-			<AccountShell>{children}</AccountShell>
-		</div>
-	);
+	return <div className="pg-account">{children}</div>;
 }

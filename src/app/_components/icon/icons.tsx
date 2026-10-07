@@ -61,6 +61,17 @@ const PATHS: Record<IconName, ReactNode> = {
 	bell: <path d="M6 10a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6M10 19a2 2 0 004 0" />,
 	leaf: <path d="M5 19c0-9 6-14 15-14 0 9-5 15-14 15M5 19l7-7" />,
 	award: (<><circle cx="12" cy="9" r="5.5" /><path d="M8.5 13.5L7 21l5-2.5 5 2.5-1.5-7.5" /></>),
+	// order actions (kiva-order-actions `XI`)
+	download: <path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" />,
+	upload: <path d="M12 16V5M7 9.5l5-5 5 5M5 20h14" />,
+	receipt: (<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z" /><path d="M9 8h6M9 12h6M9 16h3" /></>),
+	ban: (<><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>),
+	swap: <path d="M7 7h12M15 3l4 4-4 4M17 17H5M9 13l-4 4 4 4" />,
+	alert: (<><path d="M12 4l9 16H3L12 4z" /><path d="M12 10v4M12 17h.01" /></>),
+	palette: (<><path d="M12 3a9 9 0 100 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.3-.3-.3-.5-.8-.5-1.2 0-1 .8-1.7 1.8-1.7H17a4 4 0 004-4c0-4.4-4-8-9-8z" /><circle cx="7.5" cy="11" r="1.2" /><circle cx="10" cy="7" r="1.2" /><circle cx="15" cy="7.5" r="1.2" /></>),
+	wallet: (<><path d="M4 7.5A2.5 2.5 0 016.5 5H17v3" /><rect x="4" y="8" width="16" height="11" rx="2.5" /><path d="M16 13.5h.01" /></>),
+	bank: <path d="M3 9l9-5 9 5M5 10v7M9.5 10v7M14.5 10v7M19 10v7M3 20h18" />,
+	print: (<><path d="M7 9V4h10v5" /><rect x="4" y="9" width="16" height="8" rx="2" /><path d="M7 14h10v6H7z" /></>),
 };
 
 /** `<Icon name="arrow" />` — renders like the design's `icon('arrow')`, incl. the `i-arrow` hook class. */

@@ -3,10 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import classNames from "classnames";
-import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
 import Loading from "@/app/_components/common/loading/loading";
 import BagArt from "@/app/_components/shop/bagArt/bagArt";
+import { ReturnRequest } from "@/types/order.type";
 import { toErrorView } from "@/utils/apiError";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
@@ -18,11 +19,13 @@ const FILTERS: { key: OrderListFilter; label: string }[] = [
 	{ key: "all", label: "همه" },
 	{ key: "current", label: "جاری" },
 	{ key: "delivered", label: "تحویل شده" },
+	// shown only while there is a cancelled order (`counts.cancelled`)
+	{ key: "cancelled", label: "لغو شده" },
 ];
 
 const PAGE_SIZE = 10;
 
-/** `#p-orders` «سفارش‌های من» — همه / جاری / تحویل شده, newest first. */
+/** `#p-orders` «سفارش‌های من» — همه / جاری / تحویل شده (/ لغو شده), newest first. */
 export default function OrdersPanel() {
 	const [filter, setFilter] = useState<OrderListFilter>("all");
 
@@ -35,24 +38,48 @@ export default function OrdersPanel() {
 		meta: { showNotificationOnRefetch: true },
 	});
 
+	// the return status box of the cards — `OrderSummary` has no `returns`
+	const returns = useQuery({
+		queryKey: ["me", "returns"],
+		queryFn: () => withMappedError(() => AccountEndpoints.getReturns()),
+		meta: { showNotificationOnRefetch: true },
+	});
+	const latestReturn = new Map<string, ReturnRequest>();
+	[...(returns.data ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).forEach((r) => latestReturn.set(r.orderCode, r));
+
 	const list = orders.data?.pages.flatMap((p) => p.items) ?? [];
+	const cancelledCount = orders.data?.pages[0]?.counts?.cancelled ?? 0;
+	const filters = FILTERS.filter((f) => f.key !== "cancelled" || cancelledCount > 0 || filter === "cancelled");
 	// a failed «بیشتر» keeps the orders already shown; only a failed first page replaces the list
 	const firstPageFailed = !!orders.error && !orders.isFetchNextPageError;
 	const ordersError = toErrorView(ERROR_BEHAVIOUR, firstPageFailed ? orders.error : null, "دریافت سفارش‌ها با خطا مواجه شد.");
 	const moreError = toErrorView(ERROR_BEHAVIOUR, orders.isFetchNextPageError ? orders.error : null, "دریافت سفارش‌های بیشتر با خطا مواجه شد.");
+	const returnsError = toErrorView(ERROR_BEHAVIOUR, returns.error, "دریافت وضعیت درخواست‌های مرجوعی با خطا مواجه شد.");
 
 	return (
 		<div className="panel on" id="p-orders">
 			<div className="p-head">
 				<h2>سفارش‌های من</h2>
 				<div className="seg">
-					{FILTERS.map((f) => (
+					{filters.map((f) => (
 						<button key={f.key} type="button" className={classNames({ on: filter === f.key })} onClick={() => setFilter(f.key)}>
 							{f.label}
 						</button>
 					))}
 				</div>
 			</div>
+			{!!returnsError && (
+				<div style={{ marginBottom: 14 }}>
+					<ErrorComponent
+						retryable={returnsError.retryable}
+						ticketAble={returnsError.ticketAble}
+						errorText={returnsError.errorText}
+						executeFunction={() => returns.refetch()}
+						height={56}
+						loading={returns.isFetching}
+					/>
+				</div>
+			)}
 			{orders.isLoading ? (
 				<Loading />
 			) : !!ordersError ? (
@@ -67,7 +94,7 @@ export default function OrdersPanel() {
 				list.length ? (
 					<div style={orders.isPlaceholderData ? { opacity: 0.5, transition: "opacity .2s" } : undefined}>
 						{list.map((order) => (
-							<OrderCard key={order.code} order={order} />
+							<OrderCard key={order.code} order={order} ret={latestReturn.get(order.code)} />
 						))}
 						{!!moreError && (
 							<ErrorComponent

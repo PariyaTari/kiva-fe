@@ -2,7 +2,16 @@
 import { Address, AddressInput } from "@/types/address.type";
 import { Cart, CartReservation, ReservationConsolidation, ShippingMethodCode, ShippingOptionQuote } from "@/types/cart.type";
 import { Money } from "@/types/catalog.type";
-import { MessengerOption, OrderCode, OrderStatus, OrderSummary, PaymentGatewayCode, PaymentStatus, PhotoMessengerChannel } from "@/types/order.type";
+import {
+	MessengerOption,
+	OrderCode,
+	OrderStatus,
+	OrderSummary,
+	PaymentGatewayCode,
+	PaymentInit,
+	PaymentStatus,
+	PhotoMessengerChannel,
+} from "@/types/order.type";
 
 export interface PaymentGateway {
 	code: PaymentGatewayCode;
@@ -53,22 +62,6 @@ export interface PlaceOrderPayload {
 	/** The amount on the pay button — the server answers `409 PRICE_CHANGED` when it moved. */
 	expectedPayable?: Money;
 	acceptTerms: boolean;
-}
-
-/** How to leave for the bank: GET → just `url`; POST (Saman/Mellat) → an auto-submitted form with `fields`. */
-export interface PaymentRedirect {
-	url: string;
-	method: "GET" | "POST";
-	fields?: Record<string, string>;
-}
-
-export interface PaymentInit {
-	paymentId: string;
-	gateway: PaymentGatewayCode;
-	amount: Money;
-	redirect: PaymentRedirect;
-	/** End of the temporary stock hold. */
-	expiresAt?: string;
 }
 
 export interface PlaceOrderResponse {

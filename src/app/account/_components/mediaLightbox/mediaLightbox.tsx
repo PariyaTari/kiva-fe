@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import classNames from "classnames";
 import { Icon } from "@/app/_components/icon/icons";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
 import Modal from "@/app/_components/ui/modal/modal";
 import { OrderMediaItem } from "@/types/order.type";
 import { toPersianDigits } from "@/utils/digits";
+import { clockTime, dayLong } from "../../_utils/orderActions";
 
 type MediaLightboxProps = {
 	open: boolean;
@@ -15,10 +17,18 @@ type MediaLightboxProps = {
 	onIndex: (index: number) => void;
 	/** «کیف دوشی ماهک — مشکی · سفارش KV-…». */
 	caption: string;
+	/** While the photos wait for an answer: «همونه!» / «می‌خوام عوضش کنم» under the photo. */
+	decide?: {
+		deadline?: string | null;
+		canChange?: boolean;
+		approving?: boolean;
+		onApprove: () => void;
+		onChange: () => void;
+	};
 };
 
 /** The design's `openLb` — the pre-shipment photos and video, one at a time with prev / next. */
-export default function MediaLightbox({ open, onClose, items, index, onIndex, caption }: MediaLightboxProps) {
+export default function MediaLightbox({ open, onClose, items, index, onIndex, caption, decide }: MediaLightboxProps) {
 	const item = items[index];
 	const step = (delta: number) => onIndex((index + delta + items.length) % items.length);
 
@@ -44,6 +54,23 @@ export default function MediaLightbox({ open, onClose, items, index, onIndex, ca
 					<Icon name="left" />
 				</button>
 			</div>
+			{decide && (
+				<div className="m-foot">
+					{decide.deadline && (
+						<span className="sp">
+							<Icon name="clock" /> تا {dayLong(decide.deadline)}، ساعت {clockTime(decide.deadline)}
+						</span>
+					)}
+					{decide.canChange && (
+						<button type="button" className="btn btn-white" onClick={decide.onChange}>
+							<Icon name="swap" /> می‌خوام عوضش کنم
+						</button>
+					)}
+					<button type="button" className={classNames("btn btn-primary", { loading: decide.approving })} onClick={decide.onApprove}>
+						<Icon name="check" /> همونه! ارسالش کن
+					</button>
+				</div>
+			)}
 		</Modal>
 	);
 }

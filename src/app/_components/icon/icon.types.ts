@@ -8,7 +8,8 @@ export type IconName =
 	| "plus" | "minus" | "trash" | "check" | "play" | "camera" | "truck" | "box" | "home" | "phone" | "mail"
 	| "pin" | "clock" | "star" | "filter" | "sort" | "copy" | "image" | "video" | "shield" | "refresh" | "logout"
 	| "edit" | "chat" | "info" | "eye" | "cal" | "sparkle" | "lock" | "send" | "card" | "tag" | "timer" | "quote"
-	| "share" | "ruler" | "headset" | "grid" | "smile" | "pkg" | "feather" | "fire" | "bell" | "leaf" | "award";
+	| "share" | "ruler" | "headset" | "grid" | "smile" | "pkg" | "feather" | "fire" | "bell" | "leaf" | "award"
+	| "download" | "upload" | "receipt" | "ban" | "swap" | "alert" | "palette" | "wallet" | "bank" | "print";
 
 export type IconProps = svgIcon & {
 	/** Unknown names (e.g. a new one from the API) render an empty icon instead of breaking. */

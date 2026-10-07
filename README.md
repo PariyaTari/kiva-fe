@@ -4,8 +4,8 @@
 
 بر پایه‌ی **Next.js 16 (App Router)** + **TypeScript** + **Tailwind CSS 3** + **TanStack Query v5** + **Zustand**، راست‌به‌چپ و فارسی — با همان ساختار و قراردادهای پروژه‌ی `avand-fe`.
 
-- طرح‌ها: `D:\pariya\kiva` (HTML/CSS استاتیک؛ `assets/kiva.css` منبع دیزاین‌سیستم)
-- قرارداد API: `D:\pariya\kiva-openapi.yml` (نسخه‌ی 1.0.1)
+- طرح‌ها: `D:\pariya\kiva` (HTML/CSS استاتیک؛ `assets/kiva.css` منبع دیزاین‌سیستم) + کارهای سفارش در `D:\pariya\kiva-order-actions`
+- قرارداد API: `D:\pariya\kiva-openapi.yml` (نسخه‌ی 1.2.0)
 - استانداردها: اسکیل‌های `data-fetching` و `error-ui`
 
 ## اجرا (محیط توسعه)
@@ -32,7 +32,9 @@ NEXT_PUBLIC_API_URL="http://localhost:8080/api/v1/"
 
 پیاده‌سازی بخش فروشگاهی OpenAPI در حافظه، بدون وابستگی، با داده‌های خود دیزاین (`data.mjs`) و تصاویر SVG کیف/کاور (`art.mjs`).
 
-- **ورود:** هر کد ۵ رقمی پذیرفته می‌شود، جز `00000` (← `OTP_INVALID`). کاربر جدید داده‌ی نمونه دارد (۴ سفارش، یک آدرس، ۳ علاقه‌مندی، ۲ نظر).
+- **ورود:** هر کد ۵ رقمی پذیرفته می‌شود، جز `00000` (← `OTP_INVALID`). کاربر جدید داده‌ی نمونه دارد: ۱۳ سفارش (از هر وضعیت یکی: در انتظار پرداخت، ناموفق، منقضی، رزروشده، عکس منتظر پاسخ / تأییدشده / درخواست تغییر، ارسال‌شده، تحویل‌شده، مرجوعی، لغوشده)، یک آدرس، ۳ علاقه‌مندی، ۲ نظر.
+- **رزرو ۴ روزه (قرارداد 1.2.0):** سوییچ اختیاری کنار روش ارسال؛ مهلت از پرداخت موفق سفارش اول شروع می‌شود. با رزرو فعال، سبد/تسویه به همان آدرس `consolidation` می‌گیرد (ارسال رایگان با روش ارسال گروه) و سوییچ `HAS_ACTIVE_RESERVATION` می‌شود. «کلاچ مهتاب» قابل رزرو نیست (`ITEM_NOT_RESERVABLE`).
+- **کارهای سفارش:** پرداخت از حساب با «بانک سامان» همیشه `PAYMENT_GATEWAY_UNAVAILABLE` می‌دهد (مثل دیزاین)؛ سفارش پرداخت‌نشده ۱۵ دقیقه بعد منقضی می‌شود؛ آپلود فقط نوع و حجم را چک می‌کند و به‌جای فایل یک تصویر کیف برمی‌گرداند؛ فاکتور یک PDF ساده‌ی لاتین است.
 - **کد تخفیف:** `KIVA10`، `WELCOME`، `PAEEZ15`.
 - **پرداخت:** `payment.redirect` به یک بانک آزمایشی (`/mock-gateway/:id`) می‌رود با دو دکمه‌ی «پرداخت موفق» و «انصراف»؛ بعد به `/checkout/result?paymentId=…` برمی‌گردد. `POST /payments/{id}/retry` هم هست.
 - **پیگیری:** شماره‌سفارش‌هایی که با `0000` تمام می‌شوند «پیدا نشد» می‌دهند؛ بقیه یک سفارش نمونه.
@@ -48,7 +50,8 @@ NEXT_PUBLIC_API_URL="http://localhost:8080/api/v1/"
 | `/cart` | `cart.html` |
 | `/checkout`، `/checkout/result?paymentId=` | `checkout.html` (+ نتیجه‌ی پرداخت) |
 | `/login?next=` | `login.html` (OTP) |
-| `/account/{orders,tracking,addresses,wishlist,reviews,profile}` | `account.html#…` (هر پنل یک مسیر؛ `/account` ← orders) |
+| `/account/{orders,tracking,addresses,wishlist,reviews,profile}` | `account.html#…` (هر پنل یک مسیر؛ `/account` ← orders) + کارهای سفارش روی کارت: پرداخت، لغو، تأیید عکس / درخواست تغییر، خرید دوباره، فاکتور، وضعیت مرجوعی (`kiva-order-actions/*.html`) |
+| `/account/orders/[code]/return` | `kiva-order-actions/order-return.html` (بدون منوی حساب) |
 | `/wishlist`، `/wishlist/shared/[token]` | `wishlist.html` (+ لیست اشتراکیِ دیگران، با همان ظاهر) |
 | `/track?order=` | `track.html` (+ `#daily`) |
 | `/blog`، `/blog/[slug]` | `blog.html`، `blog-post.html` |
@@ -76,7 +79,7 @@ src/
 │   └── <feature>/               — (home)، products، product، cart، checkout، (auth)، account، wishlist، track، blog، faq، contact، about
 ├── config/                      — global.ts (env)، site.ts (FALLBACK_CONFIG)
 ├── httpClient/                  — HttpClient (Bearer / X-Cart-Token، رفرش تک‌پرواز روی ۴۰۱) + mapError
-├── hooks/                       — useForm، useAddressForm، useReveal، useHydrated
+├── hooks/                       — useForm، useAddressForm، useReveal، useHydrated، useRequireLogin
 ├── store/                       — auth (persist)، cart (توکن سبد مهمان)، ui (پنل‌ها)، notification
 ├── types/                       — تایپ‌های مشترک هم‌نام با schemaهای OpenAPI
 ├── utils/                       — withMappedError، apiError (toErrorView)، format، digits، jalali، clipboard، flyToCart، …
@@ -111,6 +114,8 @@ src/app/checkout/
 ## انحراف‌های آگاهانه از دیزاین
 
 - سبد خرید و حساب کاربری در موبایل: خود دیزاین اسکرول افقی داشت؛ در CSS scope‌شده با کامنت اصلاح شد.
+- سوییچ‌های فیلتر فروشگاه: در خود دیزاین قاعده‌ی `.f-sec > label` نوار سوییچ را به عرض ۰ می‌رساند (فقط دایره‌ی سفید دیده می‌شد)؛ با `:not(.switch)` اصلاح شد.
 - صفحه‌بندی بلاگ فقط وقتی واقعاً بیش از یک صفحه هست نمایش داده می‌شود (در دیزاین یک pager ثابت نمایشی بود).
 - صفحه‌ی `/wishlist/shared/[token]` (لیستی که کس دیگری به اشتراک گذاشته، فقط‌خواندنی) با ظاهر `wishlist.html` ساخته شد؛ در دیزاین دکمه‌ی اشتراک فقط لینک فروشگاه را کپی می‌کرد. حالت ناموفق صفحه‌ی نتیجه‌ی پرداخت هم در دیزاین نبود و با کلاس‌های خود دیزاین ساخته شد.
 - «کدهای آزمایشی» زیر کد تخفیف و «نسخه نمایشی» زیر OTP فقط در development.
+- کارهای سفارش: جاهایی که API داده‌ی طراحی را نمی‌دهد (مهلت نگه‌داشت پرداخت، دلیل بانک، «رنگ قبل ← بعد» درخواست تغییر، مراحل برگشت وجه روی کارت لغوشده) طبق تصمیم‌های PROGRESS.md (بخش ۰.۳) حذف یا با متن عمومی جایگزین شده‌اند. سند PDF فاکتور را بک‌اند می‌سازد؛ `order-invoice.html` فقط قالب پیشنهادی است.

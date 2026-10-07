@@ -87,19 +87,30 @@ export interface AppliedDiscount {
 	amount: Money;
 }
 
+/** Why the «رزرو ۴ روزه» switch can't be turned on (only while `available = false`). */
+export type ReservationUnavailableReason = "HAS_ACTIVE_RESERVATION" | "ITEM_NOT_RESERVABLE" | "RESERVATION_DISABLED";
+
+/** The optional «رزرو ۴ روزه» switch beside the shipping method — off unless the shopper turns it on. */
 export interface CartReservation {
 	available: boolean;
+	/** `HAS_ACTIVE_RESERVATION` → show the joining message (`consolidation`) instead of the switch. */
+	unavailableReason?: ReservationUnavailableReason | null;
 	enabled: boolean;
 	holdDays: number;
 	shipAfterDate?: string;
 	timeline?: { title: string; text: string }[];
 }
 
+/** The shopper has an active reservation: an order to the same address joins its group and ships free. */
 export interface ReservationConsolidation {
 	reservedOrderCode: OrderCode;
+	/** Fixed for the whole group — never extended. */
 	expiresAt: string;
+	/** Only orders to this address join. */
 	addressId?: number;
 	shippingWaived?: boolean;
+	/** The group's method (the first order's); a joining order can't pick another. */
+	shippingMethod?: ShippingMethodCode;
 	message: string;
 }
 

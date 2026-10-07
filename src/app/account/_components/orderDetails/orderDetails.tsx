@@ -15,6 +15,7 @@ import { formatDate, formatPrice, pad2 } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
+import InvoiceButton from "../invoiceButton/invoiceButton";
 import MediaLightbox from "../mediaLightbox/mediaLightbox";
 
 /** «۰:۲۴» on a video thumbnail. */
@@ -192,6 +193,8 @@ function Details({ order, onOpenMedia }: { order: OrderDetail; onOpenMedia: (ind
 							عکس قبل از ارسال: {media.channelName} ({toPersianDigits(media.phone)})
 						</p>
 					)}
+					{/* paid orders only — the backend renders the PDF */}
+					{order.invoiceUrl && <InvoiceButton code={order.code} variant="link" />}
 				</div>
 			</div>
 		</>

@@ -51,6 +51,12 @@ export const FALLBACK_CONFIG: SiteConfig = {
 			],
 		},
 	],
+	// the design's gateways (pay modal of an unpaid order)
+	paymentGateways: [
+		{ code: "ZARINPAL", name: "زرین‌پال", brandColor: "#F2C230", initial: "ز", isDefault: true, available: true },
+		{ code: "SAMAN", name: "بانک سامان", brandColor: "#1D5FA8", initial: "س", available: true },
+		{ code: "MELLAT", name: "بانک ملت", brandColor: "#C8102E", initial: "م", available: true },
+	],
 };
 
 /** Support hours line of the footer and contact cards (the design prints it as one phrase). */

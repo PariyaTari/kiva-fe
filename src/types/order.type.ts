@@ -181,6 +181,23 @@ export interface OrderEvent {
 	note?: string | null;
 }
 
+/** How to leave for the bank: GET → just `url`; POST (Saman/Mellat) → an auto-submitted form with `fields`. */
+export interface PaymentRedirect {
+	url: string;
+	method: "GET" | "POST";
+	fields?: Record<string, string>;
+}
+
+/** A new bank transaction (place order, retry, pay from the account). */
+export interface PaymentInit {
+	paymentId: string;
+	gateway: PaymentGatewayCode;
+	amount: Money;
+	redirect: PaymentRedirect;
+	/** End of the temporary stock hold. */
+	expiresAt?: string;
+}
+
 export interface OrderPaymentInfo {
 	gateway: PaymentGatewayCode;
 	gatewayName: string;
@@ -199,5 +216,82 @@ export interface OrderDetail extends OrderSummary {
 	timeline?: OrderEvent[];
 	customerNote?: string | null;
 	gift?: { wrap: boolean; message: string } | null;
+	returns?: ReturnRequest[];
 	invoiceUrl?: string | null;
+}
+
+// ── order actions (account) ──
+
+export type RefundMethod = "ORIGINAL_PAYMENT" | "BANK_TRANSFER" | "STORE_CREDIT";
+
+export interface Refund {
+	id: number;
+	amount: Money;
+	method: RefundMethod;
+	status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+	reason?: string | null;
+	expectedBy?: string | null;
+	completedAt?: string | null;
+	referenceId?: string | null;
+}
+
+export type CancelReason = "CHANGED_MIND" | "NOT_AS_PICTURED" | "ORDERED_BY_MISTAKE" | "FOUND_CHEAPER" | "DELIVERY_TOO_LONG" | "OTHER";
+
+/** `POST /me/orders/{code}/cancel` — the reason is required. */
+export interface CancelOrderPayload {
+	reason: CancelReason;
+	note?: string | null;
+}
+
+export interface CancelOrderResponse {
+	order: OrderSummary;
+	/** `null` when the order was never paid. */
+	refund?: Refund | null;
+	message?: string;
+}
+
+export type MediaChangeType = "COLOR" | "MODEL" | "CANCEL_ITEM" | "OTHER";
+
+/** `POST /me/orders/{code}/media-feedback` — «همونه!» or a change request. */
+export interface MediaFeedbackPayload {
+	decision: "APPROVE" | "REQUEST_CHANGE";
+	changeType?: MediaChangeType | null;
+	orderItemId?: number | null;
+	/** Colour / model to send instead. */
+	desiredVariantId?: number | null;
+	note?: string | null;
+}
+
+export type ReturnStatus = "REQUESTED" | "APPROVED" | "REJECTED" | "PICKUP_SCHEDULED" | "RECEIVED" | "REFUNDED" | "CLOSED";
+
+/** The first four are KIVA's fault — KIVA pays the return shipping. */
+export type ReturnReason = "NOT_AS_PICTURED" | "MANUFACTURING_DEFECT" | "WRONG_ITEM" | "DAMAGED_IN_TRANSIT" | "CHANGED_MIND" | "OTHER";
+
+export interface CreateReturnPayload {
+	items: { orderItemId: number; quantity: number }[];
+	reason: ReturnReason;
+	description?: string;
+	/** Ids from `POST /me/uploads` (max 6). */
+	mediaIds?: string[];
+	refundMethod?: RefundMethod;
+	/** Only for `BANK_TRANSFER`: `IR` + 24 digits. */
+	iban?: string | null;
+}
+
+export interface ReturnRequest {
+	id: number;
+	/** `RT-1012`. */
+	code: string;
+	orderCode: OrderCode;
+	status: ReturnStatus;
+	statusLabel: string;
+	reason: ReturnReason;
+	description?: string | null;
+	items: { orderItemId: number; name: string; color: Color; quantity: number }[];
+	media?: MediaAsset[];
+	shippingPaidBy?: "KIVA" | "CUSTOMER";
+	instructions?: string | null;
+	refund?: Refund | null;
+	createdAt: string;
+	decidedAt?: string | null;
 }

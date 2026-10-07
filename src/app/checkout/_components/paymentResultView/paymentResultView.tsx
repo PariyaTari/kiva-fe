@@ -11,10 +11,10 @@ import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import { useAuthStore } from "@/store/auth.store";
 import { toErrorView } from "@/utils/apiError";
 import { formatPrice } from "@/utils/format";
+import { newIdempotencyKey, redirectToGateway } from "@/utils/payment";
 import { withMappedError } from "@/utils/withMappedError";
 import { CheckoutEndpoints } from "../../_api/checkoutEndpoints";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
-import { newIdempotencyKey, redirectToGateway } from "../../_utils/payment";
 import CheckoutHero from "../checkoutHero/checkoutHero";
 import SuccessModal from "../successModal/successModal";
 

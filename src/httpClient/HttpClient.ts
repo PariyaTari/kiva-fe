@@ -83,6 +83,8 @@ export interface RequestConfig<D = unknown> {
 	timeout?: number;
 	timeoutErrorMessage?: string;
 	responseType?: ResponseType;
+	/** Upload progress of a multipart body, 0–100. */
+	onUploadProgress?: (percent: number) => void;
 }
 
 export const httpClient = {
@@ -100,13 +102,32 @@ export const httpClient = {
 					timeout: config.timeout,
 					timeoutErrorMessage: config.timeoutErrorMessage,
 					responseType: config.responseType,
+					onUploadProgress: config.onUploadProgress
+						? (e) => config.onUploadProgress?.(e.total ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0)
+						: undefined,
 					// arrays go as `category=a,b` — the API's `style: form, explode: false`
 					paramsSerializer: { indexes: null, serialize: serializeParams },
 				})
 				.then((value) => resolve(new Response<T>(value.data, value.status)))
-				.catch((reason) => reject(reason));
+				.catch((reason) => readBlobProblem(reason).then(reject));
 		}),
 };
+
+/**
+ * With `responseType: "blob"` (file downloads) a failure's problem+json body arrives as a Blob too —
+ * parse it back so `mapError` sees the usual `{ code, message }`.
+ */
+async function readBlobProblem(reason: AxiosError) {
+	const response = reason?.response;
+	const data: unknown = response?.data;
+	if (!response || typeof Blob === "undefined" || !(data instanceof Blob) || !/json/.test(data.type)) return reason;
+	try {
+		response.data = JSON.parse(await data.text());
+	} catch {
+		// not JSON after all — mapError falls back to the status
+	}
+	return reason;
+}
 
 /** `{ category: ["shoulder","cross"], onSale: true, q: undefined }` → `category=shoulder,cross&onSale=true`. */
 function serializeParams(params: Record<string, unknown>): string {

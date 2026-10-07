@@ -1,3 +1,4 @@
+import { ResultError } from "@/types/result";
 import { CLIENT_BUG, ErrorBehaviourMap, FINAL, REREAD, TRANSPORT } from "@/utils/apiError";
 
 /** Cart (page, drawer, add-to-cart buttons). */
@@ -18,8 +19,12 @@ export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
 	QUANTITY_EXCEEDS_STOCK: FINAL,
 	QUANTITY_EXCEEDS_LIMIT: FINAL,
 	SHIPPING_METHOD_UNAVAILABLE: FINAL,
+	RESERVATION_UNAVAILABLE: REREAD, // the cart changed under the switch — a re-read shows `unavailableReason`
 	VALIDATION_ERROR: CLIENT_BUG,
 };
+
+/** `422 RESERVATION_UNAVAILABLE` (`meta.reason` = `unavailableReason`) — an answer: re-read the cart, warn, no failure. */
+export const isReservationUnavailableError = (e: ResultError | null | undefined) => e?.code === "RESERVATION_UNAVAILABLE";
 
 /** Discount-code failures are an answer for the form (inline message), not an error of the page. */
 export const DISCOUNT_CODES = [

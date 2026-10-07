@@ -15,11 +15,11 @@ import { toast } from "@/store/notification.store";
 import { PaymentGatewayCode, PhotoMessengerChannel } from "@/types/order.type";
 import { toErrorView } from "@/utils/apiError";
 import { toPersianDigits } from "@/utils/digits";
+import { newIdempotencyKey, redirectToGateway } from "@/utils/payment";
 import { withMappedError } from "@/utils/withMappedError";
 import { CheckoutEndpoints } from "../../_api/checkoutEndpoints";
 import { CheckoutContext, PlaceOrderPayload } from "../../_types/checkout.type";
-import { ERROR_BEHAVIOUR, isCartEmptyError, REREAD_CONTEXT_CODES } from "../../_utils/apiError";
-import { newIdempotencyKey, redirectToGateway } from "../../_utils/payment";
+import { ERROR_BEHAVIOUR, isCartEmptyError, REREAD_CONTEXT_CODES, WARNING_CODES } from "../../_utils/apiError";
 import AddressBlock from "../addressBlock/addressBlock";
 import CheckoutHero from "../checkoutHero/checkoutHero";
 import GatewayBlock from "../gatewayBlock/gatewayBlock";
@@ -35,9 +35,11 @@ const PHONE_ERROR = "شماره موبایل معتبر وارد کن";
 function localNextSteps(ctx: CheckoutContext, messenger: PhotoMessengerChannel, reserved: boolean, shippingName: string) {
 	const messengerName = ctx.messengers.find((m) => m.channel === messenger)?.name ?? "";
 	return [
-		reserved
-			? `سفارشت تا ${toPersianDigits(ctx.reservation?.holdDays ?? 4)} روز رزرو می‌مونه؛ هر خریدی داشتی به همین سفارش اضافه می‌شه.`
-			: "سفارشت در حال آماده‌سازیه.",
+		ctx.consolidation
+			? ctx.consolidation.message
+			: reserved
+				? `سفارشت تا ${toPersianDigits(ctx.reservation?.holdDays ?? 4)} روز رزرو می‌مونه؛ هر خریدی داشتی به همین سفارش اضافه می‌شه.`
+				: "سفارشت در حال آماده‌سازیه.",
 		`عکس و ویدیوی کیفت رو قبل از ارسال توی ${messengerName} برات می‌فرستیم.`,
 		`بعد از تحویل به ${shippingName}، کد رهگیری توی حسابت قرار می‌گیره.`,
 	];
@@ -147,7 +149,7 @@ export default function CheckoutView() {
 			}
 			// the price, stock or cart moved — show the new state
 			if (REREAD_CONTEXT_CODES.includes(e.code)) queryClient.invalidateQueries({ queryKey: ["checkout"] });
-			toast(e.description, { type: e.code === "PRICE_CHANGED" ? "warning" : "error" });
+			toast(e.description, { type: WARNING_CODES.includes(e.code) ? "warning" : "error" });
 		},
 	});
 
@@ -171,8 +173,9 @@ export default function CheckoutView() {
 		place.mutate({
 			...addressPart,
 			preShipmentMessenger: { channel: messenger, phone, note: note.trim() || null, saveAsDefault: true },
-			shippingMethod: ctx.cart.shippingMethod,
-			reserve: !!ctx.reservation?.enabled,
+			// a joining order ships with its reservation group; the switch only counts while it's available
+			shippingMethod: ctx.consolidation?.shippingMethod ?? ctx.cart.shippingMethod,
+			reserve: !!ctx.reservation?.available && !!ctx.reservation.enabled,
 			paymentGateway: gateway,
 			expectedPayable: ctx.cart.totals.payable,
 			acceptTerms: true,
@@ -279,7 +282,7 @@ export default function CheckoutView() {
 						<OrderSummary
 							cart={ctx.cart}
 							messenger={ctx.messengers.find((m) => m.channel === messenger) ?? null}
-							reserveOn={!!ctx.reservation?.enabled}
+							reserveOn={!!ctx.reservation?.available && !!ctx.reservation.enabled}
 							holdDays={ctx.reservation?.holdDays ?? 4}
 							termsUrl={ctx.termsUrl || "/faq"}
 							paying={place.isPending || redirecting}
