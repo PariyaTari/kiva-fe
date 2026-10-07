@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import classNames from "classnames";
 import { useQuery } from "@tanstack/react-query";
 import Reveal from "@/app/_components/common/reveal/reveal";
 import { Icon } from "@/app/_components/icon/icons";
 import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
 import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
-import { FALLBACK_CONFIG, SUPPORT_HOURS_SUMMARY } from "@/config/site";
+import { SITE_CONFIG, SUPPORT_HOURS_SUMMARY } from "@/config/site";
 import { toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import ContactForm from "../contactForm/contactForm";
@@ -20,12 +19,12 @@ const clock = (t?: string | null) => (t ? toPersianDigits(t.replace(/^0/, "")) :
 
 /** Body of `contact.html` — the three contact cards, the form, messengers + support hours, and the FAQ nudge. */
 export default function ContactView({ initialTopic }: { initialTopic?: string }) {
-	// same query as the shell's header/footer; until it answers, the design's static values
+	// same query as the shell's header/footer (`/kiva-configs/config`); until it answers, `SITE_CONFIG` itself
 	const config = useQuery({
 		queryKey: ["site", "config"],
 		queryFn: () => withMappedError(() => SiteEndpoints.getConfig()),
 	});
-	const { support, social = [] } = config.data ?? FALLBACK_CONFIG;
+	const { support, social = [] } = config.data ?? SITE_CONFIG;
 	const messengers = LIST_CHANNELS.map((c) => social.find((s) => s.channel === c)).filter((s) => !!s);
 	const bale = social.find((s) => s.channel === "BALE") ?? messengers[0];
 
@@ -87,14 +86,8 @@ export default function ContactView({ initialTopic }: { initialTopic?: string })
 							</div>
 						</Reveal>
 						<Reveal className="card" delay={0.12}>
-							<h3 style={{ fontSize: 16, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-								ساعت پاسخگویی
-								{support?.isOpenNow !== undefined && (
-									<span className={classNames("tag open-now", support.isOpenNow ? "tag-success" : "tag-warn")} id="openNow">
-										{support.isOpenNow ? "الان پاسخگوییم" : "خارج از ساعت کاری"}
-									</span>
-								)}
-							</h3>
+							{/* the design's «الان پاسخگوییم» badge is left out: the settings are static now, with no live open/closed state */}
+							<h3 style={{ fontSize: 16, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>ساعت پاسخگویی</h3>
 							<div className="hours">
 								{(support?.hours ?? []).map((h) => (
 									<div key={h.label}>

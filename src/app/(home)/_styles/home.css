@@ -40,6 +40,13 @@
 	.site .sw button.on::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ink)}
 	.site .sw small{margin-inline-start:auto;font-size:11px;color:var(--ink-50)}
 	.site .sw small b{color:var(--ink)}
+	/* static hero (no product data, at your request): «عکس واقعی» where the design printed the price, and the colour
+	   as a label where it had the picker (its dot + name first, «بدون ادیت» at the end) */
+	.site .meta .real{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:8px;background:var(--lilac-50);color:var(--purple);font-size:11px;font-weight:700;white-space:nowrap}
+	.site .meta .real svg{width:13px;height:13px}
+	.site .sw .dot{width:16px;height:16px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(42,31,61,.15)}
+	.site .sw small{margin-inline-start:0}
+	.site .sw .raw{margin-inline-start:auto}
 	/* equals sign */
 	.eq-sign{position:absolute;left:calc(44% - 28px);top:46%;width:58px;height:58px;border-radius:50%;background:var(--purple);color:#fff;display:grid;place-items:center;font-size:30px;font-weight:300;line-height:1;box-shadow:0 0 0 8px var(--lilac-50),0 16px 30px -14px rgba(91,62,140,.7);z-index:3;opacity:0;animation:eqPop .7s .9s var(--ease) both}
 	/* card 2 — messenger chat */
@@ -216,6 +223,8 @@
 		.site .meta b,.site .meta .pr{font-size:12px}
 		.site .meta small{font-size:10.5px}
 		.site .sw small{display:none}
+		.site .sw .dot + small{display:inline}
+		.site .meta .real{height:22px;padding:0 7px;font-size:10px}
 		.chat .bubble p{font-size:11px}
 		.chat .reply{font-size:11px}
 		.eq-sign{width:46px;height:46px;font-size:24px}

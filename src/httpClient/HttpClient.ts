@@ -1,4 +1,4 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { API_URL } from "@/config/global";
 import { readPersistedTokens, useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
@@ -16,6 +16,15 @@ const DEFAULT_TIMEOUT_MS = IS_SERVER ? 8_000 : 20_000;
 
 const axiosClient = axios.create({
 	baseURL: API_URL,
+	timeout: DEFAULT_TIMEOUT_MS,
+});
+
+/**
+ * This storefront's own route handlers (`/kiva-configs/config`, `/kiva-configs/home`) — content the project owns instead of the
+ * backend. Same origin, so no session or cart headers; browser only (server code calls the loaders directly).
+ */
+const nextAxios = axios.create({
+	baseURL: "/kiva-configs/",
 	timeout: DEFAULT_TIMEOUT_MS,
 });
 
@@ -128,30 +137,38 @@ export interface RequestConfig<D = unknown> {
 	onUploadProgress?: (percent: number) => void;
 }
 
+const request = <T>(client: AxiosInstance, config: RequestConfig) =>
+	new Promise<Response<T>>((resolve, reject) => {
+		client
+			.request({
+				signal: config.signal,
+				url: config.url,
+				method: config.method,
+				baseURL: config.baseURL,
+				headers: config.headers,
+				params: config.params,
+				data: config.data,
+				timeout: config.timeout,
+				timeoutErrorMessage: config.timeoutErrorMessage,
+				responseType: config.responseType,
+				onUploadProgress: config.onUploadProgress
+					? (e) => config.onUploadProgress?.(e.total ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0)
+					: undefined,
+				// arrays go as `category=a,b` — the API's `style: form, explode: false`
+				paramsSerializer: { indexes: null, serialize: serializeParams },
+			})
+			.then((value) => resolve(new Response<T>(value.data, value.status)))
+			.catch((reason) => readBlobProblem(reason).then(reject));
+	});
+
+/** The backend API (`NEXT_PUBLIC_API_URL`). */
 export const httpClient = {
-	call: <T>(config: RequestConfig) =>
-		new Promise<Response<T>>((resolve, reject) => {
-			axiosClient
-				.request({
-					signal: config.signal,
-					url: config.url,
-					method: config.method,
-					baseURL: config.baseURL,
-					headers: config.headers,
-					params: config.params,
-					data: config.data,
-					timeout: config.timeout,
-					timeoutErrorMessage: config.timeoutErrorMessage,
-					responseType: config.responseType,
-					onUploadProgress: config.onUploadProgress
-						? (e) => config.onUploadProgress?.(e.total ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0)
-						: undefined,
-					// arrays go as `category=a,b` — the API's `style: form, explode: false`
-					paramsSerializer: { indexes: null, serialize: serializeParams },
-				})
-				.then((value) => resolve(new Response<T>(value.data, value.status)))
-				.catch((reason) => readBlobProblem(reason).then(reject));
-		}),
+	call: <T>(config: RequestConfig) => request<T>(axiosClient, config),
+};
+
+/** This app's route handlers under `/kiva-configs/` — errors map the same way (`withMappedError`). */
+export const nextApiClient = {
+	call: <T>(config: RequestConfig) => request<T>(nextAxios, config),
 };
 
 /**

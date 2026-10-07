@@ -6,7 +6,7 @@ import { Icon } from "@/app/_components/icon/icons";
 import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
 import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
-import { FALLBACK_CONFIG } from "@/config/site";
+import { SITE_CONFIG } from "@/config/site";
 import { withMappedError } from "@/utils/withMappedError";
 
 /** The design lists these three, in this order. */
@@ -19,7 +19,7 @@ export default function StillBox() {
 		queryKey: ["site", "config"],
 		queryFn: () => withMappedError(() => SiteEndpoints.getConfig()),
 	});
-	const { social = [], support } = config.data ?? FALLBACK_CONFIG;
+	const { social = [], support } = config.data ?? SITE_CONFIG;
 	const messengers = CHANNELS.map((c) => social.find((s) => s.channel === c)).filter((s) => !!s);
 
 	return (

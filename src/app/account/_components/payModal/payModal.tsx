@@ -10,7 +10,7 @@ import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
 import BankLogo from "@/app/_components/shop/bankLogo/bankLogo";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
 import Modal from "@/app/_components/ui/modal/modal";
-import { FALLBACK_CONFIG } from "@/config/site";
+import { SITE_CONFIG } from "@/config/site";
 import { toast } from "@/store/notification.store";
 import { OrderSummary, PaymentGatewayCode, PaymentInit } from "@/types/order.type";
 import { toErrorView } from "@/utils/apiError";
@@ -61,7 +61,7 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 		queryKey: ["site", "config"],
 		queryFn: () => withMappedError(() => SiteEndpoints.getConfig()),
 	});
-	const gateways = (config.data?.paymentGateways ?? FALLBACK_CONFIG.paymentGateways ?? []).map((g) => (off.includes(g.code) ? { ...g, available: false } : g));
+	const gateways = (config.data?.paymentGateways ?? SITE_CONFIG.paymentGateways ?? []).map((g) => (off.includes(g.code) ? { ...g, available: false } : g));
 	const usable = gateways.filter((g) => g.available !== false);
 	const picked = usable.find((g) => g.code === gatewayPick);
 	const gateway = picked ?? usable.find((g) => g.isDefault) ?? usable[0];

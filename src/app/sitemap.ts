@@ -3,7 +3,7 @@ import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
 import { BlogEndpoints } from "@/app/blog/_api/blogEndpoints";
 import { ProductsEndpoints } from "@/app/products/_api/productsEndpoints";
 import { EMPTY_FILTERS } from "@/app/products/_utils/filters";
-import { FALLBACK_CONFIG } from "@/config/site";
+import { SITE_CONFIG } from "@/config/site";
 import { PageMeta } from "@/types/pageinate";
 import { absoluteUrl } from "@/utils/seo";
 
@@ -53,7 +53,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		orEmpty(() => everyPage((page) => BlogEndpoints.getPosts({ q: "", page, size: PAGE_SIZE }))),
 	]);
 	// CMS pages linked from the footer (`/pages/terms`, …) — the API has no list of them
-	const cmsPages = (FALLBACK_CONFIG.footerLinks ?? []).flatMap((g) => g.links.map((l) => l.url)).filter((url) => url.startsWith("/pages/"));
+	const cmsPages = (SITE_CONFIG.footerLinks ?? []).flatMap((g) => g.links.map((l) => l.url)).filter((url) => url.startsWith("/pages/"));
 
 	return [
 		...STATIC_ROUTES.map((r) => ({ url: absoluteUrl(r.path), priority: r.priority, changeFrequency: r.changeFrequency })),

@@ -13,7 +13,7 @@ import { isNavActive, MAIN_NAV } from "@/app/_components/site/nav";
 import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
 import { CartEndpoints } from "@/app/cart/_api/cartEndpoints";
 import { WishlistEndpoints } from "@/app/wishlist/_api/wishlistEndpoints";
-import { FALLBACK_CONFIG } from "@/config/site";
+import { SITE_CONFIG } from "@/config/site";
 import { useAuthStore } from "@/store/auth.store";
 import { useUiStore } from "@/store/ui.store";
 import { SiteConfig } from "@/types/siteConfig.type";
@@ -60,7 +60,7 @@ export default function Header({ config }: { config: SiteConfig }) {
 
 	return (
 		<header className={classNames("kv-header", { scrolled })} id="kvHeader">
-			<AnnouncementBar messages={config.announcements ?? FALLBACK_CONFIG.announcements ?? []} />
+			<AnnouncementBar messages={config.announcements ?? SITE_CONFIG.announcements ?? []} />
 			<div className="kv-nav">
 				<div className="container">
 					<div className="kv-nav-in">

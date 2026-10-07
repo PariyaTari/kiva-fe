@@ -1,4 +1,7 @@
-/** Mirrors the home aggregate of the backend (kiva-openapi.yml · Config & Home). */
+/**
+ * The home aggregate — the spec's `HomePage` shape, served by this app's `/kiva-configs/home` (`loadHomePage`): the copy
+ * from the project, the catalog parts from the backend. A catalog part the backend couldn't serve is empty / `null`.
+ */
 import { Category, Color, IconName, MediaAsset, ProductRef, ProductSummary } from "@/types/catalog.type";
 import { PageMeta } from "@/types/pageinate";
 import { PhotoMessengerChannel, SocialChannel } from "@/types/order.type";
@@ -77,6 +80,17 @@ export interface HowItWorksStep {
 	isSignature: boolean;
 }
 
+/** The «روی سایت دیدی = قبل از ارسال فرستادیم» visual — fixed content of this project, no product data. */
+export interface HeroShowcase {
+	/** Served by this app (`/kiva-configs/hero.svg`), shown in both cards. */
+	image: { url: string; alt: string };
+	name: string;
+	category: string;
+	colorName: string;
+	colorHex: string;
+	messenger: PhotoMessengerChannel;
+}
+
 export interface HomePage {
 	hero: {
 		eyebrow: string;
@@ -84,15 +98,13 @@ export interface HomePage {
 		text: string;
 		primaryCta: { label: string; url: string };
 		secondaryCta: { label: string; url: string };
-		/** Its colours rotate in the «روی سایت دیدی = قبل از ارسال فرستادیم» visual. */
-		showcaseProduct: ProductSummary;
-		showcaseMessenger: PhotoMessengerChannel;
+		showcase: HeroShowcase;
 	};
 	features: HomeFeature[];
 	categories: Category[];
 	newArrivals: ProductSummary[];
 	promos: Banner[];
 	sale: Campaign | null;
-	testimonials: TestimonialListResponse;
+	testimonials: TestimonialListResponse | null;
 	howItWorks: HowItWorksStep[];
 }

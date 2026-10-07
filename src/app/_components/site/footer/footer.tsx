@@ -3,7 +3,7 @@ import Logo from "@/app/_components/common/logo/logo";
 import { Icon } from "@/app/_components/icon/icons";
 import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
 import Newsletter from "@/app/_components/site/newsletter/newsletter";
-import { FALLBACK_CONFIG, SUPPORT_HOURS_SUMMARY } from "@/config/site";
+import { SITE_CONFIG, SUPPORT_HOURS_SUMMARY } from "@/config/site";
 import { SiteConfig, TrustBadge } from "@/types/siteConfig.type";
 import { formatDate } from "@/utils/format";
 
@@ -38,11 +38,11 @@ function twoLines(label: string) {
 
 /** Newsletter box + `.kv-footer`. */
 export default function Footer({ config }: { config: SiteConfig }) {
-	const brand = config.brand ?? FALLBACK_CONFIG.brand!;
-	const support = config.support ?? FALLBACK_CONFIG.support!;
-	const social = config.social ?? FALLBACK_CONFIG.social ?? [];
-	const groups = config.footerLinks ?? FALLBACK_CONFIG.footerLinks ?? [];
-	const trust = config.trustBadges ?? FALLBACK_CONFIG.trustBadges ?? [];
+	const brand = config.brand ?? SITE_CONFIG.brand!;
+	const support = config.support ?? SITE_CONFIG.support!;
+	const social = config.social ?? SITE_CONFIG.social ?? [];
+	const groups = config.footerLinks ?? SITE_CONFIG.footerLinks ?? [];
+	const trust = config.trustBadges ?? SITE_CONFIG.trustBadges ?? [];
 
 	return (
 		<>

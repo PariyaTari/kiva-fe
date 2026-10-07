@@ -1,4 +1,4 @@
-import { httpClient } from "@/httpClient/HttpClient";
+import { httpClient, nextApiClient } from "@/httpClient/HttpClient";
 import { MessageResponse } from "@/types/apiResponse.type";
 import { Category } from "@/types/catalog.type";
 import { SiteConfig } from "@/types/siteConfig.type";
@@ -6,9 +6,12 @@ import { SearchHints, SearchSuggestResponse } from "../_types/site.type";
 
 /** Pure request functions — no React Query concepts live here (see data-fetching standard). */
 export const SiteEndpoints = {
-	/** Header/footer/drawer settings — announcements, shipping threshold, support, social, footer links. */
+	/**
+	 * Header/footer/drawer settings — announcements, shipping threshold, support, social, footer links.
+	 * Static content of this project (`SITE_CONFIG`), from this app's `/kiva-configs/config` — not the backend.
+	 */
 	getConfig: async () => {
-		const res = await httpClient.call<SiteConfig>({ method: "GET", url: "config" });
+		const res = await nextApiClient.call<SiteConfig>({ method: "GET", url: "config" });
 		return res.data;
 	},
 

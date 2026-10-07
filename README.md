@@ -76,6 +76,7 @@ src/
 │   ├── queryProvider.tsx        — کانفیگ TanStack Query + توست سراسری خطا (meta)
 │   ├── sessionProvider.tsx      — خواندن سشن ذخیره‌شده بعد از mount + هم‌گام‌سازی بین تب‌ها (رویداد storage)
 │   ├── sitemap.ts، robots.ts    — نقشه‌ی سایت (دسته‌ها، محصولات با عکس، پست‌ها) و قواعد خزش
+│   ├── kiva-configs/            — routeهای محتوای خود پروژه: `config`، `home`، `hero.svg` (به‌جای `GET /config` و `GET /home` بک‌اند)
 │   ├── globals.css              — فونت یکان‌بخ + ایمپورت دیزاین‌سیستم (tailwind/kiva/*)
 │   ├── _components/
 │   │   ├── site/                — پوسته: shell، header، megaMenu، mobileMenu، cartDrawer، searchPanel، loginPrompt، footer، …
@@ -85,7 +86,7 @@ src/
 │   │   ├── ui/                  — Button، Badge، Card، Input، Select، Textarea، Checkbox، Switch، Modal، MultiSelect
 │   │   └── icon/                — آیکن‌ست دیزاین + MessengerIcon
 │   └── <feature>/               — (home)، products، product، cart، checkout، (auth)، account، wishlist، track، blog، faq، contact، about، pages
-├── config/                      — global.ts (env)، site.ts (FALLBACK_CONFIG)
+├── config/                      — global.ts (env)، site.ts (SITE_CONFIG — تنظیمات سایت)
 ├── httpClient/                  — HttpClient (Bearer / X-Cart-Token، timeout، رفرش روی ۴۰۱ با قفل بین تب‌ها) + mapError
 ├── hooks/                       — useForm، useAddressForm، useReveal، useHydrated، useRequireLogin
 ├── store/                       — auth (persist)، cart (توکن سبد مهمان)، ui (پنل‌ها)، notification
@@ -114,6 +115,12 @@ src/app/checkout/
 - پاسخ‌های موفق بدون envelope؛ لیست‌ها `{ items, meta }`؛ خطاها RFC 7807 با `code`.
 - در JSX دقیقاً همان نام کلاس‌های دیزاین استفاده شده تا خروجی پیکسلی یکسان باشد.
 
+## محتوای ثابت در خود پروژه (`/kiva-configs/*`)
+
+- **تنظیمات سایت** (هدر، فوتر، کشوها، تماس، درگاه‌های مودال پرداخت) در `src/config/site.ts` (`SITE_CONFIG`) است و از route خود Next یعنی `/kiva-configs/config` (استاتیک) خوانده می‌شود، نه از `GET /config` بک‌اند. برای تغییر: همین فایل + دیپلوی. «الان پاسخگوییم» صفحه‌ی تماس حذف شد (وضعیت لحظه‌ای ندارد).
+- **صفحه‌ی اصلی** از `/kiva-configs/home` خود Next می‌آید (`app/kiva-configs/home/route.ts` ← `(home)/_utils/loadHomePage.ts`): متن‌ها (هیرو، ویژگی‌ها، بنرها، «چطور کار می‌کنه») در `(home)/_utils/homeContent.ts`. **هیرو کاملاً ثابت است:** یک عکس (کیف تصویری دیزاین، `HERO_ART`) که `/kiva-configs/hero.svg` می‌کشد، در هر دو کارت؛ به‌جای قیمت «عکس واقعی» و به‌جای انتخاب رنگ برچسب «رنگ: یاسی» (بدون چرخش رنگ). بخش‌های کاتالوگ زنده‌اند و روی سرور از بک‌اند خوانده می‌شوند: دسته‌ها (`/categories`)، جدیدترین‌ها (`/products?sort=newest`)، حراج (`/campaigns/active`)، نظرات (`/testimonials`). بخشی که بک‌اند جواب ندهد پنهان می‌شود (و در لاگ سرور `[home] …` ثبت می‌شود)؛ بقیه‌ی صفحه می‌ماند. prefetch سرور همان loader را مستقیم صدا می‌زند.
+- درخواست‌های مرورگر به این routeها با `nextApiClient` (`baseURL: /kiva-configs/`، همان origin، بدون هدر سشن) و بقیه با `httpClient` (بک‌اند) است. `config` و `home` در robots.txt بسته‌اند؛ `hero.svg` نه.
+
 ## SEO و رندر سمت سرور
 
 - صفحه‌های عمومی (خانه، فروشگاه، محصول، بلاگ، پست، سوالات متداول، `/pages/*`) داده‌ی اصلی را **روی سرور prefetch** می‌کنند (`getServerQueryClient` + `PrefetchBoundary` = `HydrationBoundary`)؛ کامپوننت کلاینت با **همان queryKey** همان را در اولین رندر نشان می‌دهد، پس HTML محتوا دارد نه اسکلتون. کانفیگ مرورگر دست نخورده (`staleTime: 0`) و بعد از hydration داده دوباره خوانده می‌شود؛ prefetch ناموفق فقط یعنی همان رفتار قبلی (مرورگر خودش می‌گیرد و بلوک خطا را نشان می‌دهد). کلید سرور و کلاینت باید یکی بماند (کامنت «same key» کنار هر دو).
@@ -135,6 +142,7 @@ src/app/checkout/
 - صفحه‌بندی بلاگ فقط وقتی واقعاً بیش از یک صفحه هست نمایش داده می‌شود (در دیزاین یک pager ثابت نمایشی بود).
 - صفحه‌ی `/wishlist/shared/[token]` (لیستی که کس دیگری به اشتراک گذاشته، فقط‌خواندنی) با ظاهر `wishlist.html` ساخته شد؛ در دیزاین دکمه‌ی اشتراک فقط لینک فروشگاه را کپی می‌کرد. حالت ناموفق صفحه‌ی نتیجه‌ی پرداخت هم در دیزاین نبود و با کلاس‌های خود دیزاین ساخته شد.
 - «کدهای آزمایشی» زیر کد تخفیف و «نسخه نمایشی» زیر OTP فقط در development.
+- هیروی صفحه‌ی اصلی ثابت است (به درخواست شما): بدون قیمت، انتخاب رنگ و چرخش رنگ‌های دیزاین؛ یک عکس ثابت + برچسب‌ها.
 - پنل «موجود شد خبرم کن» (`/account/stock-alerts`) و ردیف «به دردت خورد؟» زیر نظرهای محصول در دیزاین نیستند (API دارد)؛ با اجزای خود دیزاین ساخته شدند (کارت «نظرات من»، ردیف `.helpful` بلاگ).
 - لینک «قوانین و حریم خصوصی» (ورود) و «قوانین کیوا» (تسویه، `termsUrl`) در دیزاین به `faq.html` می‌رفت؛ حالا به `/pages/terms`. همین لینک به ستون «راهنمای خرید» فوتر هم اضافه شد (برای اینماد باید از همه‌ی صفحات در دسترس باشد).
 - کارهای سفارش: جاهایی که API داده‌ی طراحی را نمی‌دهد (مهلت نگه‌داشت پرداخت، دلیل بانک، «رنگ قبل ← بعد» درخواست تغییر، مراحل برگشت وجه روی کارت لغوشده) طبق تصمیم‌های PROGRESS.md (بخش ۰.۳) حذف یا با متن عمومی جایگزین شده‌اند. سند PDF فاکتور را بک‌اند می‌سازد؛ `order-invoice.html` فقط قالب پیشنهادی است.

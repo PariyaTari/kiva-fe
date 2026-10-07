@@ -11,7 +11,7 @@ import LoginPrompt from "@/app/_components/site/loginPrompt/loginPrompt";
 import MobileMenu from "@/app/_components/site/mobileMenu/mobileMenu";
 import SearchPanel from "@/app/_components/site/searchPanel/searchPanel";
 import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
-import { FALLBACK_CONFIG } from "@/config/site";
+import { SITE_CONFIG } from "@/config/site";
 import { useUiStore } from "@/store/ui.store";
 import { withMappedError } from "@/utils/withMappedError";
 
@@ -26,12 +26,12 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
 	const open = useUiStore((s) => s.open);
 	const closeAll = useUiStore((s) => s.closeAll);
 
-	// header/footer content; until (or unless) it answers the design's static values are shown
+	// header/footer content (`/kiva-configs/config` of this app); until it answers, the same values straight from `SITE_CONFIG`
 	const config = useQuery({
 		queryKey: ["site", "config"],
 		queryFn: () => withMappedError(() => SiteEndpoints.getConfig()),
 	});
-	const siteConfig = config.data ?? FALLBACK_CONFIG;
+	const siteConfig = config.data ?? SITE_CONFIG;
 
 	// navigating closes whatever overlay is open
 	useEffect(() => {

@@ -1,4 +1,4 @@
-/** Mirrors `SiteConfig` (`GET /config`) — everything the shell (header, footer, drawers) needs. */
+/** The spec's `SiteConfig` shape — the storefront's settings (`SITE_CONFIG`, served by this app at `/kiva-configs/config`). */
 import { IconName, Money, Perk } from "./catalog.type";
 import { ShippingMethodCode } from "./cart.type";
 import { MessengerOption, PaymentGatewayCode, SocialChannel } from "./order.type";
@@ -95,7 +95,6 @@ export interface SiteConfig {
 		emailResponseHint?: string;
 		responseTimeHint?: string;
 		hours?: SupportHours[];
-		isOpenNow?: boolean;
 	};
 	social?: SocialLink[];
 	paymentGateways?: PaymentGateway[];

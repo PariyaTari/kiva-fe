@@ -16,7 +16,7 @@ import PromoBanners from "../promoBanners/promoBanners";
 import SaleSection from "../saleSection/saleSection";
 import TestimonialsSection from "../testimonialsSection/testimonialsSection";
 
-/** Home page body — one aggregate request (`GET /home`) feeds every section. */
+/** Home page body — one aggregate request (this app's `/kiva-configs/home`) feeds every section; an empty catalog part is left out. */
 export default function HomeView() {
 	// same key as the server prefetch in `(home)/page.tsx`
 	const home = useQuery({
@@ -54,11 +54,11 @@ export default function HomeView() {
 		<>
 			<HeroSection hero={data.hero} />
 			<FeatureStrip features={data.features} />
-			<CategoryGrid categories={data.categories} />
-			<NewArrivals products={data.newArrivals} />
+			{data.categories.length > 0 && <CategoryGrid categories={data.categories} />}
+			{data.newArrivals.length > 0 && <NewArrivals products={data.newArrivals} />}
 			<PromoBanners promos={data.promos} />
 			{data.sale && <SaleSection sale={data.sale} receivedAt={home.dataUpdatedAt} />}
-			<TestimonialsSection testimonials={data.testimonials} />
+			{!!data.testimonials?.items.length && <TestimonialsSection testimonials={data.testimonials} />}
 			<HowItWorks steps={data.howItWorks} />
 		</>
 	);

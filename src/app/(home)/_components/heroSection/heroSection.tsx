@@ -1,16 +1,9 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import classNames from "classnames";
 import { Icon } from "@/app/_components/icon/icons";
 import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
 import { toPersianDigits } from "@/utils/digits";
-import { formatPrice } from "@/utils/format";
 import { HomePage } from "../../_types/home.type";
-
-const ROTATE_MS = 3200;
 
 /** «هرچی ببینی، همون می‌رسه.» → «هرچی ببینی،» ⏎ «<em>همون</em> می‌رسه.» — the design's headline treatment. */
 function Headline({ title }: { title: string }) {
@@ -26,39 +19,18 @@ function Headline({ title }: { title: string }) {
 	);
 }
 
-/** Hero: fixed copy + the «روی سایت دیدی = قبل از ارسال فرستادیم» visual; the bag's colours rotate in both cards together. */
+/**
+ * Hero: copy + the «روی سایت دیدی = قبل از ارسال فرستادیم» visual. Static by design (`HeroShowcase` of the project):
+ * one picture from `/kiva-configs/hero.svg` in both cards, and labels instead of the design's live price and colour
+ * picker — nothing in it can drift from the catalogue.
+ */
 export default function HeroSection({ hero }: { hero: HomePage["hero"] }) {
-	const product = hero.showcaseProduct;
-	const colors = product.colors;
-	const start = Math.max(0, colors.findIndex((c) => c.color.key === product.displayColorKey));
-	const [current, setCurrent] = useState(start);
-	const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-	const loop = () => {
-		if (timer.current) clearInterval(timer.current);
-		if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) return;
-		timer.current = setInterval(() => setCurrent((i) => (i + 1) % colors.length), ROTATE_MS);
-	};
-
-	useEffect(() => {
-		loop();
-		return () => {
-			if (timer.current) clearInterval(timer.current);
-		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- start the rotation once
-	}, []);
-
-	const pick = (i: number) => {
-		setCurrent(i);
-		loop();
-	};
-
-	// both cards show the same frames; non-current ones fade out (`.fr.out`)
-	const frames = colors.map((c, i) => (
-		<div key={c.color.key} className={classNames("fr", { out: i !== current })}>
-			<MediaImage src={c.imageUrl} alt={`${product.name} رنگ ${c.color.name}`} eager={i === current} />
+	const { showcase } = hero;
+	const picture = (
+		<div className="fr">
+			<MediaImage src={showcase.image.url} alt={showcase.image.alt} eager />
 		</div>
-	));
+	);
 
 	return (
 		<section className="hero" aria-label="بنر">
@@ -94,33 +66,22 @@ export default function HeroSection({ hero }: { hero: HomePage["hero"] }) {
 							<i />
 							<span>kiva.ir/product</span>
 						</div>
-						<div className="eq-img">{frames}</div>
+						<div className="eq-img">{picture}</div>
 						<div className="meta">
 							<div>
-								<b>{product.name}</b>
-								<small>{product.category.name}</small>
+								<b>{showcase.name}</b>
+								<small>{showcase.category}</small>
 							</div>
-							<span className="pr">
-								{formatPrice(product.price.price)} <small>تومان</small>
+							<span className="real">
+								<Icon name="camera" /> عکس واقعی
 							</span>
 						</div>
-						<div className="sw" role="radiogroup" aria-label="رنگ کیف">
-							{colors.map((c, i) => (
-								<button
-									key={c.color.key}
-									type="button"
-									className={classNames({ on: i === current })}
-									style={{ background: c.color.hex }}
-									role="radio"
-									aria-checked={i === current}
-									aria-label={c.color.name}
-									title={c.color.name}
-									onClick={() => pick(i)}
-								/>
-							))}
+						<div className="sw">
+							<i className="dot" style={{ background: showcase.colorHex }} aria-hidden="true" />
 							<small>
-								رنگ: <b>{colors[current]?.color.name}</b>
+								رنگ: <b>{showcase.colorName}</b>
 							</small>
+							<small className="raw">بدون ادیت</small>
 						</div>
 					</div>
 					<span className="eq-sign" aria-hidden="true">
@@ -132,7 +93,7 @@ export default function HeroSection({ hero }: { hero: HomePage["hero"] }) {
 							قبل از ارسال فرستادیم
 						</span>
 						<div className="top">
-							<MessengerIcon channel={hero.showcaseMessenger} />
+							<MessengerIcon channel={showcase.messenger} />
 							<span>
 								<b>کیوا</b>
 								<small>آنلاین</small>
@@ -140,7 +101,7 @@ export default function HeroSection({ hero }: { hero: HomePage["hero"] }) {
 						</div>
 						<div className="body">
 							<div className="bubble">
-								<div className="eq-img">{frames}</div>
+								<div className="eq-img">{picture}</div>
 								<p>این کیف خودته؛ همین الان برات کنار گذاشتیمش.</p>
 								<time>
 									{toPersianDigits("10:24")} <Icon name="check" />
