@@ -1,59 +1,74 @@
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import { AuthTokens, User } from "@/types/user.type";
+import { User } from "@/types/user.type";
 
 type AuthState = {
+	/** Memory only (FRONTEND_AUTH §2) — a page load gets a fresh one from the `kiva_rt` session cookie. */
 	accessToken: string | null;
-	refreshToken: string | null;
 	user: User | null;
-	/** `false` until the persisted session was read on the client — gate auth-dependent UI/queries on it. */
+	/** `false` until the session was restored on the client (`restoreSession`) — gate auth-dependent UI/queries on it. */
 	hydrated: boolean;
-	setSession: (tokens: AuthTokens, user: User) => void;
-	setTokens: (tokens: Pick<AuthTokens, "accessToken" | "refreshToken">) => void;
+	/** Signed in (OTP verify, phone change) — also tells the other tabs. */
+	setSession: (accessToken: string, user: User) => void;
+	/** A rotated access token of the same session. */
+	setAccessToken: (accessToken: string) => void;
 	setUser: (user: User) => void;
+	/** Signed out or the session ended — also tells the other tabs. */
 	clear: () => void;
+	/** Drops this tab's copy only — another tab already ended the session. */
+	forget: () => void;
+	markHydrated: () => void;
 };
 
 /**
- * OTP + JWT session (kiva-openapi.yml · Auth). Persisted in localStorage; hydration is skipped on
- * creation and triggered by `SessionProvider` after mount so the server render and first client
- * render agree (both start as a guest).
+ * Non-secret marker that this browser holds a session cookie: guests skip the refresh on page load, and a
+ * change of it (`storage` event) tells the other tabs to sign in or out. A new value on every sign-in, so a
+ * sign-in after another one still reaches them. The tokens themselves never touch storage.
  */
-export const useAuthStore = create<AuthState>()(
-	persist(
-		(set) => ({
-			accessToken: null,
-			refreshToken: null,
-			user: null,
-			hydrated: false,
-			setSession: (tokens, user) => set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, user }),
-			setTokens: (tokens) => set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
-			setUser: (user) => set({ user }),
-			clear: () => set({ accessToken: null, refreshToken: null, user: null }),
-		}),
-		{
-			name: "kiva-auth",
-			storage: createJSONStorage(() => localStorage),
-			partialize: ({ accessToken, refreshToken, user }) => ({ accessToken, refreshToken, user }),
-			skipHydration: true,
-			onRehydrateStorage: () => () => useAuthStore.setState({ hydrated: true }),
-		},
-	),
-);
+export const SESSION_HINT_KEY = "kiva-session";
+/** Before contract 1.4.0 the tokens (refresh token included) were persisted here. */
+const LEGACY_AUTH_KEY = "kiva-auth";
 
-/**
- * The tokens as last saved by any tab. Tabs share one localStorage but each keeps its own copy in
- * memory, so after another tab rotated the (single-use) refresh token this is the only fresh copy.
- */
-export function readPersistedTokens(): Pick<AuthTokens, "accessToken" | "refreshToken"> | null {
-	try {
-		const raw = localStorage.getItem(useAuthStore.persist.getOptions().name ?? "kiva-auth");
-		const state = raw ? (JSON.parse(raw) as { state?: Partial<AuthState> }).state : null;
-		return state?.accessToken && state.refreshToken ? { accessToken: state.accessToken, refreshToken: state.refreshToken } : null;
-	} catch {
-		return null;
-	}
-}
+const storage = {
+	read: (key: string) => {
+		try {
+			return localStorage.getItem(key);
+		} catch {
+			return null;
+		}
+	},
+	write: (key: string, value: string | null) => {
+		try {
+			if (value === null) localStorage.removeItem(key);
+			else localStorage.setItem(key, value);
+		} catch {
+			// private mode / storage blocked — the session still works in this tab
+		}
+	},
+};
+
+export const hasSessionHint = () => !!storage.read(SESSION_HINT_KEY);
+
+/** Removes the pre-1.4.0 persisted tokens — a refresh token must not linger in localStorage. */
+export const dropLegacySession = () => storage.write(LEGACY_AUTH_KEY, null);
+
+/** OTP + JWT session (kiva-openapi.yml 1.4.0 · Auth). Lives in memory; the refresh token is an HttpOnly cookie. */
+export const useAuthStore = create<AuthState>()((set) => ({
+	accessToken: null,
+	user: null,
+	hydrated: false,
+	setSession: (accessToken, user) => {
+		storage.write(SESSION_HINT_KEY, `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`);
+		set({ accessToken, user });
+	},
+	setAccessToken: (accessToken) => set({ accessToken }),
+	setUser: (user) => set({ user }),
+	clear: () => {
+		storage.write(SESSION_HINT_KEY, null);
+		set({ accessToken: null, user: null });
+	},
+	forget: () => set({ accessToken: null, user: null }),
+	markHydrated: () => set({ hydrated: true }),
+}));
 
 /** Display name the design greets with («سلام سارا» / «دوست عزیز»). */
 export function displayNameOf(user: User | null): string {

@@ -20,13 +20,13 @@ export interface MediaAsset {
 	id: string;
 	type: "IMAGE" | "VIDEO";
 	url: string;
-	thumbnailUrl?: string;
+	thumbnailUrl?: string | null;
 	posterUrl?: string | null;
 	width?: number;
 	height?: number;
 	durationSec?: number | null;
 	mimeType?: string;
-	alt?: string;
+	alt?: string | null;
 	blurhash?: string | null;
 }
 
@@ -137,7 +137,8 @@ export interface ProductSummary {
 	defaultColorKey: ColorKey;
 	/** Colour the card image starts with (first matching colour when a colour filter is active). */
 	displayColorKey?: ColorKey;
-	image: MediaAsset;
+	/** `null` until a photo is uploaded — the card draws the bag illustration instead. */
+	image: MediaAsset | null;
 	hoverImage?: MediaAsset | null;
 	badges: ProductBadge[];
 	stock: StockInfo;
@@ -157,7 +158,7 @@ export interface Breadcrumb {
 
 export interface SeoMeta {
 	title?: string;
-	description?: string;
+	description?: string | null;
 	canonicalUrl?: string;
 	ogImageUrl?: string;
 	noIndex?: boolean;

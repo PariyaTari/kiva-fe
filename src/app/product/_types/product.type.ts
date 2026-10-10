@@ -7,9 +7,9 @@ import { Review } from "@/types/review.type";
 export type MediaView = "FRONT" | "SIDE" | "BACK" | "DETAIL" | "INTERIOR" | "STYLE" | "ON_MODEL" | "SCALE";
 
 export interface ProductMedia extends MediaAsset {
-	view?: MediaView;
+	view?: MediaView | null;
 	/** «نمای جلو». */
-	viewLabel?: string;
+	viewLabel?: string | null;
 	sortOrder?: number;
 	isPrimary?: boolean;
 	/** «عکس واقعی، بدون ادیت». */
@@ -56,10 +56,10 @@ export interface ProductDetail extends ProductSummary {
 	selectedColorKey?: ColorKey;
 	shortDescription?: string | null;
 	/** HTML of the «توضیحات» tab. */
-	description?: string;
+	description?: string | null;
 	/** «چرا …؟» bullets. */
 	highlights?: string[];
-	materialDescription?: string;
+	materialDescription?: string | null;
 	specTable: SpecRow[];
 	variants: ProductVariant[];
 	breadcrumbs: Breadcrumb[];

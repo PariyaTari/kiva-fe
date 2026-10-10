@@ -18,6 +18,23 @@ export interface UpdateProfilePayload {
 	marketingSmsOptIn?: boolean;
 }
 
+/** `POST /me/phone-change/request` — one code went to the current number, one to the new one (same timers). */
+export interface PhoneChangeOtpResponse {
+	currentPhone: string;
+	/** Normalized. */
+	newPhone: string;
+	codeLength: number;
+	expiresInSeconds: number;
+	resendAvailableInSeconds: number;
+}
+
+/** `POST /me/phone-change/verify` — both codes prove both numbers. */
+export interface PhoneChangePayload {
+	newPhone: string;
+	currentPhoneCode: string;
+	newPhoneCode: string;
+}
+
 /** Header of the account — greeting, the four stat cards and the side-menu counters. */
 export interface AccountDashboard {
 	greeting?: string;

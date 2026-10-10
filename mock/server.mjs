@@ -1,11 +1,16 @@
 /**
- * KIVA dev mock backend — implements the storefront part of kiva-openapi.yml (v1.2.0) in memory,
+ * KIVA dev mock backend — implements the storefront part of kiva-openapi.yml (v1.4.0) in memory,
  * with the design's sample data, so every page can be developed and checked before the real API exists.
  *
  *   npm run mock        → http://localhost:8080/api/v1
  *
  * Env: MOCK_PORT (8080) · MOCK_FE_ORIGIN (http://localhost:3000, where the fake bank returns to) · MOCK_DELAY (ms, 180)
- * OTP: any 5-digit code works except 00000 (→ OTP_INVALID).
+ * OTP: any 5-digit code works except 00000 (→ OTP_INVALID; the 5th wrong try → OTP_TOO_MANY_ATTEMPTS) and 11111
+ * (→ OTP_EXPIRED). A code needs a send first; one send per number every 120 s (→ OTP_RESEND_TOO_SOON).
+ * 09999999999 always answers RATE_LIMITED. Login and phone change both.
+ * Session (1.4.0): the access token in the body, the refresh token in the HttpOnly `kiva_rt` cookie (Path=/api/v1/auth),
+ * rotated on every refresh; a rotated cookie is honoured for 30 s, after that it ends the whole chain (theft).
+ * `PATCH /me` with firstName «تداخل» → 409 CHANGED_BY_SOMEONE_ELSE.
  * Payments: `payment.redirect` opens a fake bank page (`/mock-gateway/:id`) with «پرداخت موفق» / «انصراف».
  * Order actions (account): a new user gets one order in every state (unpaid, failed, expired, reserved, photo
  * waiting / approved / change requested, shipped, delivered, return requested, cancelled). Demo answers:
@@ -259,7 +264,12 @@ const users = new Map(); // phone → user
 const access = new Map(); // accessToken → phone
 const accessExpiry = new Map(); // accessToken → ms; past it the token answers 401 TOKEN_EXPIRED (then the FE refreshes)
 const ACCESS_TTL = 900; // seconds — `expiresIn`
-const refresh = new Map(); // refreshToken → phone
+const sessions = new Map(); // refreshToken (cookie) → { phone, family, rotatedAt } — a family = one sign-in on one device
+const REFRESH_TTL = 2592000; // seconds — `refreshExpiresIn` (customer: 30 days)
+const ROTATION_GRACE_MS = 30e3;
+const otps = new Map(); // `${purpose}:${phone}` → { sentAt, wrong }
+const OTP_TTL_MS = 300e3, OTP_COOLDOWN_S = 120, OTP_MAX_TRIES = 5;
+const RATE_LIMITED_PHONE = "09999999999";
 const carts = new Map(); // cartId → cart
 const payments = new Map(); // paymentId → { orderCode, phone, gateway, amount, paidAt }
 const idempotency = new Map();
@@ -348,10 +358,48 @@ const userView = (u) => {
 		marketingSmsOptIn: u.marketingSmsOptIn, roles: ["CUSTOMER"], createdAt: iso(u.createdAt),
 	};
 };
-function issueTokens(u) {
-	const at = rid("at"), rt = rid("rt");
-	access.set(at, u.phone); accessExpiry.set(at, Date.now() + ACCESS_TTL * 1000); refresh.set(rt, u.phone);
-	return { accessToken: at, refreshToken: rt, tokenType: "Bearer", expiresIn: ACCESS_TTL, refreshExpiresIn: 2592000 };
+function issueAccess(u) {
+	const at = rid("at");
+	access.set(at, u.phone); accessExpiry.set(at, Date.now() + ACCESS_TTL * 1000);
+	return { accessToken: at, tokenType: "Bearer", expiresIn: ACCESS_TTL, refreshExpiresIn: REFRESH_TTL };
+}
+/** A new session (sign-in) or the next link of one (`family`): the access token for the body, the refresh token as the cookie. */
+function startSession(ctx, u, family = rid("fam")) {
+	const rt = rid("rt");
+	sessions.set(rt, { phone: u.phone, family, rotatedAt: null });
+	ctx.headers["Set-Cookie"] = `kiva_rt=${rt}; Max-Age=${REFRESH_TTL}; Path=${API}/auth; Secure; HttpOnly; SameSite=Strict`;
+	return issueAccess(u);
+}
+const endSessions = (match) => { for (const [rt, s] of sessions) if (match(s)) sessions.delete(rt); };
+const sessionCookie = (ctx) => /(?:^|;\s*)kiva_rt=([^;]*)/.exec(String(ctx.req.headers.cookie || ""))?.[1] || null;
+// `/auth/refresh` and `/auth/logout` only answer the storefront's own origins (dev: any localhost port)
+const checkOrigin = (ctx) => {
+	const origin = ctx.req.headers.origin;
+	if (origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) fail(403, "FORBIDDEN", "دسترسی نداری.");
+};
+const tooMany = (ctx, code, message, seconds) => {
+	ctx.headers["Retry-After"] = String(seconds);
+	fail(429, code, message, { meta: { retryAfterSeconds: seconds } });
+};
+/** One code per number and purpose every 120 s; the demo number is always over the limit. */
+function canSendCode(ctx, purpose, phone) {
+	if (phone === RATE_LIMITED_PHONE) tooMany(ctx, "RATE_LIMITED", "زیاد امتحان کردی.", 3 * 3600);
+	const prev = otps.get(`${purpose}:${phone}`);
+	const wait = prev ? Math.ceil((prev.sentAt + OTP_COOLDOWN_S * 1000 - Date.now()) / 1000) : 0;
+	if (wait > 0) tooMany(ctx, "OTP_RESEND_TOO_SOON", "کد قبلی همین الان فرستاده شد؛ یه کم صبر کن.", wait);
+}
+const sendCode = (purpose, phone) => otps.set(`${purpose}:${phone}`, { sentAt: Date.now(), wrong: 0 });
+/** Checks a code (`field` names it in `meta` for the phone change); returns the call that spends it once everything passed. */
+function checkCode(purpose, phone, code, field) {
+	const key = `${purpose}:${phone}`, otp = otps.get(key), meta = field ? { field } : {};
+	if (!otp || code === "11111" || Date.now() - otp.sentAt > OTP_TTL_MS) fail(422, "OTP_EXPIRED", "این کد منقضی شده یا قبلاً استفاده شده.", { meta });
+	if (otp.wrong >= OTP_MAX_TRIES) fail(422, "OTP_TOO_MANY_ATTEMPTS", "این کد رو زیادی اشتباه زدی و دیگه کار نمی‌کنه.", { meta });
+	if (code === "00000") {
+		otp.wrong++;
+		if (otp.wrong >= OTP_MAX_TRIES) fail(422, "OTP_TOO_MANY_ATTEMPTS", "این کد رو زیادی اشتباه زدی و دیگه کار نمی‌کنه.", { meta });
+		fail(422, "OTP_INVALID", "کد اشتباهه.", { meta: { ...meta, attemptsLeft: OTP_MAX_TRIES - otp.wrong } });
+	}
+	return () => otps.delete(key);
 }
 const needUser = (ctx) => ctx.user || fail(401, "UNAUTHORIZED", "اول وارد حساب کاربریت شو.");
 
@@ -812,13 +860,16 @@ route("POST", "/newsletter/subscriptions", (ctx) => {
 route("POST", "/auth/otp/send", (ctx) => {
 	const phone = toEn(ctx.body?.phone).replace(/\D/g, "");
 	if (!validPhone(phone)) validation([{ field: "phone", code: "PHONE_INVALID", message: "شماره موبایل باید ۱۱ رقم باشه و با ۰۹ شروع بشه" }]);
-	return { phone, codeLength: 5, expiresInSeconds: 300, resendAvailableInSeconds: 120 };
+	canSendCode(ctx, "LOGIN", phone);
+	sendCode("LOGIN", phone);
+	return { phone, codeLength: 5, expiresInSeconds: OTP_TTL_MS / 1000, resendAvailableInSeconds: OTP_COOLDOWN_S };
 });
 route("POST", "/auth/otp/verify", (ctx) => {
 	const phone = toEn(ctx.body?.phone).replace(/\D/g, ""), code = toEn(ctx.body?.code);
 	if (!validPhone(phone)) validation([{ field: "phone", code: "PHONE_INVALID", message: "شماره موبایل معتبر نیست" }]);
-	if (!/^\d{5}$/.test(code)) validation([{ field: "code", code: "PATTERN", message: "کد ۵ رقمی رو کامل وارد کن" }]);
-	if (code === "00000") fail(422, "OTP_INVALID", "کد واردشده درست نیست.", { meta: { attemptsLeft: 2 } });
+	if (!/^\d{5}$/.test(code)) validation([{ field: "code", code: "OTP_CODE_FORMAT_INVALID", message: "کد ۵ رقمی رو کامل وارد کن" }]);
+	if (phone === RATE_LIMITED_PHONE) tooMany(ctx, "RATE_LIMITED", "زیاد امتحان کردی.", 3 * 3600);
+	checkCode("LOGIN", phone, code)();
 	const isNewUser = !users.has(phone);
 	const u = getUserByPhone(phone, true);
 	const guest = ctx.body?.guestCartToken && carts.get(ctx.body.guestCartToken);
@@ -829,18 +880,31 @@ route("POST", "/auth/otp/verify", (ctx) => {
 		carts.delete(guest.id); u.cartId = mine.id; carts.set(mine.id, mine);
 	}
 	ctx.user = u;
-	return { ...issueTokens(u), isNewUser, user: userView(u), cart: cartView(carts.get(u.cartId), ctx) };
+	return { ...startSession(ctx, u), isNewUser, user: userView(u), cart: cartView(carts.get(u.cartId), ctx) };
 });
 route("POST", "/auth/refresh", (ctx) => {
-	const phone = refresh.get(ctx.body?.refreshToken);
-	if (!phone) fail(401, "REFRESH_TOKEN_INVALID", "نشستت تموم شده؛ دوباره وارد شو.");
-	refresh.delete(ctx.body.refreshToken);
-	return issueTokens(users.get(phone));
+	checkOrigin(ctx);
+	const s = sessions.get(sessionCookie(ctx));
+	const u = s && users.get(s.phone);
+	if (!u) fail(401, "REFRESH_TOKEN_INVALID", "نشستت تموم شده؛ دوباره وارد شو.");
+	if (s.rotatedAt) {
+		// a cookie that was already rotated: a parallel request (≤ 30 s) gets a token without a new cookie;
+		// later it can only be a stolen copy → the whole chain ends
+		if (Date.now() - s.rotatedAt > ROTATION_GRACE_MS) {
+			endSessions((x) => x.family === s.family);
+			fail(401, "REFRESH_TOKEN_INVALID", "نشستت تموم شده؛ دوباره وارد شو.");
+		}
+		return issueAccess(u);
+	}
+	s.rotatedAt = Date.now();
+	return startSession(ctx, u, s.family);
 });
 route("POST", "/auth/logout", (ctx) => {
-	needUser(ctx);
-	refresh.delete(ctx.body?.refreshToken);
-	access.delete(ctx.token);
+	checkOrigin(ctx);
+	const s = sessions.get(sessionCookie(ctx));
+	if (s) endSessions(ctx.body?.allDevices ? (x) => x.phone === s.phone : (x) => x.family === s.family);
+	// access tokens stay valid until they expire (≤ 15 min) — the client drops its copy
+	ctx.headers["Set-Cookie"] = `kiva_rt=; Max-Age=0; Path=${API}/auth; Secure; HttpOnly; SameSite=Strict`;
 	ctx.status = 204;
 });
 // test aid (not in the spec): expire every access token now, to watch the FE rotate them (e.g. with two tabs open)
@@ -1241,8 +1305,47 @@ route("PATCH", "/me", (ctx) => {
 	const u = needUser(ctx);
 	const b = ctx.body || {};
 	if (b.email && !/^\S+@\S+\.\S+$/.test(b.email)) validation([{ field: "email", code: "EMAIL_INVALID", message: "ایمیل معتبر نیست" }]);
+	if (b.firstName === "تداخل") fail(409, "CHANGED_BY_SOMEONE_ELSE", "همین الان اطلاعاتت جای دیگه‌ای عوض شد و چیزی ذخیره نشد؛ فرم رو دوباره ببین.");
 	["firstName", "lastName", "email", "birthDate", "gender", "defaultMessenger", "defaultMessengerPhone", "marketingSmsOptIn"].forEach((k) => { if (k in b) u[k] = b[k] === "" ? null : b[k]; });
 	return userView(u);
+});
+// both numbers are proven: a code to the current one and a code to the new one
+route("POST", "/me/phone-change/request", (ctx) => {
+	const u = needUser(ctx);
+	const newPhone = toEn(ctx.body?.newPhone).replace(/\D/g, "");
+	if (!validPhone(newPhone)) validation([{ field: "newPhone", code: "PHONE_INVALID", message: "شماره موبایل باید ۱۱ رقم باشه و با ۰۹ شروع بشه" }]);
+	if (newPhone === u.phone) validation([{ field: "newPhone", code: "PHONE_SAME_AS_CURRENT", message: "این همین شماره‌ی فعلیته." }]);
+	canSendCode(ctx, "PHONE_CHANGE", u.phone);
+	canSendCode(ctx, "PHONE_CHANGE", newPhone);
+	sendCode("PHONE_CHANGE", u.phone);
+	sendCode("PHONE_CHANGE", newPhone);
+	u.phoneChange = newPhone;
+	return { currentPhone: u.phone, newPhone, codeLength: 5, expiresInSeconds: OTP_TTL_MS / 1000, resendAvailableInSeconds: OTP_COOLDOWN_S };
+});
+route("POST", "/me/phone-change/verify", (ctx) => {
+	const u = needUser(ctx);
+	const b = ctx.body || {};
+	const newPhone = toEn(b.newPhone).replace(/\D/g, ""), cur = toEn(b.currentPhoneCode), next = toEn(b.newPhoneCode);
+	const errors = [];
+	if (!validPhone(newPhone)) errors.push({ field: "newPhone", code: "PHONE_INVALID", message: "شماره موبایل معتبر نیست" });
+	if (!/^\d{5}$/.test(cur)) errors.push({ field: "currentPhoneCode", code: "OTP_CODE_FORMAT_INVALID", message: "کد ۵ رقمی رو کامل وارد کن" });
+	if (!/^\d{5}$/.test(next)) errors.push({ field: "newPhoneCode", code: "OTP_CODE_FORMAT_INVALID", message: "کد ۵ رقمی رو کامل وارد کن" });
+	if (errors.length) validation(errors);
+	if (u.phoneChange !== newPhone) fail(422, "OTP_EXPIRED", "برای این شماره کدی نفرستادیم؛ دوباره کد بگیر.", { meta: { field: "newPhoneCode" } });
+	// a right code isn't spent while the other one is wrong
+	const spendCurrent = checkCode("PHONE_CHANGE", u.phone, cur, "currentPhoneCode");
+	const spendNew = checkCode("PHONE_CHANGE", newPhone, next, "newPhoneCode");
+	if (users.has(newPhone)) fail(409, "PHONE_ALREADY_REGISTERED", "این شماره حساب دیگه‌ای داره.");
+	spendCurrent(); spendNew();
+	// every session ends (their access tokens point at the old number → 401); the old number is free for a new account
+	const old = u.phone;
+	endSessions((x) => x.phone === old);
+	users.delete(old);
+	u.phone = newPhone; u.phoneChange = null;
+	users.set(newPhone, u);
+	[stockAlerts, pendingReviews, [...payments.values()], [...uploads.values()]].forEach((list) => list.forEach((x) => { if (x.phone === old) x.phone = newPhone; }));
+	console.log(`[sms → ${old}] شماره‌ی حساب کیوای تو به ${newPhone} تغییر کرد.`);
+	return { ...startSession(ctx, u), user: userView(u) };
 });
 route("GET", "/me/dashboard", (ctx) => {
 	const u = needUser(ctx);
@@ -1647,6 +1750,8 @@ const server = http.createServer(async (req, res) => {
 		"Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 		"Access-Control-Allow-Headers": "Content-Type,Authorization,X-Cart-Token,Idempotency-Key,If-Match",
 		"Access-Control-Expose-Headers": "X-Cart-Token,Retry-After",
+		// the session cookie travels with `credentials: 'include'` — needs an exact origin (above) and this
+		"Access-Control-Allow-Credentials": "true",
 		Vary: "Origin",
 	};
 	if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
@@ -1674,7 +1779,10 @@ const server = http.createServer(async (req, res) => {
 	};
 	await new Promise((ok) => setTimeout(ok, DELAY));
 	try {
-		if (token && !ctx.user) fail(401, "TOKEN_EXPIRED", "نشستت منقضی شده؛ دوباره تلاش کن.");
+		if (token && !ctx.user) {
+			if (access.has(token) && accessExpiry.get(token) <= Date.now()) fail(401, "TOKEN_EXPIRED", "نشستت منقضی شده؛ دوباره تلاش کن.");
+			fail(401, "UNAUTHORIZED", "اول وارد حساب کاربریت شو.");
+		}
 		ctx.body = raw.length && !multipart ? JSON.parse(raw.toString("utf8")) : null;
 		ctx.multipart = multipart ? parseMultipart(raw, req.headers["content-type"]) : null;
 		const out = await r.handler(ctx);

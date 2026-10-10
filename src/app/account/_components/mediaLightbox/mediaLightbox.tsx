@@ -83,7 +83,7 @@ function LightboxVideo({ item }: { item: OrderMediaItem }) {
 		return (
 			<video
 				src={item.url}
-				poster={item.posterUrl ?? item.thumbnailUrl}
+				poster={item.posterUrl ?? item.thumbnailUrl ?? undefined}
 				controls
 				autoPlay
 				playsInline

@@ -17,6 +17,7 @@ type RequestFailure = {
 	response?: {
 		status?: number;
 		data?: Partial<ApiProblem> | null;
+		headers?: Record<string, unknown>;
 	};
 };
 
@@ -29,7 +30,23 @@ function coerceMessage(message: unknown): string {
 	return "خطای غیرمنتظره‌ای رخ داده است.";
 }
 
-function extractDetails(errors: ApiFieldError[] | undefined): ErrorDetail[] | null {
+/**
+ * A server failure carries `traceId` — support finds the exact request in the logs by it, so it is shown
+ * with the message («کد پیگیری») wherever the message goes: error blocks and toasts.
+ */
+function withTraceId(message: string, status: number, traceId: string | null | undefined): string {
+	return status >= 500 && traceId ? `${message} (کد پیگیری: ${traceId})` : message;
+}
+
+/** `429`s always say when to come back; `Retry-After` (seconds) stands in when the body has no `meta.retryAfterSeconds`. */
+function metaOf(failure: RequestFailure, status: number): Record<string, unknown> | null {
+	const meta = failure.response?.data?.meta ?? null;
+	const retryAfter = Number(failure.response?.headers?.["retry-after"]);
+	if (status !== 429 || meta?.retryAfterSeconds != null || !Number.isFinite(retryAfter)) return meta;
+	return { ...meta, retryAfterSeconds: retryAfter };
+}
+
+function extractDetails(errors: ApiFieldError[] | null | undefined): ErrorDetail[] | null {
 	if (!Array.isArray(errors)) return null;
 	const details = errors
 		.filter((item): item is ApiFieldError => !!item && typeof item === "object")
@@ -90,11 +107,11 @@ export function mapError(error: unknown): ResultError {
 	if (data?.message) {
 		return {
 			success: false,
-			description: coerceMessage(data.message),
+			description: withTraceId(coerceMessage(data.message), status, data.traceId),
 			code: data.code ?? InternalErrorCode.APP_ERROR,
 			statusCode: status,
 			errorDetails: extractDetails(data.errors),
-			meta: data.meta ?? null,
+			meta: metaOf(err, status),
 		};
 	}
 

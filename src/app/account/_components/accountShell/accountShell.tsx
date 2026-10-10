@@ -42,13 +42,13 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 	});
 
 	const logout = useMutation({
-		mutationFn: () => withMappedError(() => AuthEndpoints.logout(useAuthStore.getState().refreshToken)),
-		// the session ends on this device whatever the server answered (design `K.logout`)
+		mutationFn: () => withMappedError(() => AuthEndpoints.logout()),
+		// the session ends on this device whatever the server answered (design `K.logout`); the access token is still
+		// valid for up to 15 minutes, so it must leave memory. Signing out re-fetches what's shown (`SessionProvider`).
 		onSettled: () => {
-			useAuthStore.getState().clear();
-			useCartStore.getState().setGuestToken(null);
 			queryClient.removeQueries({ queryKey: ["me"] });
-			queryClient.invalidateQueries();
+			useCartStore.getState().setGuestToken(null);
+			useAuthStore.getState().clear();
 			router.push("/");
 		},
 	});

@@ -5,11 +5,13 @@ import Link from "next/link";
 import classNames from "classnames";
 import { useMutation } from "@tanstack/react-query";
 import { Icon } from "@/app/_components/icon/icons";
+import { SITE_CONFIG } from "@/config/site";
 import { toast } from "@/store/notification.store";
 import { digitsOnly, toPersianDigits } from "@/utils/digits";
+import { isResendTooSoonError, otpErrorText, retryAfterOf } from "@/utils/otp";
 import { withMappedError } from "@/utils/withMappedError";
 import { AuthEndpoints } from "../../../_api/authEndpoints";
-import { SendOtpResponse } from "../../../_types/auth.type";
+import { SentCode } from "../../../_types/auth.type";
 
 const PHONE = /^09\d{9}$/;
 const PHONE_ERROR = "شماره موبایل باید ۱۱ رقم باشه و با ۰۹ شروع بشه";
@@ -17,7 +19,7 @@ const PHONE_ERROR = "شماره موبایل باید ۱۱ رقم باشه و ب
 type PhoneStepProps = {
 	/** Kept when the shopper comes back with «ویرایش». */
 	initialPhone: string;
-	onSent: (phone: string, sent: SendOtpResponse) => void;
+	onSent: (phone: string, sent: SentCode) => void;
 };
 
 /** Step ۱ «ورود یا ثبت‌نام» — mobile number → an SMS code. */
@@ -32,10 +34,16 @@ export default function PhoneStep({ initialPhone, onSent }: PhoneStepProps) {
 			onSent(res.phone || value, res);
 		},
 		// a rejected number is an answer for the field; anything else (rate limit, network) is a toast
-		onError: (e) => {
+		onError: (e, value) => {
 			const field = e.errorDetails?.find((d) => d.field === "phone");
-			if (field || e.code === "PHONE_INVALID") setError(field?.message ?? e.description);
-			else toast(e.description, { type: "error" });
+			if (field || e.code === "PHONE_INVALID") return setError(field?.message ?? e.description);
+			// a code went to this number moments ago (back from «ویرایش») — on to it, the resend timer running
+			const wait = retryAfterOf(e);
+			if (isResendTooSoonError(e) && wait) {
+				toast(otpErrorText(e), { icon: "mail", type: "info" });
+				return onSent(value, { codeLength: SITE_CONFIG.auth?.otpLength ?? 5, resendAvailableInSeconds: wait });
+			}
+			toast(otpErrorText(e), { type: "error" });
 		},
 	});
 

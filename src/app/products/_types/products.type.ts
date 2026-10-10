@@ -43,8 +43,8 @@ export interface ProductFacets {
 	colors: FacetOption[];
 	materials?: FacetOption[];
 	bagTypes?: FacetOption[];
-	/** Dynamic bounds of the price slider. */
-	price: { min: Money; max: Money; step: number };
+	/** Dynamic bounds of the price slider — `null` when nothing matches the filters. */
+	price: { min: Money; max: Money; step: number } | null;
 	onSaleCount?: number;
 	inStockCount?: number;
 	newCount?: number;

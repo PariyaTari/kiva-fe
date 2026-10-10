@@ -19,6 +19,7 @@ export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
 	PRODUCT_NOT_FOUND: FINAL, // change request: the bag left the catalogue
 	VALIDATION_ERROR: CLIENT_BUG,
 	RATE_LIMITED: TRANSPORT,
+	CHANGED_BY_SOMEONE_ELSE: REREAD,
 };
 
 /*
@@ -32,5 +33,7 @@ export const isGatewayUnavailableError = (e: ResultError | null | undefined) => 
 export const isTooLateError = (e: ResultError | null | undefined) => e?.code === "ORDER_NOT_CANCELLABLE" || e?.code === "CHANGE_REQUEST_NOT_ALLOWED";
 /** Re-subscribing from «برگردون»: already on / back in stock meanwhile — an info toast, not an error (as on the product page). */
 export const isStockAlertAnswer = (e: ResultError | null | undefined) => e?.code === "STOCK_ALERT_EXISTS" || e?.code === "PRODUCT_IN_STOCK";
+/** `PATCH /me`: the profile was saved elsewhere meanwhile and nothing was stored — re-read it and start the form over. */
+export const isChangedBySomeoneElseError = (e: ResultError | null | undefined) => e?.code === "CHANGED_BY_SOMEONE_ELSE";
 /** The return page's closed state. */
 export const isNotReturnableError = (e: ResultError | null | undefined) => e?.code === "ORDER_NOT_RETURNABLE" || e?.code === "RETURN_WINDOW_EXPIRED";

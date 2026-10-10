@@ -26,9 +26,11 @@ export type ApiProblem = {
 	/** Persian, user-facing message — safe to show as-is. */
 	message: string;
 	detail?: string;
-	instance?: string;
-	traceId?: string;
-	errors?: ApiFieldError[];
-	/** Error-specific data: `minSubtotal`, `availableQuantity`, `retryAfterSeconds`, ... */
-	meta?: Record<string, unknown>;
+	instance?: string | null;
+	/** Support finds the request in the logs by it — shown as «کد پیگیری» on server errors. */
+	traceId?: string | null;
+	/** Only for `VALIDATION_ERROR`; `null` otherwise. */
+	errors?: ApiFieldError[] | null;
+	/** Error-specific data: `minSubtotal`, `availableQuantity`, `retryAfterSeconds`, `attemptsLeft`, `field`, ... */
+	meta?: Record<string, unknown> | null;
 };

@@ -14,12 +14,14 @@ import {
 	ReturnRequest,
 } from "@/types/order.type";
 import { StockAlert } from "@/types/stockAlert.type";
-import { User } from "@/types/user.type";
+import { PhoneChangeResponse, User } from "@/types/user.type";
 import {
 	AccountDashboard,
 	MyReviewListResponse,
 	OrderListFilter,
 	OrderListResponse,
+	PhoneChangeOtpResponse,
+	PhoneChangePayload,
 	ReorderResponse,
 	TrackingDayGroup,
 	UpdateProfilePayload,
@@ -37,6 +39,18 @@ export const AccountEndpoints = {
 
 	updateMe: async (payload: UpdateProfilePayload) => {
 		const res = await httpClient.call<User>({ method: "PATCH", url: "me", data: payload });
+		return res.data;
+	},
+
+	/** Ownership of both numbers is proven: one code goes to the current number, one to the new one. */
+	requestPhoneChange: async (newPhone: string) => {
+		const res = await httpClient.call<PhoneChangeOtpResponse>({ method: "POST", url: "me/phone-change/request", data: { newPhone } });
+		return res.data;
+	},
+
+	/** Ends every session and starts a new one for this device — the new session cookie needs `withCredentials`. */
+	verifyPhoneChange: async (payload: PhoneChangePayload) => {
+		const res = await httpClient.call<PhoneChangeResponse>({ method: "POST", url: "me/phone-change/verify", data: payload, withCredentials: true });
 		return res.data;
 	},
 

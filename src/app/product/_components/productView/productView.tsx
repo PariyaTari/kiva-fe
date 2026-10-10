@@ -211,6 +211,7 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 							images={images}
 							video={video}
 							badges={data.badges}
+							art={{ type: data.bagType, color: variant.color.hex }}
 							view={shownView}
 							swapKey={swapKey}
 							onView={pickView}

@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import Logo from "@/app/_components/common/logo/logo";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { AuthResponse } from "@/types/user.type";
 import AuthArt from "../_components/authArt/authArt";
-import { SendOtpResponse } from "../_types/auth.type";
+import { SentCode } from "../_types/auth.type";
 import DoneStep from "./_components/doneStep/doneStep";
 import NameStep from "./_components/nameStep/nameStep";
 import OtpStep from "./_components/otpStep/otpStep";
@@ -22,7 +21,6 @@ const safeNext = (value: string | null) => (value && value.startsWith("/") && !v
 /** `/login?next=…` — phone → OTP → (new shoppers) name → done, then back to `next` (design `login.html`). */
 export default function LoginPage() {
 	const router = useRouter();
-	const queryClient = useQueryClient();
 	const next = safeNext(useSearchParams().get("next"));
 	const hydrated = useAuthStore((s) => s.hydrated);
 	const signedIn = useAuthStore((s) => !!s.accessToken);
@@ -30,7 +28,7 @@ export default function LoginPage() {
 
 	const [step, setStep] = useState<LoginStep>("phone");
 	const [phone, setPhone] = useState("");
-	const [sent, setSent] = useState<SendOtpResponse | null>(null);
+	const [sent, setSent] = useState<SentCode | null>(null);
 	const [name, setName] = useState("");
 
 	// already signed in → straight on (only before this visit's own login started)
@@ -45,11 +43,10 @@ export default function LoginPage() {
 	};
 
 	const verified = (res: AuthResponse) => {
-		setSession(res, res.user);
-		// the guest cart was merged into the account's cart
-		useCartStore.getState().setGuestToken(null);
-		// cart, hearts, prices… everything now belongs to the signed-in shopper
-		queryClient.invalidateQueries();
+		// the guest cart was merged into the account's cart (`cart` stays null until the backend's cart phase — then keep it)
+		if (res.cart) useCartStore.getState().setGuestToken(null);
+		// cart, hearts, prices… everything now belongs to the signed-in shopper — `SessionProvider` re-fetches it
+		setSession(res.accessToken, res.user);
 		setTimeout(() => (res.isNewUser && !res.user.firstName ? setStep("name") : finish(res.user.firstName ?? "")), 450);
 	};
 

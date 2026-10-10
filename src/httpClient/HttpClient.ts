@@ -1,8 +1,8 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { API_URL } from "@/config/global";
-import { readPersistedTokens, useAuthStore } from "@/store/auth.store";
+import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
-import { AuthTokens } from "@/types/user.type";
+import { refreshSession } from "./session";
 import { Response } from "./utils/Response";
 
 const IS_SERVER = typeof window === "undefined";
@@ -28,12 +28,8 @@ const nextAxios = axios.create({
 	timeout: DEFAULT_TIMEOUT_MS,
 });
 
-const REFRESH_URL = "auth/refresh";
-/** Web Locks name — one tab at a time spends the (single-use, rotating) refresh token. */
-const REFRESH_LOCK = "kiva-auth-refresh";
-
 // ── request: Bearer for signed-in users, the guest cart token otherwise ──
-// The session lives in this browser's storage; on the server (page prefetch) every request is an anonymous one,
+// The session lives in this tab's memory; on the server (page prefetch) every request is an anonymous one,
 // and the stores there are module singletons shared by all visitors — never read or write them.
 axiosClient.interceptors.request.use((config) => {
 	if (IS_SERVER) return config;
@@ -44,73 +40,38 @@ axiosClient.interceptors.request.use((config) => {
 	return config;
 });
 
-// One refresh in flight per tab — parallel 401s wait for the same rotation.
-let refreshing: Promise<string> | null = null;
-
-/** The refresh token was refused (expired, revoked or already rotated) — unlike a network failure, the session is over. */
-class SessionEndedError extends Error {}
-
-/** Runs `task` while holding the cross-tab lock; without Web Locks (old browsers) it simply runs. */
-async function withRefreshLock<T>(task: () => Promise<T>): Promise<T> {
-	return typeof navigator !== "undefined" && navigator.locks ? await navigator.locks.request(REFRESH_LOCK, task) : task();
-}
-
-/**
- * A fresh access token for a request that got 401 with `staleToken`. Rotation is single-use, so tabs take turns:
- * whoever holds the lock first rotates and saves; the others then find the new pair in storage and adopt it
- * instead of spending the revoked refresh token (which would end the session in every tab).
- */
-function refreshAccessToken(staleToken: string): Promise<string> {
-	refreshing ??= withRefreshLock(async () => {
-		const saved = readPersistedTokens();
-		// signed out (here or in another tab) meanwhile
-		if (!saved) throw new SessionEndedError();
-		// another tab — or an earlier refresh in this one — already rotated
-		if (saved.accessToken !== staleToken) {
-			useAuthStore.getState().setTokens(saved);
-			return saved.accessToken;
-		}
-		try {
-			const res = await axios.post<AuthTokens>(REFRESH_URL, { refreshToken: saved.refreshToken }, { baseURL: API_URL, timeout: DEFAULT_TIMEOUT_MS });
-			useAuthStore.getState().setTokens(res.data);
-			return res.data.accessToken;
-		} catch (err) {
-			const status = (err as AxiosError).response?.status;
-			if (status === 400 || status === 401) throw new SessionEndedError();
-			throw err;
-		}
-	}).finally(() => {
-		refreshing = null;
-	});
-	return refreshing;
-}
-
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
-// ── response: keep the guest cart token the server hands out; rotate expired access tokens once ──
+// ── response: keep the guest cart token the server hands out; renew a refused access token once ──
 axiosClient.interceptors.response.use(
 	(response) => {
 		const cartToken = response.headers["x-cart-token"];
 		if (!IS_SERVER && cartToken && !useAuthStore.getState().accessToken) useCartStore.getState().setGuestToken(cartToken);
 		return response;
 	},
-	async (error: AxiosError<{ code?: string }>) => {
+	async (error: AxiosError) => {
 		const original = error.config as RetriableConfig | undefined;
-		const status = error.response?.status;
 		// the token this request was sent with — not the current one, which a parallel refresh may have replaced
 		const sentToken = String(original?.headers.get("Authorization") ?? "").replace(/^Bearer /, "");
 
-		if (status === 401 && original && sentToken && !original._retried && !String(original.url).includes(REFRESH_URL)) {
+		// TOKEN_EXPIRED is the usual case; UNAUTHORIZED with a token (the server's key changed) is fixed by a refresh too.
+		// Without a token a 401 is a plain «sign in first».
+		if (error.response?.status === 401 && original && sentToken && !original._retried) {
 			original._retried = true;
+			const current = useAuthStore.getState().accessToken;
+			// signed out meanwhile
+			if (!current) throw error;
+			let token: string;
 			try {
-				const token = await refreshAccessToken(sentToken);
-				original.headers.set("Authorization", `Bearer ${token}`);
-				return axiosClient.request(original);
-			} catch (refreshError) {
-				// the refresh token was refused → the session is over; continue as a guest.
-				// A network failure keeps the session — the original 401 surfaces and a later request tries again.
-				if (refreshError instanceof SessionEndedError) useAuthStore.getState().clear();
+				// a refresh in this tab already replaced the token this request went with
+				token = current !== sentToken ? current : await refreshSession();
+			} catch {
+				// the session ended (`refreshSession` signed this browser out — `SessionProvider` then re-fetches
+				// everything as a guest) or the refresh didn't get through: the original 401 surfaces
+				throw error;
 			}
+			original.headers.set("Authorization", `Bearer ${token}`);
+			return axiosClient.request(original);
 		}
 		throw error;
 	},
@@ -135,6 +96,11 @@ export interface RequestConfig<D = unknown> {
 	responseType?: ResponseType;
 	/** Upload progress of a multipart body, 0–100. */
 	onUploadProgress?: (percent: number) => void;
+	/**
+	 * Send and accept cookies (`credentials: 'include'`) — only the requests that set or read the `kiva_rt` session
+	 * cookie: OTP verify, logout, phone-change verify. Without it the browser drops the response's `Set-Cookie`.
+	 */
+	withCredentials?: boolean;
 }
 
 const request = <T>(client: AxiosInstance, config: RequestConfig) =>
@@ -151,6 +117,7 @@ const request = <T>(client: AxiosInstance, config: RequestConfig) =>
 				timeout: config.timeout,
 				timeoutErrorMessage: config.timeoutErrorMessage,
 				responseType: config.responseType,
+				withCredentials: config.withCredentials,
 				onUploadProgress: config.onUploadProgress
 					? (e) => config.onUploadProgress?.(e.total ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0)
 					: undefined,

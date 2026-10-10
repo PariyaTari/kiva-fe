@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import classNames from "classnames";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
@@ -19,7 +19,8 @@ import { convertPersianToEnglishString, toPersianDigits } from "@/utils/digits";
 import { gregorianToJalali, jalaliToGregorian } from "@/utils/jalali";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
-import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isChangedBySomeoneElseError } from "../../_utils/apiError";
+import PhoneChangeModal from "../phoneChangeModal/phoneChangeModal";
 
 const MESSENGERS: { channel: PhotoMessengerChannel; name: string }[] = [
 	{ channel: "RUBIKA", name: "روبیکا" },
@@ -48,13 +49,17 @@ const SCHEMA: ValidationSchema<ProfileValues> = {
 	birthDate: (v) => (v.trim() && !jalaliToGregorian(v) ? "تاریخ رو به شکل ۱۳۷۵/۰۶/۲۰ بنویس" : undefined),
 };
 
-/** `#p-profile` «اطلاعات شخصی» — the form starts from a fresh `GET /me`. */
+/** `#p-profile` «اطلاعات شخصی» — the form starts from a fresh `GET /me`. «تغییر» next to the number opens the phone change. */
 export default function ProfilePanel() {
 	const me = useQuery({
 		queryKey: ["me", "profile"],
 		queryFn: () => withMappedError(() => AccountEndpoints.getMe()),
 		meta: { showNotificationOnRefetch: true },
 	});
+	// bumped to start the form over from a fresh profile (someone else saved meanwhile)
+	const [formVersion, setFormVersion] = useState(0);
+	// a fresh modal on every open
+	const [phoneChange, setPhoneChange] = useState({ open: false, key: 0 });
 
 	const meError = toErrorView(ERROR_BEHAVIOUR, me.error, "دریافت اطلاعات شخصی با خطا مواجه شد.");
 
@@ -74,13 +79,33 @@ export default function ProfilePanel() {
 					loading={me.isFetching}
 				/>
 			) : !me.error && !!me.data ? (
-				<ProfileForm key={me.data.id} user={me.data} />
+				<ProfileForm
+					key={`${me.data.id}:${formVersion}`}
+					user={me.data}
+					onChangePhone={() => setPhoneChange((m) => ({ open: true, key: m.key + 1 }))}
+					onStale={() => me.refetch().then(() => setFormVersion((v) => v + 1))}
+				/>
 			) : null}
+			{!!me.data && (
+				<PhoneChangeModal
+					key={phoneChange.key}
+					open={phoneChange.open}
+					onClose={() => setPhoneChange((m) => ({ ...m, open: false }))}
+					currentPhone={me.data.phone}
+				/>
+			)}
 		</div>
 	);
 }
 
-function ProfileForm({ user }: { user: User }) {
+type ProfileFormProps = {
+	user: User;
+	onChangePhone: () => void;
+	/** The profile changed elsewhere since it was read — re-read it and start the form over. */
+	onStale: () => void;
+};
+
+function ProfileForm({ user, onChangePhone, onStale }: ProfileFormProps) {
 	const queryClient = useQueryClient();
 	const setUser = useAuthStore((s) => s.setUser);
 
@@ -110,11 +135,18 @@ function ProfileForm({ user }: { user: User }) {
 					marketingSmsOptIn: v.sms,
 				}),
 			),
-		meta: { showNotification: true },
 		onSuccess: (saved) => {
 			setUser(saved);
 			queryClient.invalidateQueries({ queryKey: ["me", "dashboard"] });
 			toast("اطلاعاتت ذخیره شد", { icon: "check" });
+		},
+		onError: (e) => {
+			// saved elsewhere meanwhile (another tab / device) and nothing was stored — read it again (FRONTEND_AUTH §8)
+			if (isChangedBySomeoneElseError(e)) {
+				toast(e.description, { type: "info", duration: 4500 });
+				return onStale();
+			}
+			toast(e.description, { type: "error" });
 		},
 	});
 
@@ -129,12 +161,7 @@ function ProfileForm({ user }: { user: User }) {
 					<label>شماره موبایل</label>
 					<div className="input-group">
 						<input className="input ltr" value={toPersianDigits(user.phone)} disabled style={{ background: "var(--lilac-50)" }} aria-label="شماره موبایل" />
-						<button
-							type="button"
-							className="btn btn-soft"
-							id="chPh"
-							onClick={() => toast("برای تغییر شماره، با پشتیبانی تماس بگیر یا از حساب خارج و با شماره جدید وارد شو.", { icon: "info", type: "info", duration: 4500 })}
-						>
+						<button type="button" className="btn btn-soft" id="chPh" onClick={onChangePhone}>
 							تغییر
 						</button>
 					</div>

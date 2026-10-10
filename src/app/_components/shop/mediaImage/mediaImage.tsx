@@ -3,7 +3,8 @@ import classNames from "classnames";
 
 type MediaImageProps = {
 	src?: string | null;
-	alt?: string;
+	/** `MediaAsset.alt` may be `null`. */
+	alt?: string | null;
 	className?: string;
 	style?: CSSProperties;
 	/** `object-fit: cover` instead of `contain` (covers, banners). */
@@ -21,7 +22,7 @@ export default function MediaImage({ src, alt = "", className, style, cover, eag
 		// eslint-disable-next-line @next/next/no-img-element -- remote CDN media, responsive sizes come from the API
 		<img
 			src={src}
-			alt={alt}
+			alt={alt ?? ""}
 			className={classNames("kv-img", { cover }, className)}
 			style={style}
 			loading={eager ? "eager" : "lazy"}

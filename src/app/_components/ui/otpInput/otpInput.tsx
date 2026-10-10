@@ -8,7 +8,19 @@ import { OtpInputProps } from "./otpInput.type";
 const onlyDigits = (value: string) => convertPersianToEnglishString(value).replace(/\D/g, "");
 
 /** The design's `.otp` boxes — one digit each, auto-advance, backspace back, arrows and paste. */
-export default function OtpInput({ length = 5, value, onChange, onComplete, error = false, errorKey, ok = false, disabled = false, autoFocus = false }: OtpInputProps) {
+export default function OtpInput({
+	id,
+	label,
+	length = 5,
+	value,
+	onChange,
+	onComplete,
+	error = false,
+	errorKey,
+	ok = false,
+	disabled = false,
+	autoFocus = false,
+}: OtpInputProps) {
 	const boxes = useRef<(HTMLInputElement | null)[]>([]);
 
 	const focusAt = (i: number) => boxes.current[Math.max(0, Math.min(i, length - 1))]?.focus();
@@ -56,7 +68,7 @@ export default function OtpInput({ length = 5, value, onChange, onComplete, erro
 	};
 
 	return (
-		<div key={errorKey} className={classNames("otp", { err: error, ok })} id="otp">
+		<div key={errorKey} className={classNames("otp", { err: error, ok })} id={id} role="group" aria-label={label}>
 			{Array.from({ length }, (_, i) => {
 				const digit = value[i]?.trim() ?? "";
 				return (

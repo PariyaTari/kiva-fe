@@ -140,6 +140,15 @@
 	.al-foot .acts{display:flex;gap:8px;margin-inline-start:auto}
 	.al-foot .del:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
 	.al-foot .btn-white.loading::after{border-color:rgba(91,62,140,.25);border-top-color:var(--purple)}
+	/* ── «تغییر شماره موبایل» (profile) — no design: the order modals' blocks + login's code boxes (`.otp`, global) ── */
+	.ph-num{display:inline-block}
+	.ph-code .otp{margin:0}
+	.ph-err{display:block;margin-top:10px;font-size:12px;font-weight:500;color:var(--danger);text-align:center}
+	.ph-timer{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:18px;font-size:13px;color:var(--ink-50)}
+	.ph-timer b{color:var(--ink)}
+	.ph-timer button{background:none;border:0;padding:0;color:var(--purple);font:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+	.ph-timer button:disabled{opacity:.5;cursor:default}
+	.ph-timer button svg{width:15px;height:15px}
 	@media (max-width:1000px){
 		.acc{grid-template-columns:1fr}
 		/* deviation: the design's grid item kept the menu's full width as its minimum, so the menu never scrolled and the page grew to ~1100px on phones */

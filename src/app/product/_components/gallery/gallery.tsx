@@ -4,8 +4,9 @@ import { MouseEvent, useRef, useState } from "react";
 import classNames from "classnames";
 import { Icon } from "@/app/_components/icon/icons";
 import { toneClass } from "@/app/_components/ui/badge/badge";
+import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
-import { ProductBadge } from "@/types/catalog.type";
+import { BagType, ProductBadge } from "@/types/catalog.type";
 import { ProductMedia } from "../../_types/product.type";
 
 /** Badges the design prints on the main image, in its order (low stock lives in the price box instead). */
@@ -16,6 +17,8 @@ type GalleryProps = {
 	images: ProductMedia[];
 	video?: ProductMedia | null;
 	badges: ProductBadge[];
+	/** Drawn instead of a photo while the colour has none uploaded yet. */
+	art: { type?: BagType; color: string };
 	view: number;
 	/** Bumped on colour / view change → replays the `.swap` animation. */
 	swapKey: number;
@@ -24,7 +27,7 @@ type GalleryProps = {
 };
 
 /** `.gal` — thumbs, video thumb, the main image with click-zoom that follows the mouse and swipe on touch. */
-export default function Gallery({ images, video, badges, view, swapKey, onView, onVideo }: GalleryProps) {
+export default function Gallery({ images, video, badges, art, view, swapKey, onView, onVideo }: GalleryProps) {
 	const [zoom, setZoom] = useState(false);
 	const [origin, setOrigin] = useState<string>();
 	const touchX = useRef(0);
@@ -41,7 +44,7 @@ export default function Gallery({ images, video, badges, view, swapKey, onView, 
 		<div className="gal">
 			<div className="thumbs" id="thumbs" role="tablist" aria-label="تصاویر محصول">
 				{images.map((m, i) => (
-					<button key={m.id} type="button" className={classNames("thumb", { on: i === view })} role="tab" aria-label={m.viewLabel ?? m.alt} onClick={() => onView(i)}>
+					<button key={m.id} type="button" className={classNames("thumb", { on: i === view })} role="tab" aria-label={m.viewLabel ?? m.alt ?? undefined} onClick={() => onView(i)}>
 						<MediaImage src={m.thumbnailUrl ?? m.url} alt={m.alt} />
 					</button>
 				))}
@@ -76,7 +79,7 @@ export default function Gallery({ images, video, badges, view, swapKey, onView, 
 					))}
 				</div>
 				<div key={swapKey} className={classNames("im", { swap: swapKey > 0 })} id="im" style={{ transformOrigin: origin }}>
-					<MediaImage src={current?.url} alt={current?.alt} eager />
+					{current ? <MediaImage src={current.url} alt={current.alt} eager /> : <BagArt type={art.type ?? "tote"} color={art.color} />}
 				</div>
 				<div className="note-real">
 					<span>

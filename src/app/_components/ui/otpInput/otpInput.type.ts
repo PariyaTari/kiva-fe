@@ -1,4 +1,7 @@
 export type OtpInputProps = {
+	id?: string;
+	/** Names the group of boxes for screen readers — needed when a form has two codes. */
+	label?: string;
 	length?: number;
 	/** ASCII digits typed so far. */
 	value: string;

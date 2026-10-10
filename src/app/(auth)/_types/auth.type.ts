@@ -9,6 +9,9 @@ export interface SendOtpResponse {
 	resendAvailableInSeconds: number;
 }
 
+/** What the code step needs of a send — also built from an `OTP_RESEND_TOO_SOON` (the previous code still works). */
+export type SentCode = Pick<SendOtpResponse, "codeLength" | "resendAvailableInSeconds">;
+
 export interface VerifyOtpPayload {
 	phone: string;
 	code: string;

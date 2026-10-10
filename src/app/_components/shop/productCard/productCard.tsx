@@ -6,6 +6,7 @@ import classNames from "classnames";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/app/_components/icon/icons";
 import { toneClass } from "@/app/_components/ui/badge/badge";
+import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
 import WishlistToggle from "@/app/_components/shop/wishlistToggle/wishlistToggle";
 import { CartEndpoints } from "@/app/cart/_api/cartEndpoints";
@@ -38,7 +39,7 @@ export default function ProductCard({ product, colorKey, delay = 0, reveal = tru
 	const off = product.price.discountPercent ?? 0;
 	const tags = product.badges.filter((b) => b.code === "NEW" || b.code === "HAS_VIDEO");
 	const href = `/product/${product.slug}?color=${color}`;
-	const imageUrl = option?.imageUrl ?? product.image.url;
+	const imageUrl = option?.imageUrl ?? product.image?.url;
 
 	const add = useMutation({
 		mutationFn: () => withMappedError(() => CartEndpoints.addItem({ variantId: option.variantId, quantity: 1 })),
@@ -67,7 +68,12 @@ export default function ProductCard({ product, colorKey, delay = 0, reveal = tru
 			<div className="pcard-top">
 				<Link className="pcard-media" href={href} aria-label={product.name}>
 					<div key={swapKey} ref={imgRef} className={classNames("pcard-img", { swap: swapKey > 0 })}>
-						<MediaImage src={imageUrl} alt={product.image.alt ?? product.name} />
+						{/* no photo uploaded yet → the bag illustration in the card's colour (contract: `image` is null) */}
+						{imageUrl ? (
+							<MediaImage src={imageUrl} alt={product.image?.alt ?? product.name} />
+						) : (
+							<BagArt type={product.bagType ?? "tote"} color={option?.color.hex ?? color} />
+						)}
 					</div>
 					<div className="pcard-tags">
 						{tags.map((tag) => (

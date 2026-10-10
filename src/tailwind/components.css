@@ -147,3 +147,67 @@ img.kv-img.cover {
 		animation: none;
 	}
 }
+
+/* ── SMS code boxes (`ui/otpInput`) — from login.html's page style, shared by login and the account's phone change ── */
+.otp {
+	display: flex;
+	gap: 10px;
+	justify-content: center;
+	direction: ltr;
+	margin: 6px 0 16px;
+}
+.otp input {
+	width: 58px;
+	height: 66px;
+	border-radius: var(--r);
+	border: 1.5px solid var(--line-2);
+	text-align: center;
+	font: inherit;
+	font-size: 26px;
+	font-weight: 800;
+	color: var(--ink);
+	transition:
+		border-color 0.2s,
+		box-shadow 0.2s,
+		transform 0.2s;
+	background: #fff;
+}
+.otp input:focus {
+	outline: 0;
+	border-color: var(--purple);
+	box-shadow: 0 0 0 4px rgba(91, 62, 140, 0.12);
+	transform: translateY(-2px);
+}
+.otp input.filled {
+	border-color: var(--tag-border);
+	background: var(--lilac-50);
+}
+.otp input:disabled {
+	opacity: 0.55;
+}
+.otp.err input {
+	border-color: var(--danger);
+	animation: otpShake 0.4s;
+}
+.otp.ok input {
+	border-color: var(--success);
+	background: var(--success-bg);
+}
+@media (max-width: 760px) {
+	.otp {
+		gap: 7px;
+	}
+	.otp input {
+		width: 50px;
+		height: 58px;
+		font-size: 22px;
+	}
+}
+@keyframes otpShake {
+	25% {
+		transform: translateX(-6px);
+	}
+	75% {
+		transform: translateX(6px);
+	}
+}
