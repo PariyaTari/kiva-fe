@@ -187,6 +187,19 @@ function Details({ order, onOpenMedia }: { order: OrderDetail; onOpenMedia: (ind
 							<span>{order.payment?.status === "SUCCEEDED" ? "پرداخت شده" : "قابل پرداخت"}</span>
 							<span>{formatPrice(totals.payable)} تومان</span>
 						</div>
+						{/* after a change request: still to pay for a pricier bag, or refunds (cheaper bag, dropped bag, return) */}
+						{!!totals.balanceDue && (
+							<div>
+								<span>مابه‌التفاوت (پرداخت نشده)</span>
+								<span>{formatPrice(totals.balanceDue)} تومان</span>
+							</div>
+						)}
+						{!!totals.refunded && (
+							<div>
+								<span>برگشت داده شد</span>
+								<span>{formatPrice(totals.refunded)} تومان</span>
+							</div>
+						)}
 					</div>
 					{media && (
 						<p style={{ marginTop: 8, fontSize: 12.5 }} className="muted">

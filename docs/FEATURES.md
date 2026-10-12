@@ -2,6 +2,7 @@
 
 > تاریخ: ۱۸ مهر ۱۴۰۵ (2026-10-10)
 > فروشگاه: `kiva-fe` (Next.js 16) · قرارداد API: `kiva-openapi.yml` **نسخه‌ی 1.4.0** · راهنمای ورود بک‌اند: `FRONTEND_AUTH.md`
+> **به‌روزرسانی ۲۰ مهر (قرارداد 1.5.0):** بخش‌های ۳.۴ تا ۳.۶ و جدول شکاف‌های بخش ۷ به‌روز شدند. فهرست endpointهای بخش ۴ هنوز 1.4.0 است؛ ۱۸ endpoint تازه‌ی `/admin/*` در خود کانترکت و فاز ۱۲ ِ `kiva-backoffice-fe/docs/PLAN.md` آمده‌اند.
 >
 > این سند هر چیزی را که مشتری در فروشگاه می‌بیند یا انجام می‌دهد فهرست می‌کند، و برای هر کدام می‌گوید پشتش چه داده‌ای است و ادمین کجا مدیریتش می‌کند.
 > همه‌ی endpointهای `/admin/*` در کانترکت **[پیشنهادی]** علامت خورده‌اند، یعنی بک‌اند هنوز قطعی‌شان نکرده.
@@ -380,6 +381,10 @@
   - `desiredVariantId` (رنگ یا مدل جایگزین)
   - `note`
 - مابه‌التفاوت را فرانت فقط نمایش می‌دهد (`قیمت ورینت × تعداد − lineTotal`).
+- **رسیدگی (1.5.0):** اپراتور با `POST /admin/orders/{code}/change-request/resolution` درخواست را `APPLY` یا `REJECT` می‌کند (`variantId`، `note` برای مشتری، `notifyCustomer`). سفارش به `PROCESSING` و عکس به `WAITING` برمی‌گردد و `feedback.resolution` تا عکس تازه می‌ماند.
+  - قیمت قلم تازه = قیمت **امروز** ورینت. ارزان‌تر ← `Refund` خودکار (`PENDING`)؛ گران‌تر ← `totals.balanceDue` و `actions.canPay` (مشتری از «سفارش‌های من» می‌پردازد) و تا صفر نشود ارسال ممکن نیست (`422 BALANCE_DUE`).
+  - `CANCEL_ITEM` قلم را حذف و سهمش را استرداد می‌کند؛ اگر تنها قلم بود، سفارش لغو با استرداد کامل.
+  - از `CHANGE_REQUESTED` فقط همین endpoint یا لغو بیرون می‌برد.
 - **در پنل:** `mediaApprovalRate` و `changeRequestRate` در داشبورد.
 
 ### ۳.۵ لغو و استرداد
@@ -392,8 +397,8 @@
   - `method`: `ORIGINAL_PAYMENT`، `BANK_TRANSFER`، `STORE_CREDIT`
   - `status`: `PENDING`، `PROCESSING`، `COMPLETED`، `FAILED`
   - `expectedBy`، `completedAt`، `referenceId`
-- **استرداد ادمین** (`POST /admin/orders/{code}/refunds`، فقط ADMIN): کامل یا جزئی، با دلیل و روش. می‌تواند به یک مرجوعی وصل شود (`returnId`).
-- ⚠️ تغییر وضعیت یک refund (مثلاً به `COMPLETED`) endpoint ندارد (بخش ۷).
+- **استرداد ادمین** (`POST /admin/orders/{code}/refunds`، فقط ADMIN): کامل یا جزئی، با دلیل و روش. می‌تواند به یک مرجوعی وصل شود (`returnId`؛ مرجوعی باید `RECEIVED` باشد). همیشه `PENDING` ساخته می‌شود؛ جمع استردادهای غیر `FAILED` از مبلغ پرداخت‌شده بیشتر نمی‌شود.
+- **پیگیری استرداد (1.5.0)** (`PATCH /admin/refunds/{id}`، فقط ADMIN): `PENDING → PROCESSING`، `→ COMPLETED` (با `referenceId` برای کارت/شبا؛ به `totals.refunded` اضافه، مرجوعی `REFUNDED`، پیامک)، `→ FAILED`. `note` می‌شود `Refund.statusNote` که مشتری هم می‌بیند.
 
 ### ۳.۶ مرجوعی
 
@@ -408,7 +413,8 @@
   - `shippingPaidBy` (`KIVA` یا `CUSTOMER`)
   - `instructions`: متن راهنمای ارسال برگشتی که مشتری روی کارتش می‌بیند
   - `rejectionReason`
-- ⚠️ وضعیت‌های بعد از تصمیم (`PICKUP_SCHEDULED`، `RECEIVED`، `CLOSED`) endpoint ندارند (بخش ۷).
+- **ادامه‌ی چرخه (1.5.0):** `PUT /admin/returns/{id}/pickup` (← `PICKUP_SCHEDULED`، اختیاری؛ حامل، زمان، کد رهگیری)، `POST /admin/returns/{id}/receipt` (← `RECEIVED`؛ برای هر قلم تعداد رسیده و تعداد برگشتی به موجودی با دلیل `RETURNED`)، استرداد با `returnId` (← `REFUNDED` وقتی `COMPLETED` شود)، `POST /admin/returns/{id}/close` (← `CLOSED` بدون استرداد، با دلیل برای مشتری). پاسخ پنل `AdminReturnRequest` با `allowedTransitions`.
+- وضعیت سفارش دنبال مرجوعی باز: `RETURN_REQUESTED` ← بعد از `RECEIVED`: `RETURNED` ← `REFUNDED`؛ رد یا بسته ← دوباره `DELIVERED`. مشتری `pickup`، `receivedAt`، `rejectionReason`، `closeReason` و `refund.statusNote` را روی کارتش می‌بیند.
 
 ### ۳.۷ پرداخت
 
@@ -628,6 +634,8 @@
 ---
 
 ## ۷. شکاف‌ها: چیزهایی که پنل لازم دارد ولی در کانترکت نیست
+
+> **1.5.0 (۲۰ مهر):** بسته شدند ← #3 (`GET /admin/testimonials`)، #4 (`GET /admin/pages`)، #5 (`GET /admin/announcements`، `GET /admin/faq/groups`)، #6 (لیست/ویرایش/حذف متریال، حذف رنگ، `IN_USE`)، #7 (`…/change-request/resolution` + `balanceDue`)، #8 (`pickup`، `receipt`، `close`)، #9 (`PATCH /admin/refunds/{id}`)، #10 (`GET /admin/customers/{id}`)، #11 (`GET /admin/newsletter/subscriptions`)، #12 (`GET /admin/stock-alerts`)، #18 (`GET /admin/audit-log`)، #21 (`DELETE /admin/campaigns/{id}`، لیست همه‌ی کمپین‌ها). **هنوز باز:** #1، #2، #13 تا #17، #19، #20.
 
 | # | نیاز | چرا | پیشنهاد |
 |---|---|---|---|

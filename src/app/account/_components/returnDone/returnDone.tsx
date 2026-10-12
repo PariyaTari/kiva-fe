@@ -50,7 +50,8 @@ export default function ReturnDone({ ret, amount, method }: ReturnDoneProps) {
 					<div>
 						<span className="nn">۳</span>
 						<span>
-							بعد از رسیدن و بررسی کیف، {formatPrice(ret.refund?.amount ?? amount)} تومان به {REFUND_DESTINATION[ret.refund?.method ?? method]} برمی‌گرده.
+							بعد از رسیدن و بررسی کیف، {formatPrice(ret.refund?.amount ?? amount)} تومان به{" "}
+							{REFUND_DESTINATION[ret.refund?.method ?? ret.refundMethod ?? method]} برمی‌گرده.
 						</span>
 					</div>
 				</div>

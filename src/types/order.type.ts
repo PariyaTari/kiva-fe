@@ -104,6 +104,8 @@ export interface OrderSummary {
 	statusLabel: string;
 	statusTone?: Tone;
 	payable: Money;
+	/** Left to pay after a change to a pricier colour / model (`totals.balanceDue`); the order doesn't ship until it's 0. */
+	balanceDue?: Money;
 	shippingMethod: { code: ShippingMethodCode; name: string };
 	itemsPreview: OrderItemPreview[];
 	itemsCount?: number;
@@ -140,8 +142,11 @@ export interface OrderTotals {
 	shippingCost: Money;
 	shippingFreeReason?: string | null;
 	giftWrapCost?: Money;
+	/** «پرداخت شده». */
 	payable: Money;
 	refunded?: Money;
+	/** See `OrderSummary.balanceDue`. */
+	balanceDue?: Money;
 	currency?: "IRT";
 }
 
@@ -161,7 +166,33 @@ export interface OrderMediaItem extends MediaAsset {
 	capturedAt?: string;
 }
 
+export type MediaChangeType = "COLOR" | "MODEL" | "CANCEL_ITEM" | "OTHER";
+
+/** The operator's answer to a change request — the order goes back to `PROCESSING` and new photos follow. */
+export interface ChangeResolution {
+	decision: "APPLY" | "REJECT";
+	/** The variant that was actually sent instead. */
+	variantId?: number | null;
+	/** For the shopper (the reason, for `REJECT`). */
+	note?: string | null;
+	at: string;
+}
+
+/** The shopper's latest answer to the photos; for `REQUEST_CHANGE` the request as it was sent. */
+export interface MediaFeedback {
+	decision: "APPROVE" | "REQUEST_CHANGE";
+	changeType?: MediaChangeType | null;
+	orderItemId?: number | null;
+	/** Colour / model asked for instead. */
+	desiredVariantId?: number | null;
+	note?: string | null;
+	at: string;
+	/** `null` until the operator handles the request; stays until the new photos are answered. */
+	resolution?: ChangeResolution | null;
+}
+
 export interface PreShipmentMedia {
+	/** `CHANGE_REQUESTED` only until the operator handles it; then `WAITING` again (new photos). */
 	status: "WAITING" | "SENT" | "APPROVED" | "CHANGE_REQUESTED";
 	channel: PhotoMessengerChannel;
 	channelName: string;
@@ -170,7 +201,7 @@ export interface PreShipmentMedia {
 	sentAt?: string | null;
 	waitingMessage?: string | null;
 	items: OrderMediaItem[];
-	feedback?: { decision: "APPROVE" | "REQUEST_CHANGE"; note?: string | null; at: string } | null;
+	feedback?: MediaFeedback | null;
 	feedbackDeadline?: string | null;
 }
 
@@ -230,9 +261,15 @@ export interface Refund {
 	method: RefundMethod;
 	status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 	reason?: string | null;
+	/** The return request this refund is for. */
+	returnId?: number | null;
+	createdAt?: string;
 	expectedBy?: string | null;
 	completedAt?: string | null;
+	/** Bank / gateway tracking number. */
 	referenceId?: string | null;
+	/** Note on the latest status change, written for the shopper (e.g. why it failed). */
+	statusNote?: string | null;
 }
 
 export type CancelReason = "CHANGED_MIND" | "NOT_AS_PICTURED" | "ORDERED_BY_MISTAKE" | "FOUND_CHEAPER" | "DELIVERY_TOO_LONG" | "OTHER";
@@ -249,8 +286,6 @@ export interface CancelOrderResponse {
 	refund?: Refund | null;
 	message?: string;
 }
-
-export type MediaChangeType = "COLOR" | "MODEL" | "CANCEL_ITEM" | "OTHER";
 
 /** `POST /me/orders/{code}/media-feedback` — «همونه!» or a change request. */
 export interface MediaFeedbackPayload {
@@ -291,7 +326,24 @@ export interface ReturnRequest {
 	media?: MediaAsset[];
 	shippingPaidBy?: "KIVA" | "CUSTOMER";
 	instructions?: string | null;
+	refundMethod?: RefundMethod;
+	/** Only for `REJECTED`. */
+	rejectionReason?: string | null;
+	/** KIVA collects the parcel (`PICKUP_SCHEDULED`); `null` when the shopper sends it. */
+	pickup?: ReturnPickup | null;
 	refund?: Refund | null;
 	createdAt: string;
 	decidedAt?: string | null;
+	receivedAt?: string | null;
+	closedAt?: string | null;
+	/** Only for `CLOSED` (ended without a refund). */
+	closeReason?: string | null;
+}
+
+export interface ReturnPickup {
+	carrier?: ShippingMethodCode;
+	carrierName?: string;
+	scheduledFor?: string | null;
+	trackingCode?: string | null;
+	note?: string | null;
 }

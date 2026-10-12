@@ -15,13 +15,19 @@ import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
 import { ERROR_BEHAVIOUR, isTooLateError } from "../../_utils/apiError";
 import { clockTime, dayLong, dayShort, itemsLabel } from "../../_utils/orderActions";
+import ChangeRequestLines from "../changeRequestLines/changeRequestLines";
 import MediaLightbox from "../mediaLightbox/mediaLightbox";
 
-/** Which `.pc` box an order shows: waiting for «همونه؟», approved, or a change requested. */
-export type PhotoCheckState = "ask" | "ok" | "chg";
+/**
+ * Which `.pc` box an order shows: waiting for «همونه؟», approved, a change requested, or — back in
+ * `PROCESSING` — the operator's answer to the change request (shown only once the media says there is one).
+ */
+export type PhotoCheckState = "ask" | "ok" | "chg" | "res";
 
 export function photoCheckState(order: OrderSummary): PhotoCheckState | null {
 	if (order.status === "CHANGE_REQUESTED" || order.preShipmentMedia?.status === "CHANGE_REQUESTED") return "chg";
+	// `OrderSummary` can't tell a handled change request from an order that was never photographed
+	if (order.status === "PROCESSING") return "res";
 	if (order.status !== "PHOTO_SENT") return null;
 	if (order.preShipmentMedia?.status === "APPROVED") return "ok";
 	return order.actions?.canApproveMedia ? "ask" : null;
@@ -37,7 +43,8 @@ type PhotoCheckProps = {
 
 /**
  * `.pc` «عکس‌های کیفت رسید! همونیه که می‌خواستی؟» — the KIVA signature on the card: one-click approve
- * (also from the lightbox), or a change request; after the answer, the green / cream variant.
+ * (also from the lightbox), or a change request; after the answer, the green / cream variant; after the
+ * operator handled a change request, its result (done → green, refused → cream) until the new photos arrive.
  */
 export default function PhotoCheck({ order, state, onRequestChange }: PhotoCheckProps) {
 	const queryClient = useQueryClient();
@@ -71,6 +78,8 @@ export default function PhotoCheck({ order, state, onRequestChange }: PhotoCheck
 	const shots = media.data?.items ?? [];
 	const deadline = media.data?.feedbackDeadline;
 	const feedback = media.data?.feedback;
+	/** The operator's answer — kept until the new photos are answered. */
+	const resolution = feedback?.decision === "REQUEST_CHANGE" ? feedback.resolution : null;
 	const canChange = !!order.actions?.canRequestChange;
 	const mediaError = toErrorView(ERROR_BEHAVIOUR, media.error, "دریافت عکس‌های کیف با خطا مواجه شد.");
 	const errorBar = !!mediaError && (
@@ -124,20 +133,50 @@ export default function PhotoCheck({ order, state, onRequestChange }: PhotoCheck
 					</span>
 				</div>
 				<div className="req">
-					<div className="req-line">
-						<span className="lbl">کیف</span>
-						<b>{itemsLabel(order)}</b>
-						{feedback?.at && (
-							<span className="muted" style={{ fontSize: 12.5 }}>
-								— ثبت: {dayShort(feedback.at)}، ساعت {clockTime(feedback.at)}
-							</span>
-						)}
-					</div>
-					{feedback?.note && <div className="req-q">{feedback.note}</div>}
+					<ChangeRequestLines order={order} feedback={feedback} />
 					{errorBar}
 				</div>
 			</div>
 		);
+
+	if (state === "res") {
+		// nothing to tell for an order that was never photographed
+		if (!resolution) return errorBar || null;
+		const applied = resolution.decision === "APPLY";
+		const dropped = applied && feedback?.changeType === "CANCEL_ITEM";
+		return (
+			<div className={classNames("pc", applied ? "ok" : "chg")}>
+				<span className="ribbon">
+					<Icon name="swap" /> درخواست تغییر
+				</span>
+				<div className="pc-h">
+					<span className="pi">
+						<Icon name={applied ? "check" : "info"} />
+					</span>
+					<span>
+						<b>{dropped ? "کیفی که خواستی از سفارش حذف شد" : applied ? "درخواست تغییرت انجام شد" : "درخواست تغییرت انجام نشد"}</b>
+						<small>
+							{channel && <MessengerIcon channel={channel} />}{" "}
+							{dropped
+								? `سهمش به کارتت برمی‌گرده؛ از بقیه‌ی سفارش عکس می‌گیریم و توی ${channelName} قبل از ارسال می‌بینی.`
+								: applied
+									? `از کیف جدید عکس و ویدیو می‌گیریم و توی ${channelName} برات می‌فرستیم؛ بعد از تأییدت ارسال می‌شه.`
+									: `همون کیف قبلی برات ارسال می‌شه؛ قبلش دوباره عکسش رو توی ${channelName} می‌بینی.`}
+						</small>
+					</span>
+				</div>
+				<div className="req">
+					<div className="req-line">
+						<span className="lbl">رسیدگی</span>
+						<span>
+							{dayShort(resolution.at)}، ساعت {clockTime(resolution.at)}
+						</span>
+					</div>
+					{resolution.note && <div className="req-q">{resolution.note}</div>}
+				</div>
+			</div>
+		);
+	}
 
 	const sentAt = summary?.sentAt ?? media.data?.sentAt;
 
@@ -151,7 +190,7 @@ export default function PhotoCheck({ order, state, onRequestChange }: PhotoCheck
 					<Icon name="camera" />
 				</span>
 				<span>
-					<b>عکس‌های کیفت رسید! همونیه که می‌خواستی؟</b>
+					<b>عکس‌های {resolution?.decision === "APPLY" ? "کیف جدیدت" : "کیفت"} رسید! همونیه که می‌خواستی؟</b>
 					<small>
 						{channel && <MessengerIcon channel={channel} />} توی {channelName} هم برات فرستادیم{sentAt ? ` — ${dayLong(sentAt)}` : ""}
 					</small>

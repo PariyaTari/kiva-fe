@@ -16,11 +16,11 @@ import { OrderSummary, PaymentGatewayCode, PaymentInit } from "@/types/order.typ
 import { toErrorView } from "@/utils/apiError";
 import { toPersianDigits } from "@/utils/digits";
 import { formatPrice } from "@/utils/format";
-import { newIdempotencyKey, redirectToGateway } from "@/utils/payment";
+import { newIdempotencyKey, redirectToGateway, rememberBalancePayment } from "@/utils/payment";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
 import { ERROR_BEHAVIOUR, isGatewayUnavailableError, isOrderAlreadyPaidError, isPaymentExpiredError } from "../../_utils/apiError";
-import { itemsLabel } from "../../_utils/orderActions";
+import { itemsLabel, UNPAID } from "../../_utils/orderActions";
 import ModalHead from "../modalHead/modalHead";
 import ReorderButton from "../reorderButton/reorderButton";
 
@@ -34,10 +34,13 @@ type View = "form" | "redirect" | "paid" | "expired";
 
 /**
  * Pay an unpaid order from «سفارش‌های من» (`POST /me/orders/{code}/payments`) — design `order-pay.html`.
+ * The same call pays `balanceDue` of a paid order (a change to a pricier colour / model).
  * The bank sends the shopper back to `/checkout/result?paymentId=…`, like checkout.
  */
 export default function PayModal({ order, open, onClose }: PayModalProps) {
 	const queryClient = useQueryClient();
+	/** Paying the difference of a change request, not the order itself. */
+	const balance = !UNPAID.includes(order.status) && (order.balanceDue ?? 0) > 0;
 	const [view, setView] = useState<View>("form");
 	const [gatewayPick, setGatewayPick] = useState<PaymentGatewayCode | null>(null);
 	/** Gateways that answered «not available» during this visit. */
@@ -79,6 +82,7 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 		onSuccess: (res) => {
 			setInit(res);
 			setView("redirect");
+			if (balance) rememberBalancePayment(res.paymentId);
 			redirectToGateway(res.redirect);
 		},
 		onError: (e, code) => {
@@ -103,7 +107,7 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 
 	const detailError = toErrorView(ERROR_BEHAVIOUR, detail.error, "دریافت جزئیات سفارش با خطا مواجه شد.");
 	const totals = detail.data?.totals;
-	const payable = totals?.payable ?? order.payable;
+	const payable = balance ? (totals?.balanceDue ?? order.balanceDue ?? 0) : (totals?.payable ?? order.payable);
 
 	return (
 		<Modal open={open} onClose={onClose} width={600}>
@@ -128,8 +132,10 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 						<div className="ck">
 							<Icon name="check" />
 						</div>
-						<h3>این سفارش قبلاً پرداخت شده</h3>
-						<p>پرداخت {order.code} چند لحظه پیش تأیید شد و سفارشت در حال آماده‌سازیه؛ نیازی به پرداخت دوباره نیست.</p>
+						<h3>{balance ? "مابه‌التفاوت قبلاً پرداخت شده" : "این سفارش قبلاً پرداخت شده"}</h3>
+						<p>
+							{balance ? "مابه‌التفاوت" : "پرداخت"} {order.code} چند لحظه پیش تأیید شد و سفارشت در حال آماده‌سازیه؛ نیازی به پرداخت دوباره نیست.
+						</p>
 						<div className="acts">
 							<button type="button" className="btn btn-primary btn-block" onClick={onClose}>
 								مشاهده سفارش
@@ -152,7 +158,11 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 					</div>
 				) : (
 					<>
-						<ModalHead icon="lock" title="پرداخت سفارش" sub={`${order.code} · ${itemsLabel(order)} · ارسال با ${order.shippingMethod.name}`} />
+						<ModalHead
+							icon="lock"
+							title={balance ? "پرداخت مابه‌التفاوت" : "پرداخت سفارش"}
+							sub={`${order.code} · ${itemsLabel(order)} · ارسال با ${order.shippingMethod.name}`}
+						/>
 						{detail.isLoading ? (
 							<Loading />
 						) : !!detailError ? (
@@ -184,36 +194,57 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 										</div>
 									))}
 								</div>
-								<div style={{ marginTop: 6 }}>
-									<div className="sum-row">
-										<span>قیمت کالاها</span>
-										<b>
-											{formatPrice(totals.itemsCompareAtTotal)} <small>تومان</small>
-										</b>
-									</div>
-									{totals.productDiscount > 0 && (
-										<div className="sum-row disc">
-											<span>تخفیف محصولات</span>
-											<b>−{formatPrice(totals.productDiscount)}</b>
+								{balance ? (
+									<div style={{ marginTop: 6 }}>
+										<div className="sum-row">
+											<span>پرداخت شده</span>
+											<b>
+												{formatPrice(totals.payable)} <small>تومان</small>
+											</b>
 										</div>
-									)}
-									{totals.codeDiscount > 0 && (
-										<div className="sum-row disc">
-											<span>کد تخفیف</span>
-											<b>−{formatPrice(totals.codeDiscount)}</b>
+										<div className="sum-row total">
+											<span>مابه‌التفاوت تغییر کیف</span>
+											<b>
+												{formatPrice(payable)} <small>تومان</small>
+											</b>
 										</div>
-									)}
-									<div className="sum-row">
-										<span>ارسال ({order.shippingMethod.name})</span>
-										<b>{totals.shippingCost ? formatPrice(totals.shippingCost) : <span className="free">رایگان</span>}</b>
+										<div className="note cream" style={{ marginTop: 12 }}>
+											<Icon name="info" />
+											<span>رنگ یا مدلی که خواستی گرون‌تره؛ بعد از پرداخت مابه‌التفاوت، سفارشت ارسال می‌شه.</span>
+										</div>
 									</div>
-									<div className="sum-row total">
-										<span>مبلغ قابل پرداخت</span>
-										<b>
-											{formatPrice(totals.payable)} <small>تومان</small>
-										</b>
+								) : (
+									<div style={{ marginTop: 6 }}>
+										<div className="sum-row">
+											<span>قیمت کالاها</span>
+											<b>
+												{formatPrice(totals.itemsCompareAtTotal)} <small>تومان</small>
+											</b>
+										</div>
+										{totals.productDiscount > 0 && (
+											<div className="sum-row disc">
+												<span>تخفیف محصولات</span>
+												<b>−{formatPrice(totals.productDiscount)}</b>
+											</div>
+										)}
+										{totals.codeDiscount > 0 && (
+											<div className="sum-row disc">
+												<span>کد تخفیف</span>
+												<b>−{formatPrice(totals.codeDiscount)}</b>
+											</div>
+										)}
+										<div className="sum-row">
+											<span>ارسال ({order.shippingMethod.name})</span>
+											<b>{totals.shippingCost ? formatPrice(totals.shippingCost) : <span className="free">رایگان</span>}</b>
+										</div>
+										<div className="sum-row total">
+											<span>مبلغ قابل پرداخت</span>
+											<b>
+												{formatPrice(totals.payable)} <small>تومان</small>
+											</b>
+										</div>
 									</div>
-								</div>
+								)}
 							</>
 						) : null}
 						<div className="m-sec">

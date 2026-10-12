@@ -22,12 +22,14 @@ const makeConfetti = (): Piece[] =>
 type SuccessModalProps = {
 	orderCode: string;
 	nextSteps: string[];
+	/** Defaults to «سفارشت با موفقیت ثبت شد!». */
+	title?: string;
 	/** Closing the modal leads to the order list (design `onClose`). */
 	onClose: () => void;
 };
 
 /** «سفارشت با موفقیت ثبت شد!» — the design's success modal, with a burst of `.confetti` behind it. */
-export default function SuccessModal({ orderCode, nextSteps, onClose }: SuccessModalProps) {
+export default function SuccessModal({ orderCode, nextSteps, title = "سفارشت با موفقیت ثبت شد!", onClose }: SuccessModalProps) {
 	const [open, setOpen] = useState(true);
 	// only ever rendered after a client-side answer (never on the server), so random positions are safe here
 	const [pieces, setPieces] = useState<Piece[]>(makeConfetti);
@@ -56,7 +58,7 @@ export default function SuccessModal({ orderCode, nextSteps, onClose }: SuccessM
 					<div className="ck">
 						<Icon name="check" />
 					</div>
-					<h3>سفارشت با موفقیت ثبت شد!</h3>
+					<h3>{title}</h3>
 					<p className="muted" style={{ fontSize: 13.5 }}>
 						ممنون که کیوا رو انتخاب کردی
 					</p>

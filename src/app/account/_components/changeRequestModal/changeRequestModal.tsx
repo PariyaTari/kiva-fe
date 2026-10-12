@@ -113,10 +113,10 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 				kind === "CANCEL_ITEM" && item
 					? `بعد از تأیید اپراتور، ${formatPrice(item.lineTotal)} تومان به کارتت برمی‌گرده.`
 					: priceDiff > 0
-						? `مابه‌التفاوت ${formatPrice(priceDiff)} تومانی رو با لینکی که برات می‌فرستیم پرداخت می‌کنی.`
+						? `بعد از تأیید اپراتور، مابه‌التفاوت ${formatPrice(priceDiff)} تومانی رو همین‌جا توی «سفارش‌های من» پرداخت می‌کنی؛ بعدش ارسال می‌شه.`
 						: priceDiff < 0
-							? `مابه‌التفاوت ${formatPrice(-priceDiff)} تومانی به کارتت برمی‌گرده.`
-							: "اگه قیمت فرق داشت، لینک پرداخت یا برگشت وجهش برات فرستاده می‌شه.";
+							? `بعد از تأیید اپراتور، مابه‌التفاوت ${formatPrice(-priceDiff)} تومانی به کارتت برمی‌گرده.`
+							: "اگه قیمت فرق داشت، مابه‌التفاوت یا توی «سفارش‌های من» پرداخت می‌شه یا به کارتت برمی‌گرده.";
 			setResult({ view: "done", step3 });
 		},
 		onError: (e) => {
@@ -531,7 +531,7 @@ function PriceDiff({ diff }: { diff: number }) {
 			<div className="diff d-up">
 				<Icon name="info" />
 				<span>
-					<b>{formatPrice(diff)} تومان</b> بیشتر؛ بعد از هماهنگی، لینک پرداخت مابه‌التفاوت برات فرستاده می‌شه.
+					<b>{formatPrice(diff)} تومان</b> بیشتر؛ بعد از تأیید اپراتور، مابه‌التفاوت رو توی «سفارش‌های من» پرداخت می‌کنی.
 				</span>
 			</div>
 		);
@@ -539,7 +539,7 @@ function PriceDiff({ diff }: { diff: number }) {
 		<div className="diff d-down">
 			<Icon name="card" />
 			<span>
-				<b>{formatPrice(-diff)} تومان</b> کمتر؛ مابه‌التفاوت به کارتت برمی‌گرده.
+				<b>{formatPrice(-diff)} تومان</b> کمتر؛ بعد از تأیید اپراتور، مابه‌التفاوت به کارتت برمی‌گرده.
 			</span>
 		</div>
 	);

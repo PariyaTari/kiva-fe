@@ -11,7 +11,7 @@ import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import { useAuthStore } from "@/store/auth.store";
 import { toErrorView } from "@/utils/apiError";
 import { formatPrice } from "@/utils/format";
-import { newIdempotencyKey, redirectToGateway } from "@/utils/payment";
+import { isBalancePayment, newIdempotencyKey, redirectToGateway } from "@/utils/payment";
 import { withMappedError } from "@/utils/withMappedError";
 import { CheckoutEndpoints } from "../../_api/checkoutEndpoints";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
@@ -84,7 +84,12 @@ export default function PaymentResultView() {
 						/>
 					</div>
 				) : !data ? null : paid ? (
-					<SuccessModal orderCode={data.order?.code ?? ""} nextSteps={data.nextSteps ?? []} onClose={() => router.push("/account/orders")} />
+					<SuccessModal
+						orderCode={data.order?.code ?? ""}
+						nextSteps={data.nextSteps ?? []}
+						title={isBalancePayment(data.paymentId) ? "مابه‌التفاوت سفارشت پرداخت شد!" : undefined}
+						onClose={() => router.push("/account/orders")}
+					/>
 				) : data.status === "PENDING" ? (
 					<div className="empty" style={{ padding: "80px 0" }}>
 						<div className="art">

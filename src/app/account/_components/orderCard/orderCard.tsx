@@ -52,6 +52,7 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 	const shipment = order.shipment;
 	const photo = photoCheckState(order);
 	const progress = !NO_PROGRESS.includes(status);
+	const balanceDue = order.balanceDue ?? 0;
 
 	const toggle = () => {
 		setOpen((o) => !o);
@@ -90,6 +91,24 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 					<span className={classNames("tag", toneClass(order.statusTone))}>{order.statusLabel}</span>
 				</div>
 				<div className="ord-b">
+					{/* a change to a pricier colour / model — the order waits for it, whatever its state */}
+					{balanceDue > 0 && (
+						<OrderStateBar
+							tone="warn"
+							icon="card"
+							title="مابه‌التفاوت تغییر کیف مونده"
+							text="رنگ یا مدلی که خواستی گرون‌تره؛ بعد از پرداخت مابه‌التفاوت، سفارشت ارسال می‌شه."
+						>
+							<span className="amt">
+								{formatPrice(balanceDue)} <small>تومان</small>
+							</span>
+							{actions?.canPay && (
+								<button type="button" className="btn btn-primary btn-sm" onClick={() => openModal("pay")}>
+									<Icon name="lock" /> پرداخت
+								</button>
+							)}
+						</OrderStateBar>
+					)}
 					{status === "PENDING_PAYMENT" ? (
 						<OrderStateBar tone="warn" icon="card" title="پرداخت این سفارش کامل نشده" text="تا وقتی کیف‌ها موجودن، می‌تونی همین‌جا پرداختش کنی.">
 							{amount}

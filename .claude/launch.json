@@ -36,6 +36,18 @@
       "port": 3100
     },
     {
+      "name": "bo-mock",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--watch", "D:/pariya/kiva-backoffice-fe/mock/server.mjs"],
+      "port": 8090
+    },
+    {
+      "name": "bo-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "D:/pariya/kiva-backoffice-fe", "run", "dev"],
+      "port": 3200
+    },
+    {
       "name": "kiva-design",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5500", "--directory", "D:\\pariya\\kiva"],
