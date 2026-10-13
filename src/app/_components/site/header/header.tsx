@@ -12,6 +12,7 @@ import MegaMenu from "@/app/_components/site/megaMenu/megaMenu";
 import { isNavActive, MAIN_NAV } from "@/app/_components/site/nav";
 import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
 import { CartEndpoints } from "@/app/cart/_api/cartEndpoints";
+import { announceCartIssues } from "@/app/cart/_utils/cartIssues";
 import { WishlistEndpoints } from "@/app/wishlist/_api/wishlistEndpoints";
 import { SITE_CONFIG } from "@/config/site";
 import { useAuthStore } from "@/store/auth.store";
@@ -47,6 +48,9 @@ export default function Header({ config }: { config: SiteConfig }) {
 		queryFn: () => withMappedError(() => CartEndpoints.getCart()),
 		enabled: hydrated,
 	});
+
+	// on every page — so the stock / price / discount changes this read found (they come once) are told wherever the shopper is
+	useEffect(() => announceCartIssues(cart.data), [cart.data]);
 
 	const wishlistIds = useQuery({
 		queryKey: ["wishlist", "ids"],

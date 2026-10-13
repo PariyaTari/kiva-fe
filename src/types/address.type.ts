@@ -9,7 +9,8 @@ export interface City {
 export interface Province {
 	id: number;
 	name: string;
-	cities?: City[];
+	/** `null` when asked with `includeCities=false`. */
+	cities?: City[] | null;
 }
 
 export interface Address {
@@ -27,7 +28,7 @@ export interface Address {
 	recipientPhone: string;
 	isSelfRecipient?: boolean;
 	isDefault: boolean;
-	/** «استان، شهر، آدرس». */
+	/** «استان، شهر، آدرس»، plus «پلاک …» / «واحد …» when given. */
 	fullText?: string;
 	createdAt?: string;
 }
@@ -41,5 +42,6 @@ export interface AddressInput {
 	recipientName: string;
 	recipientPhone: string;
 	isSelfRecipient?: boolean;
+	/** `true` makes it the default; `false` never unsets the default (one address is always the default; the first one is). */
 	setAsDefault?: boolean;
 }

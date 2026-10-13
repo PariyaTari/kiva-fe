@@ -10,6 +10,7 @@ import { toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import { CartEndpoints } from "../../_api/cartEndpoints";
 import { isReservationUnavailableError } from "../../_utils/apiError";
+import { announceCartIssues } from "../../_utils/cartIssues";
 
 /** The design underlines this phrase of the last timeline step. */
 const ONE_SHIPPING = "یک هزینه ارسال";
@@ -39,7 +40,8 @@ export default function ReserveBox({ reservation, consolidation }: ReserveBoxPro
 
 	const setReserve = useMutation({
 		mutationFn: (enabled: boolean) => withMappedError(() => CartEndpoints.setReservation(enabled)),
-		onSuccess: (_cart, enabled) => {
+		onSuccess: (cart, enabled) => {
+			announceCartIssues(cart);
 			queryClient.invalidateQueries({ queryKey: ["cart"] });
 			if (enabled) toast(`رزرو ${days} روزه فعال شد`, { icon: "timer" });
 		},

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Logo from "@/app/_components/common/logo/logo";
+import { announceCartIssues } from "@/app/cart/_utils/cartIssues";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { AuthResponse } from "@/types/user.type";
@@ -43,8 +44,9 @@ export default function LoginPage() {
 	};
 
 	const verified = (res: AuthResponse) => {
-		// the guest cart was merged into the account's cart (`cart` stays null until the backend's cart phase — then keep it)
-		if (res.cart) useCartStore.getState().setGuestToken(null);
+		// the guest cart was merged into the account's cart and its token is dead now; what the merge cut (the product caps) comes once
+		useCartStore.getState().setGuestToken(null);
+		announceCartIssues(res.cart);
 		// cart, hearts, prices… everything now belongs to the signed-in shopper — `SessionProvider` re-fetches it
 		setSession(res.accessToken, res.user);
 		setTimeout(() => (res.isNewUser && !res.user.firstName ? setStep("name") : finish(res.user.firstName ?? "")), 450);

@@ -3,6 +3,7 @@
 import classNames from "classnames";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/app/_components/icon/icons";
+import { announceCartIssues } from "@/app/cart/_utils/cartIssues";
 import { toast } from "@/store/notification.store";
 import { useUiStore } from "@/store/ui.store";
 import { OrderSummary } from "@/types/order.type";
@@ -25,6 +26,7 @@ export default function ReorderButton({ order, className, onDone }: ReorderButto
 		mutationFn: () => withMappedError(() => AccountEndpoints.reorder(order.code)),
 		meta: { showNotification: true },
 		onSuccess: (res) => {
+			announceCartIssues(res.cart);
 			queryClient.invalidateQueries({ queryKey: ["cart"] });
 			onDone?.();
 			const openCart = { label: "مشاهده سبد", onClick: () => useUiStore.getState().open("cart") };

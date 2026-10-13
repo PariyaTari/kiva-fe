@@ -10,6 +10,7 @@ import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
 import { CartEndpoints } from "@/app/cart/_api/cartEndpoints";
 import { ERROR_BEHAVIOUR } from "@/app/cart/_utils/apiError";
+import { announceCartIssues } from "@/app/cart/_utils/cartIssues";
 import { useAuthStore } from "@/store/auth.store";
 import { useUiStore } from "@/store/ui.store";
 import { toErrorView } from "@/utils/apiError";
@@ -34,7 +35,10 @@ export default function CartDrawer() {
 	const removeItem = useMutation({
 		mutationFn: (itemId: string) => withMappedError(() => CartEndpoints.removeItem(itemId)),
 		meta: { showNotification: true },
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
+		onSuccess: (res) => {
+			announceCartIssues(res.cart);
+			queryClient.invalidateQueries({ queryKey: ["cart"] });
+		},
 	});
 
 	const items = cart.data?.items ?? [];
@@ -78,7 +82,7 @@ export default function CartDrawer() {
 					items.map((item) => (
 						<div className="mini-item" key={item.id}>
 							<Link className="th" href={item.product.url ?? `/product/${item.product.slug}?color=${item.color.key}`} onClick={closeAll}>
-								<MediaImage src={item.image?.url} alt={item.product.name} />
+								<MediaImage src={item.image?.url} alt={item.product.name} placeholderColor={item.color.hex} />
 							</Link>
 							<div>
 								<h4>{item.product.name}</h4>
@@ -86,6 +90,8 @@ export default function CartDrawer() {
 									<span className="swatch-dot" style={{ background: item.color.hex }} />
 									{item.color.name} · {toPersianDigits(item.quantity)} عدد
 								</div>
+								{/* sold out / left the store — outside the total (contract 1.7.0) */}
+								{item.purchasable === false && <span className="low-stock">الان قابل خرید نیست</span>}
 								<div className="pr">
 									{formatPrice(item.lineTotal)} <small className="muted">تومان</small>
 								</div>
@@ -111,7 +117,8 @@ export default function CartDrawer() {
 					</Link>
 				) : (
 					<>
-						{free && !free.eligible ? (
+						{/* `null`: no shipping method has free shipping right now */}
+						{!free ? null : !free.eligible ? (
 							<div className="note">
 								<Icon name="truck" />
 								<span>

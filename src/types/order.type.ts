@@ -50,6 +50,7 @@ export interface OrderProgress {
 }
 
 export interface ReservationInfo {
+	/** Always `true` from `GET /me/reservation`; `false` on an order card = the hold ended and the order moves to `PROCESSING` shortly. */
 	active: boolean;
 	orderCode: OrderCode;
 	startedAt?: string;
@@ -73,7 +74,8 @@ export interface OrderItemPreview {
 	productId: number;
 	name: string;
 	colorKey: ColorKey;
-	imageUrl?: string;
+	/** `null` until the colour has a photo. */
+	imageUrl?: string | null;
 	quantity: number;
 }
 
@@ -117,6 +119,7 @@ export interface OrderSummary {
 }
 
 export interface OrderItem {
+	/** Row number inside this order (1…n) — unique only within the order. */
 	id: number;
 	productId: number;
 	variantId: number;
@@ -124,7 +127,8 @@ export interface OrderItem {
 	name: string;
 	slug?: string;
 	color: Color;
-	image?: MediaAsset;
+	/** `null` until the colour has a photo. */
+	image?: MediaAsset | null;
 	quantity: number;
 	unitPrice: Money;
 	unitCompareAtPrice?: Money | null;
@@ -154,6 +158,8 @@ export interface AddressSnapshot {
 	provinceName: string;
 	cityName: string;
 	addressLine: string;
+	plaque?: string | null;
+	unit?: string | null;
 	postalCode: string;
 	recipientName: string;
 	recipientPhone: string;
@@ -225,7 +231,7 @@ export interface PaymentInit {
 	gateway: PaymentGatewayCode;
 	amount: Money;
 	redirect: PaymentRedirect;
-	/** End of the temporary stock hold. */
+	/** End of the order's payment window (placed + 15 min) — the same for every attempt of the order, never extended. */
 	expiresAt?: string;
 }
 

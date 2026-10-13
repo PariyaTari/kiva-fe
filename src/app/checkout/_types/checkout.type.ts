@@ -20,14 +20,18 @@ export interface PaymentGateway {
 	brandColor?: string;
 	/** Letter inside the fallback logo (`.bank`). */
 	initial?: string;
+	/** What checkout starts with — always one of the `available` ones (none when nothing is available). */
 	isDefault?: boolean;
+	/** Only these are accepted by `POST /orders`. */
 	available?: boolean;
 }
 
 /** Everything the checkout page needs, in one request (`GET /checkout`). */
 export interface CheckoutContext {
 	cart: Cart;
+	/** Default first, then the oldest. */
 	addresses: Address[];
+	/** The requested `addressId`, else the default; `null` when the shopper has no address → the new-address form opens. */
 	selectedAddressId?: number | null;
 	messengers: MessengerOption[];
 	/** Profile default or the last choice. */
@@ -59,7 +63,7 @@ export interface PlaceOrderPayload {
 	shippingMethod: ShippingMethodCode;
 	reserve?: boolean | null;
 	paymentGateway: PaymentGatewayCode;
-	/** The amount on the pay button — the server answers `409 PRICE_CHANGED` when it moved. */
+	/** The amount on the pay button — only compared (`409 PRICE_CHANGED` when it moved), never charged. Always send it. */
 	expectedPayable?: Money;
 	acceptTerms: boolean;
 }
@@ -73,13 +77,16 @@ export interface PlaceOrderResponse {
 /** `GET /payments/{id}` — what the result page shows after the bank sends the shopper back. */
 export interface PaymentResult {
 	paymentId: string;
+	/** `PENDING` on the result page = verify is still running — ask again every 3 s, for at most 30 s. */
 	status: PaymentStatus;
 	amount: Money;
 	gateway: PaymentGatewayCode;
 	referenceId?: string | null;
 	cardMask?: string | null;
 	paidAt?: string | null;
+	/** Failed attempts only — `null` for `SUCCEEDED` / `PENDING`. */
 	failureReason?: string | null;
+	/** Not paid, not being verified, and the order is still inside its payment window. */
 	canRetry?: boolean;
 	order?: {
 		code: OrderCode;
@@ -87,6 +94,6 @@ export interface PaymentResult {
 		reserved?: boolean;
 		consolidatedInto?: OrderCode | null;
 	};
-	/** The three steps of the success modal. */
+	/** The three steps of the success modal — only for `SUCCEEDED`, empty otherwise. */
 	nextSteps?: string[];
 }

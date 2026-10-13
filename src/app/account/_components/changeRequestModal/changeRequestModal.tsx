@@ -235,7 +235,7 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 													/>
 													<span className="radio" />
 													<span className="th">
-														<MediaImage src={i.image?.url} alt={i.name} />
+														<MediaImage src={i.image?.url} alt={i.name} placeholderColor={i.color.hex} />
 													</span>
 													<span>
 														<span className="t" style={{ display: "block" }}>
@@ -487,7 +487,7 @@ function Compare({ item, next, nextName }: { item: OrderItem; next: ProductColor
 		<div className="cmp">
 			<div className="side-c">
 				<div className="art">
-					<MediaImage src={item.image?.url} alt={item.name} />
+					<MediaImage src={item.image?.url} alt={item.name} placeholderColor={item.color.hex} />
 				</div>
 				<span>
 					<small>الان</small>

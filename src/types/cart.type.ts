@@ -33,10 +33,19 @@ export interface CartItem {
 		url?: string;
 	};
 	color: Color;
-	image?: MediaAsset;
+	/** `null` until the colour has a photo — the row shows the bag illustration. */
+	image?: MediaAsset | null;
 	quantity: number;
-	/** Cap of the + button (variant stock). */
+	/**
+	 * Cap of the + button = min(stock of this colour, the product's `maxPerOrder` − the other colours of it in the cart, 20).
+	 * The purchase cap belongs to the product, not the colour (contract 1.7.0). `0` for a row that can't be bought.
+	 */
 	maxQuantity?: number;
+	/**
+	 * `false`: the colour sold out or left the store. The row stays (to see or remove) but counts in no total,
+	 * and `POST /orders` is refused while it is in the cart.
+	 */
+	purchasable: boolean;
 	unitPrice: Money;
 	unitCompareAtPrice?: Money | null;
 	lineTotal: Money;
@@ -47,6 +56,11 @@ export interface CartItem {
 	addedAt?: string;
 }
 
+/**
+ * What changed since the cart was last read — each one comes **once** (the read that returns it marks it seen).
+ * `QUANTITY_REDUCED` with `currentValue = 0`: the row was removed (no room left under the product's cap).
+ * `DISCOUNT_REMOVED`: the code stopped being valid and was taken off (`itemId = null`).
+ */
 export interface CartIssue {
 	code: "OUT_OF_STOCK" | "QUANTITY_REDUCED" | "PRICE_INCREASED" | "PRICE_DECREASED" | "VARIANT_UNAVAILABLE" | "DISCOUNT_REMOVED" | "SHIPPING_METHOD_CHANGED";
 	itemId?: string | null;
@@ -55,7 +69,10 @@ export interface CartIssue {
 	currentValue?: number | null;
 }
 
-/** `itemsCompareAtTotal` − `productDiscount` = `subtotal` − `codeDiscount` + `shippingCost` = `payable`. */
+/**
+ * `itemsCompareAtTotal` − `productDiscount` = `subtotal` − `codeDiscount` + `shippingCost` = `payable`.
+ * The amounts count purchasable rows only; `itemsCount` / `linesCount` count every row (the badge shows what the cart shows).
+ */
 export interface CartTotals {
 	itemsCount: number;
 	linesCount?: number;
@@ -121,8 +138,10 @@ export interface Cart {
 	totals: CartTotals;
 	shippingMethod: ShippingMethodCode;
 	shippingOptions: ShippingOptionQuote[];
-	freeShipping?: FreeShippingProgress;
+	/** `null` when no active shipping method has free shipping. */
+	freeShipping?: FreeShippingProgress | null;
 	reservation: CartReservation;
+	/** For the default address (the cart has none); always `null` for a guest. */
 	consolidation?: ReservationConsolidation | null;
 	discount?: AppliedDiscount | null;
 	issues?: CartIssue[];
@@ -135,6 +154,7 @@ export interface CartMutationResponse {
 	affectedItemId?: string | null;
 	/** What the «برگردون» (undo) button re-adds. */
 	removedItem?: { variantId: number; quantity: number; name: string } | null;
+	/** Toast after an add («… (۱ عدد) به سبد اضافه شد») or a remove; `null` for an update, and for an add that found no room (`cart.issues` says why). */
 	message?: string | null;
 }
 

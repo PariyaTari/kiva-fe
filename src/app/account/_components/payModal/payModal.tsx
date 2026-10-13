@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import classNames from "classnames";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
@@ -16,7 +17,7 @@ import { OrderSummary, PaymentGatewayCode, PaymentInit } from "@/types/order.typ
 import { toErrorView } from "@/utils/apiError";
 import { toPersianDigits } from "@/utils/digits";
 import { formatPrice } from "@/utils/format";
-import { newIdempotencyKey, redirectToGateway, rememberBalancePayment } from "@/utils/payment";
+import { createdPaymentOf, newIdempotencyKey, redirectToGateway, rememberBalancePayment } from "@/utils/payment";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
 import { ERROR_BEHAVIOUR, isGatewayUnavailableError, isOrderAlreadyPaidError, isPaymentExpiredError } from "../../_utils/apiError";
@@ -48,7 +49,7 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 	const [gatewayError, setGatewayError] = useState<string | null>(null);
 	const [shake, setShake] = useState(0);
 	const [init, setInit] = useState<PaymentInit | null>(null);
-	/** One `Idempotency-Key` per gateway — a resend after a lost response gets the same transaction. */
+	/** One `Idempotency-Key` per gateway — a resend after a lost response gets the same transaction; a new attempt gets a new one. */
 	const keys = useRef<Partial<Record<PaymentGatewayCode, string>>>({});
 
 	// items and totals of the summary
@@ -96,11 +97,17 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 				return setView("expired");
 			}
 			if (isGatewayUnavailableError(e)) {
+				// the key answered once — the same key would replay this answer; the next try is a new attempt
+				delete keys.current[code];
 				const name = gateways.find((g) => g.code === code)?.name ?? "";
-				setOff((list) => [...list, code]);
+				// with `meta.paymentId` the attempt was made and only the bank didn't answer — the gateway itself is on, try again;
+				// without it the gateway is off — pick another
+				if (!createdPaymentOf(e)) setOff((list) => [...list, code]);
 				setGatewayError(e.description || `درگاه ${name} الان در دسترس نیست؛ با یه درگاه دیگه پرداخت کن.`);
 				return setShake((n) => n + 1);
 			}
+			// the order used its 10 payment attempts — trying again won't help (it expires at the end of its window)
+			if (e.code === "RATE_LIMITED") return toast(e.description, { type: "warning", duration: 7000 });
 			toast(e.description, { type: "error", duration: 6000, action: { label: "تلاش دوباره", onClick: () => pay.mutate(code) } });
 		},
 	});
@@ -126,6 +133,26 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 						<button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 18 }} onClick={() => init && redirectToGateway(init.redirect)}>
 							اگه منتقل نشدی، این‌جا رو بزن
 						</button>
+					</div>
+				) : view === "paid" && balance && detail.isFetching ? (
+					// the re-read tells «already paid» from «can't be paid from here yet»
+					<Loading />
+				) : view === "paid" && balance && (detail.data?.totals.balanceDue ?? 0) > 0 ? (
+					// until the backend's balance phase a paid order answers `ORDER_ALREADY_PAID` even with a balance left (contract 1.7.0)
+					<div className="m-done">
+						<div className="ck purple">
+							<Icon name="info" />
+						</div>
+						<h3>پرداخت مابه‌التفاوت فعلاً از این‌جا ممکن نیست</h3>
+						<p>مابه‌التفاوت سفارش {order.code} هنوز پرداخت نشده؛ برای پرداختش با پشتیبانی کیوا تماس بگیر.</p>
+						<div className="acts">
+							<Link className="btn btn-primary btn-block" href="/contact">
+								تماس با پشتیبانی
+							</Link>
+							<button type="button" className="btn btn-outline btn-block" onClick={onClose}>
+								بستن
+							</button>
+						</div>
 					</div>
 				) : view === "paid" ? (
 					<div className="m-done">
@@ -181,7 +208,7 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 									{detail.data.items.map((item) => (
 										<div key={item.id} className="mini">
 											<span className="th">
-												<MediaImage src={item.image?.url} alt={item.image?.alt ?? item.name} />
+												<MediaImage src={item.image?.url} alt={item.image?.alt ?? item.name} placeholderColor={item.color.hex} />
 												{item.quantity > 1 && <em>{toPersianDigits(item.quantity)}</em>}
 											</span>
 											<span>

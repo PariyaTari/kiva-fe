@@ -37,8 +37,13 @@ export default function AddressModalBody({ address, onSaved }: AddressModalBodyP
 		onError: (e) => {
 			const fieldErrors = addressErrorsFrom(e.errorDetails);
 			if (e.code === "CITY_NOT_IN_PROVINCE") fieldErrors.cityId = e.description;
-			if (Object.keys(fieldErrors).length) showErrors(fieldErrors);
-			else toast(e.description, { type: "error" });
+			if (Object.keys(fieldErrors).length) return showErrors(fieldErrors);
+			// edited an address deleted meanwhile (another tab) — show the book as it is now
+			if (e.code === "ADDRESS_NOT_FOUND") {
+				queryClient.invalidateQueries({ queryKey: ["me", "addresses"] });
+				onSaved();
+			}
+			toast(e.description, { type: "error" });
 		},
 	});
 

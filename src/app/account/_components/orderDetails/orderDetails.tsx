@@ -129,7 +129,7 @@ function Details({ order, onOpenMedia }: { order: OrderDetail; onOpenMedia: (ind
 				{order.items.map((item) => (
 					<div key={item.id} className="it-row">
 						<span className="th">
-							<MediaImage src={item.image?.url} alt={item.image?.alt ?? item.name} />
+							<MediaImage src={item.image?.url} alt={item.image?.alt ?? item.name} placeholderColor={item.color.hex} />
 						</span>
 						<span>
 							<Link href={`/product/${item.slug ?? item.productId}?color=${item.color.key}`}>

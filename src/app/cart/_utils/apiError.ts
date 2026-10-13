@@ -26,7 +26,15 @@ export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
 /** `422 RESERVATION_UNAVAILABLE` (`meta.reason` = `unavailableReason`) — an answer: re-read the cart, warn, no failure. */
 export const isReservationUnavailableError = (e: ResultError | null | undefined) => e?.code === "RESERVATION_UNAVAILABLE";
 
-/** Discount-code failures are an answer for the form (inline message), not an error of the page. */
+/**
+ * A row answer that means the cart moved under the screen — the row is gone (another tab), its stock or the
+ * product's cap (`maxPerOrder`, shared by its colours) dropped, or the colour left the store. The toast says why;
+ * a re-read shows the new caps / rows.
+ */
+export const isCartChangedError = (e: ResultError | null | undefined) =>
+	["CART_ITEM_NOT_FOUND", "QUANTITY_EXCEEDS_STOCK", "QUANTITY_EXCEEDS_LIMIT", "OUT_OF_STOCK", "PRODUCT_UNAVAILABLE"].includes(e?.code ?? "");
+
+/** Discount-code failures are an answer for the form (inline message), not an error of the page. `VALIDATION_ERROR` = empty code (`DISCOUNT_CODE_REQUIRED`). */
 export const DISCOUNT_CODES = [
 	"DISCOUNT_CODE_INVALID",
 	"DISCOUNT_CODE_EXPIRED",

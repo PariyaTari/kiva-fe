@@ -36,6 +36,9 @@
 	.citem .pr del{display:block;font-size:12.5px;color:var(--ink-30)}
 	.citem .pr b{font-size:16px;font-weight:800}
 	.citem .pr small{font-size:11.5px;color:var(--ink-50)}
+	/* not in the design (contract 1.7.0): a row that can't be bought right now (sold out / left the store) stays
+	   in the cart to see or remove, outside the totals — dimmed photo and price */
+	.citem.off .th,.citem.off .pr{opacity:.45}
 	.ship-opts{display:grid;gap:12px}
 	.ship-opts .ic{width:46px;height:46px;border-radius:14px;background:var(--lilac-50);display:grid;place-items:center;color:var(--purple);flex:none}
 	.ship-opts .ic svg{width:24px;height:24px}

@@ -152,7 +152,7 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 							<span className="ths">
 								{order.itemsPreview.slice(0, 4).map((item, i) => (
 									<span key={`${item.productId}-${i}`}>
-										<MediaImage src={item.imageUrl} alt={item.name} />
+										<MediaImage src={item.imageUrl} alt={item.name} placeholderColor={item.colorKey} />
 									</span>
 								))}
 							</span>

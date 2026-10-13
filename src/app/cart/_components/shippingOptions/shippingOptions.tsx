@@ -6,6 +6,7 @@ import { ShippingMethodCode, ShippingOptionQuote } from "@/types/cart.type";
 import { formatPrice } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { CartEndpoints } from "../../_api/cartEndpoints";
+import { announceCartIssues } from "../../_utils/cartIssues";
 
 type ShippingOptionsProps = {
 	options: ShippingOptionQuote[];
@@ -21,7 +22,10 @@ export default function ShippingOptions({ options, selected, lockedTo }: Shippin
 	const setMethod = useMutation({
 		mutationFn: (method: ShippingMethodCode) => withMappedError(() => CartEndpoints.setShippingMethod(method)),
 		meta: { showNotification: true },
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
+		onSuccess: (cart) => {
+			announceCartIssues(cart);
+			queryClient.invalidateQueries({ queryKey: ["cart"] });
+		},
 	});
 
 	// the radio follows the click right away

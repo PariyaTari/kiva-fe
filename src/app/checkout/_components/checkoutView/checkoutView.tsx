@@ -9,17 +9,18 @@ import { addressErrorsFrom, toAddressInput } from "@/app/_components/address/_ut
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
 import Loading from "@/app/_components/common/loading/loading";
 import BagArt from "@/app/_components/shop/bagArt/bagArt";
+import { announceCartIssues, unpurchasableItems } from "@/app/cart/_utils/cartIssues";
 import { useAddressForm } from "@/hooks/useAddressForm";
 import { useAuthStore } from "@/store/auth.store";
 import { toast } from "@/store/notification.store";
 import { PaymentGatewayCode, PhotoMessengerChannel } from "@/types/order.type";
 import { toErrorView } from "@/utils/apiError";
 import { toPersianDigits } from "@/utils/digits";
-import { newIdempotencyKey, redirectToGateway } from "@/utils/payment";
+import { createdPaymentOf, newIdempotencyKey, redirectToGateway } from "@/utils/payment";
 import { withMappedError } from "@/utils/withMappedError";
 import { CheckoutEndpoints } from "../../_api/checkoutEndpoints";
 import { CheckoutContext, PlaceOrderPayload } from "../../_types/checkout.type";
-import { ERROR_BEHAVIOUR, isCartEmptyError, REREAD_CONTEXT_CODES, WARNING_CODES } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isAddressGoneError, isCartEmptyError, REREAD_CONTEXT_CODES, WARNING_CODES } from "../../_utils/apiError";
 import AddressBlock from "../addressBlock/addressBlock";
 import CheckoutHero from "../checkoutHero/checkoutHero";
 import GatewayBlock from "../gatewayBlock/gatewayBlock";
@@ -83,6 +84,13 @@ export default function CheckoutView() {
 		meta: { showNotificationOnRefetch: true },
 	});
 
+	// the picked address was deleted meanwhile (another tab) — back to the default one
+	const addressGone = isAddressGoneError(checkout.error);
+	if (addressGone && addressPick !== null) setAddressPick(null);
+
+	// the cart is synced on this read too, so what changed since the last visit (once) is told here
+	useEffect(() => announceCartIssues(checkout.data?.cart), [checkout.data]);
+
 	const ctx = checkout.data;
 	const addresses = ctx?.addresses ?? [];
 	// with no saved address the form is the only way
@@ -135,6 +143,14 @@ export default function CheckoutView() {
 				});
 		},
 		onError: (e) => {
+			// the order was placed and its stock is held — only the bank didn't answer: carry on from its transaction, never place it again
+			const created = createdPaymentOf(e);
+			if (created) {
+				queryClient.invalidateQueries({ queryKey: ["cart"] });
+				queryClient.invalidateQueries({ queryKey: ["me"] });
+				toast(`سفارش ${created.orderCode} ثبت شد ولی درگاه پرداخت جواب نداد؛ از همین‌جا دوباره پرداختش کن.`, { type: "warning", duration: 6000 });
+				return router.replace(`/checkout/result?paymentId=${encodeURIComponent(created.paymentId)}`);
+			}
 			// answers about a field are shown on the field, like the client-side checks
 			if (e.code === "MESSENGER_REQUIRED") return shakeSignature();
 			if (e.code === "MESSENGER_PHONE_INVALID") return showPhoneError(e.description || PHONE_ERROR);
@@ -147,6 +163,16 @@ export default function CheckoutView() {
 				const phoneDetail = e.errorDetails?.find((d) => d.field === "preShipmentMessenger.phone");
 				if (phoneDetail) return showPhoneError(phoneDetail.message);
 			}
+			// a real city of another province (`newAddress`)
+			if (e.code === "CITY_NOT_IN_PROVINCE" && isNew) {
+				showAddressErrors({ cityId: e.description });
+				return scrollToNewAddress();
+			}
+			// the saved address was deleted meanwhile — back to the default one
+			if (e.code === "ADDRESS_NOT_FOUND") setAddressPick(null);
+			// three unpaid orders already hold stock — pay (or let go of) one of them first
+			if (e.code === "RATE_LIMITED")
+				return toast(e.description, { type: "warning", duration: 7000, action: { label: "سفارش‌های من", href: "/account/orders" } });
 			// the price, stock or cart moved — show the new state
 			if (REREAD_CONTEXT_CODES.includes(e.code)) queryClient.invalidateQueries({ queryKey: ["checkout"] });
 			toast(e.description, { type: WARNING_CODES.includes(e.code) ? "warning" : "error" });
@@ -155,6 +181,8 @@ export default function CheckoutView() {
 
 	const pay = () => {
 		if (!ctx) return;
+		// a sold-out row is refused by the server — it has to leave the cart first
+		if (unpurchasableItems(ctx.cart).length) return toast("اول کیف‌هایی که الان قابل خرید نیستن رو از سبدت حذف کن.", { type: "warning", action: { label: "رفتن به سبد", href: "/cart" } });
 		// 1. address
 		let addressPart: Pick<PlaceOrderPayload, "addressId" | "newAddress" | "saveNewAddress">;
 		if (isNew) {
@@ -199,13 +227,13 @@ export default function CheckoutView() {
 		);
 
 	const cartEmpty = isCartEmptyError(checkout.error);
-	const checkoutError = cartEmpty ? null : toErrorView(ERROR_BEHAVIOUR, checkout.error, "دریافت اطلاعات تکمیل خرید با خطا مواجه شد.");
+	const checkoutError = cartEmpty || addressGone ? null : toErrorView(ERROR_BEHAVIOUR, checkout.error, "دریافت اطلاعات تکمیل خرید با خطا مواجه شد.");
 
 	return (
 		<>
 			<CheckoutHero />
 			<div className="container" id="coRoot">
-				{!hydrated || !signedIn || checkout.isLoading ? (
+				{!hydrated || !signedIn || checkout.isLoading || addressGone ? (
 					<Loading />
 				) : cartEmpty ? (
 					<div className="empty" style={{ padding: "80px 0" }}>

@@ -10,6 +10,7 @@ import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
 import WishlistToggle from "@/app/_components/shop/wishlistToggle/wishlistToggle";
 import { CartEndpoints } from "@/app/cart/_api/cartEndpoints";
+import { announceCartIssues, nothingAdded } from "@/app/cart/_utils/cartIssues";
 import { useReveal } from "@/hooks/useReveal";
 import { toast } from "@/store/notification.store";
 import { useUiStore } from "@/store/ui.store";
@@ -44,10 +45,13 @@ export default function ProductCard({ product, colorKey, delay = 0, reveal = tru
 	const add = useMutation({
 		mutationFn: () => withMappedError(() => CartEndpoints.addItem({ variantId: option.variantId, quantity: 1 })),
 		meta: { showNotification: true },
-		onSuccess: () => {
-			flyToCart(imgRef.current);
+		onSuccess: (res) => {
+			announceCartIssues(res.cart);
 			queryClient.invalidateQueries({ queryKey: ["cart"] });
-			toast(`${product.name} (${option.color.name}) به سبد اضافه شد`, {
+			// the product's cap was already full in the cart — the issue above says so
+			if (nothingAdded(res)) return;
+			flyToCart(imgRef.current);
+			toast(res.message ?? `${product.name} (${option.color.name}) به سبد اضافه شد`, {
 				icon: "bag",
 				action: { label: "مشاهده سبد", onClick: () => openCart("cart") },
 			});

@@ -5,6 +5,7 @@ import classNames from "classnames";
 import { Icon } from "@/app/_components/icon/icons";
 import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
+import { unpurchasableItems } from "@/app/cart/_utils/cartIssues";
 import { Cart } from "@/types/cart.type";
 import { MessengerOption, PhotoMessengerChannel } from "@/types/order.type";
 import { toPersianDigits } from "@/utils/digits";
@@ -24,6 +25,8 @@ type OrderSummaryProps = {
 export default function OrderSummary({ cart, messenger, reserveOn, holdDays, termsUrl, paying, onPay }: OrderSummaryProps) {
 	const { totals, discount } = cart;
 	const method = cart.shippingOptions.find((o) => o.method === cart.shippingMethod);
+	// sold out / left the store since it went into the cart — the order is refused until it leaves the cart
+	const blocked = unpurchasableItems(cart);
 
 	return (
 		<aside className="summary">
@@ -37,7 +40,7 @@ export default function OrderSummary({ cart, messenger, reserveOn, holdDays, ter
 				{cart.items.map((item) => (
 					<div key={item.id} className="mini">
 						<span className="th">
-							<MediaImage src={item.image?.url} alt={item.image?.alt ?? item.product.name} />
+							<MediaImage src={item.image?.url} alt={item.image?.alt ?? item.product.name} placeholderColor={item.color.hex} />
 							<em>{toPersianDigits(item.quantity)}</em>
 						</span>
 						<span>
@@ -45,6 +48,7 @@ export default function OrderSummary({ cart, messenger, reserveOn, holdDays, ter
 							<small>
 								<span className="swatch-dot" style={{ background: item.color.hex, width: 10, height: 10 }} /> {item.color.name}
 							</small>
+							{item.purchasable === false && <span className="low-stock">الان قابل خرید نیست</span>}
 						</span>
 						<span className="p">{formatPrice(item.lineTotal)}</span>
 					</div>
@@ -95,7 +99,28 @@ export default function OrderSummary({ cart, messenger, reserveOn, holdDays, ter
 						</div>
 					)}
 				</div>
-				<button type="button" className={classNames("btn btn-primary btn-lg btn-block", { loading: paying })} id="payBtn" style={{ marginTop: 14 }} aria-busy={paying || undefined} onClick={onPay}>
+				{blocked.length > 0 && (
+					<div className="note danger" style={{ marginTop: 14 }}>
+						<Icon name="alert" />
+						<span>
+							{blocked.length === 1 ? `«${blocked[0].product.name}» الان قابل خرید نیست` : `${toPersianDigits(blocked.length)} کیف الان قابل خرید نیستن`}؛ برای ثبت
+							سفارش اول از{" "}
+							<Link className="btn-link" href="/cart">
+								سبدت
+							</Link>{" "}
+							{blocked.length === 1 ? "حذفش" : "حذفشون"} کن.
+						</span>
+					</div>
+				)}
+				<button
+					type="button"
+					className={classNames("btn btn-primary btn-lg btn-block", { loading: paying })}
+					id="payBtn"
+					style={{ marginTop: 14 }}
+					aria-busy={paying || undefined}
+					disabled={blocked.length > 0}
+					onClick={onPay}
+				>
 					<Icon name="lock" /> پرداخت {formatPrice(totals.payable)} تومان
 				</button>
 				<p className="muted" style={{ fontSize: 11.5, textAlign: "center", marginTop: 10 }}>

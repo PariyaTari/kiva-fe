@@ -272,12 +272,18 @@ const OTP_TTL_MS = 300e3, OTP_COOLDOWN_S = 120, OTP_MAX_TRIES = 5;
 const RATE_LIMITED_PHONE = "09999999999";
 const carts = new Map(); // cartId → cart
 const payments = new Map(); // paymentId → { orderCode, phone, gateway, amount, paidAt }
-const idempotency = new Map();
+const idempotency = new Map(); // `${route}:${key}` → { body, order?, res?, error? } — the same key with another body is `409`
+const gatewayState = new Map(); // test aid: gateway code → "OFF" (refused before anything is made) | "NO_ANSWER" (made, then the bank didn't answer)
+let BALANCE_PAYMENTS = true; // test aid: `false` = the contract's current phase (a paid order answers `ORDER_ALREADY_PAID`)
 const stockAlerts = [];
 const pendingReviews = []; // user-submitted reviews (status PENDING)
 const uploads = new Map(); // mediaId → { phone, asset }
 let USER_SEQ = 1024, ADDR_SEQ = 40, REVIEW_SEQ = 9000, ALERT_SEQ = 70, RETURN_SEQ = 1012, REFUND_SEQ = 30;
 const HOLD_MS = 15 * 60e3; // unpaid orders keep their stock this long
+const MAX_PER_ORDER = 5; // the product's purchase cap — shared by its colours (contract 1.7.0)
+const MAX_LINE = 20; // no row holds more
+const MAX_UNPAID = 3; // unpaid orders still holding stock — the 4th gets `429`
+const MAX_ATTEMPTS = 10; // payment attempts per order
 const RETURN_DAYS = 7;
 
 const newCart = () => { const c = { id: rid("cart"), items: [], shippingMethod: "POST", reserve: false, code: null, issues: [] }; carts.set(c.id, c); return c; };
@@ -430,6 +436,43 @@ function resolveCart(ctx) {
 	ctx.headers["X-Cart-Token"] = c.id;
 	return c;
 }
+/** A colour that can be bought right now: the product is in the store and has stock. */
+const purchasable = (p) => !p.inactive && p.stock > 0;
+const sameProduct = (c, line, p) => c.items.filter((i) => i !== line && variantById(i.variantId)?.p.id === p.id);
+/** Cap of a row = min(stock, `maxPerOrder` − the product's other colours in the cart, 20); `0` for a row that can't be bought. */
+function lineCap(c, line) {
+	const { p } = variantById(line.variantId);
+	if (!purchasable(p)) return 0;
+	const others = sameProduct(c, line, p).reduce((n, i) => n + i.qty, 0);
+	return Math.max(0, Math.min(p.stock, MAX_PER_ORDER - others, MAX_LINE));
+}
+/**
+ * Every read compares the rows with the store: a colour that went off says so once (and keeps its share of the cap);
+ * rows over their cap shrink — the older row keeps its share, a row left without room goes (`QUANTITY_REDUCED` → 0).
+ */
+function syncCart(c) {
+	const used = new Map(); // productId → kept by older rows
+	for (const line of [...c.items].sort((a, b) => a.addedAt - b.addedAt)) {
+		const v = variantById(line.variantId);
+		if (!v) continue;
+		const { p, k } = v;
+		const name = `${p.n} (${D.COLOR_BY_KEY[k].name})`;
+		const off = !purchasable(p);
+		if (off && !line.off)
+			c.issues.push({ code: p.inactive ? "VARIANT_UNAVAILABLE" : "OUT_OF_STOCK", itemId: line.id, message: p.inactive ? `«${name}» دیگه توی فروشگاه نیست.` : `«${name}» تموم شد؛ توی جمع سبدت حساب نمی‌شه.`, previousValue: null, currentValue: null });
+		line.off = off;
+		const before = used.get(p.id) ?? 0;
+		if (!off) {
+			const cap = Math.max(0, Math.min(p.stock, MAX_PER_ORDER - before, MAX_LINE));
+			if (line.qty > cap) {
+				c.issues.push({ code: "QUANTITY_REDUCED", itemId: line.id, message: cap ? `تعداد «${name}» به ${fa(cap)} عدد کم شد.` : `«${name}» از سبدت حذف شد؛ سقف خرید این کیف با رنگ‌های دیگه‌ش پر شده.`, previousValue: line.qty, currentValue: cap });
+				line.qty = cap;
+			}
+		}
+		used.set(p.id, before + line.qty);
+	}
+	c.items = c.items.filter((i) => i.qty > 0);
+}
 function codeDiscount(code, subtotal) {
 	const c = D.CODES[String(code || "").toUpperCase().trim()];
 	if (!c) return { ok: false, code: "DISCOUNT_CODE_INVALID", msg: "این کد تخفیف معتبر نیست" };
@@ -501,21 +544,25 @@ function reservationView(c, ctx) {
 }
 /** `opts.addressId`: the address the order goes to (checkout) — joining a reservation is per address; the cart uses the default one. */
 function cartView(c, ctx, opts = {}) {
+	syncCart(c);
 	const items = c.items.filter((i) => variantById(i.variantId)).map((i) => {
 		const { p, k } = variantById(i.variantId);
 		const unitCompare = p.old || p.price;
 		return {
 			id: i.id, productId: p.id, variantId: i.variantId,
 			product: { id: p.id, slug: p.slug, sku: `KV-${1000 + p.id}`, name: p.n, category: catRef(catOf(p)), url: `/product/${p.slug}?color=${k}` },
-			color: color(k), image: media(p, k), quantity: i.qty, maxQuantity: p.stock,
+			color: color(k), image: p.noPhoto ? null : media(p, k), quantity: i.qty, maxQuantity: lineCap(c, i), purchasable: !i.off,
 			unitPrice: p.price, unitCompareAtPrice: p.old || null, lineTotal: p.price * i.qty, lineCompareAtTotal: p.old ? p.old * i.qty : null,
 			lineDiscount: (unitCompare - p.price) * i.qty, stock: stockInfo(p),
 			isWishlisted: ctx.user ? ctx.user.wishlist.some((w) => w.productId === p.id) : null, addedAt: iso(i.addedAt),
 		};
 	});
+	// the badge counts every row; the money only the rows that can be bought
 	const itemsCount = items.reduce((s, i) => s + i.quantity, 0);
-	const subtotal = items.reduce((s, i) => s + i.lineTotal, 0);
-	const full = items.reduce((s, i) => s + (i.unitCompareAtPrice || i.unitPrice) * i.quantity, 0);
+	const live = items.filter((i) => i.purchasable);
+	const liveCount = live.reduce((s, i) => s + i.quantity, 0);
+	const subtotal = live.reduce((s, i) => s + i.lineTotal, 0);
+	const full = live.reduce((s, i) => s + (i.unitCompareAtPrice || i.unitPrice) * i.quantity, 0);
 	let discount = null;
 	if (c.code) {
 		const d = codeDiscount(c.code, subtotal);
@@ -527,7 +574,7 @@ function cartView(c, ctx, opts = {}) {
 	const addressId = "addressId" in opts ? opts.addressId : (ctx.user?.addresses.find((a) => a.isDefault) ?? ctx.user?.addresses[0])?.id;
 	const consolidation = group && addressId === group.addressId ? consolidationView(group) : null;
 	const method = consolidation ? consolidation.shippingMethod : c.shippingMethod;
-	const options = shippingOptions(subtotal, itemsCount, method, consolidation);
+	const options = shippingOptions(subtotal, liveCount, method, consolidation);
 	const ship = options.find((o) => o.method === method);
 	const codeAmount = discount ? discount.amount : 0;
 	const issues = c.issues; c.issues = [];
@@ -535,8 +582,8 @@ function cartView(c, ctx, opts = {}) {
 		id: c.id, isGuest: !ctx.user, items,
 		totals: {
 			itemsCount, linesCount: items.length, itemsCompareAtTotal: full, productDiscount: full - subtotal, subtotal, codeDiscount: codeAmount,
-			shippingCost: itemsCount ? ship.cost : 0, shippingIsFree: !!(itemsCount && ship.cost === 0),
-			payable: Math.max(0, subtotal - codeAmount + (itemsCount ? ship.cost : 0)), totalSavings: full - subtotal + codeAmount, currency: "IRT",
+			shippingCost: liveCount ? ship.cost : 0, shippingIsFree: !!(liveCount && ship.cost === 0),
+			payable: Math.max(0, subtotal - codeAmount + (liveCount ? ship.cost : 0)), totalSavings: full - subtotal + codeAmount, currency: "IRT",
 		},
 		shippingMethod: method, shippingOptions: options,
 		// joining a reservation ships free whatever the amount
@@ -552,15 +599,22 @@ function cartView(c, ctx, opts = {}) {
 	};
 }
 const mutation = (c, ctx, extra = {}) => ({ cart: cartView(c, ctx), affectedItemId: null, removedItem: null, message: null, ...extra });
+/** Adds to a row up to its cap (`QUANTITY_REDUCED` when cut); `added` = how many really went in (0 = no room). */
 function addToCart(c, vid, qty) {
 	const v = variantById(vid) || fail(404, "VARIANT_NOT_FOUND", "این رنگ از محصول پیدا نشد.");
+	if (v.p.inactive) fail(422, "PRODUCT_UNAVAILABLE", "این کیف دیگه توی فروشگاه نیست.");
 	if (!v.p.stock) fail(422, "OUT_OF_STOCK", "این کالا فعلاً موجود نیست.");
 	let line = c.items.find((i) => i.variantId === Number(vid));
-	const want = (line ? line.qty : 0) + qty;
-	const final = Math.min(want, v.p.stock);
-	if (final < want) c.issues.push({ code: "QUANTITY_REDUCED", itemId: line?.id ?? null, message: `حداکثر موجودی: ${fa(v.p.stock)} عدد`, previousValue: want, currentValue: final });
-	if (line) line.qty = final; else { line = { id: rid("ci"), variantId: Number(vid), qty: final, addedAt: Date.now() }; c.items.push(line); }
-	return { line, v, qty: final };
+	const others = sameProduct(c, line, v.p).reduce((n, i) => n + i.qty, 0);
+	// in stock, but the other colours already fill the product's cap
+	if (others >= MAX_PER_ORDER) fail(422, "QUANTITY_EXCEEDS_LIMIT", `از هر کیف حداکثر ${fa(MAX_PER_ORDER)} عدد می‌شه خرید؛ رنگ‌های دیگه‌ی این کیف توی سبدت این سقف رو پر کردن.`, { meta: { maxPerOrder: MAX_PER_ORDER } });
+	if (!line) { line = { id: rid("ci"), variantId: Number(vid), qty: 0, addedAt: Date.now() }; c.items.push(line); }
+	const had = line.qty, want = had + qty;
+	const cap = Math.min(v.p.stock, MAX_PER_ORDER - others, MAX_LINE);
+	line.qty = Math.min(want, cap);
+	if (line.qty < want)
+		c.issues.push({ code: "QUANTITY_REDUCED", itemId: line.id, message: cap === v.p.stock ? `حداکثر موجودی: ${fa(cap)} عدد` : `از این کیف حداکثر ${fa(MAX_PER_ORDER)} عدد می‌شه خرید (با رنگ‌های دیگه‌ش)`, previousValue: want, currentValue: line.qty });
+	return { line, v, added: line.qty - had };
 }
 
 // ───────────────────────────── orders ─────────────────────────────
@@ -916,6 +970,7 @@ route("POST", "/auth/otp/verify", (ctx) => {
 	if (guest && guest.id !== u.cartId) {
 		const mine = carts.get(u.cartId) || newCart();
 		guest.items.forEach((i) => { try { addToCart(mine, i.variantId, i.qty); } catch { /* skip unavailable */ } });
+		if (guest.items.length) { mine.shippingMethod = guest.shippingMethod; mine.reserve = guest.reserve; }
 		if (guest.code && !mine.code) mine.code = guest.code;
 		carts.delete(guest.id); u.cartId = mine.id; carts.set(mine.id, mine);
 	}
@@ -951,6 +1006,25 @@ route("POST", "/auth/logout", (ctx) => {
 route("POST", "/__mock/expire-access-tokens", (ctx) => {
 	for (const at of accessExpiry.keys()) accessExpiry.set(at, 0);
 	ctx.status = 204;
+});
+/** Test aid: a product's stock (`{ stock }`), out of the store (`{ active: false }`), or without photos (`{ photo: false }`) — every colour of it. */
+route("POST", "/__mock/products/:id", (ctx) => {
+	const p = getP(ctx.params.id) || fail(404, "PRODUCT_NOT_FOUND", "محصول پیدا نشد.");
+	if (ctx.body?.stock != null) p.stock = Math.max(0, Number(ctx.body.stock));
+	if (ctx.body?.active != null) p.inactive = !ctx.body.active;
+	if (ctx.body?.photo != null) p.noPhoto = !ctx.body.photo;
+	return { id: p.id, stock: p.stock, active: !p.inactive, photo: !p.noPhoto };
+});
+/** Test aid: a gateway's state — `UP`, `OFF` (refused before anything is made) or `NO_ANSWER` (made, then the bank didn't answer). */
+route("POST", "/__mock/gateways/:code", (ctx) => {
+	const state = String(ctx.body?.state || "UP").toUpperCase();
+	if (state === "UP") gatewayState.delete(ctx.params.code); else gatewayState.set(ctx.params.code, state);
+	return Object.fromEntries(gatewayState);
+});
+/** Test aid: `{ enabled: false }` = the contract's current phase — a paid order with a balance answers `ORDER_ALREADY_PAID`. */
+route("POST", "/__mock/balance-payments", (ctx) => {
+	BALANCE_PAYMENTS = ctx.body?.enabled !== false;
+	return { enabled: BALANCE_PAYMENTS };
 });
 /** Test aid: the panel's `POST /admin/orders/{code}/change-request/resolution` (`{ decision, variantId?, note? }`). */
 route("POST", "/__mock/orders/:code/change-request/resolution", (ctx) => {
@@ -1162,18 +1236,23 @@ route("DELETE", "/cart", (ctx) => { const c = resolveCart(ctx); c.items = []; c.
 route("POST", "/cart/items", (ctx) => {
 	const c = resolveCart(ctx);
 	const qty = Math.max(1, Math.min(20, Number(ctx.body?.quantity) || 1));
-	const { line, v } = addToCart(c, ctx.body?.variantId, qty);
-	return mutation(c, ctx, { affectedItemId: line.id, message: `${v.p.n} (${D.COLOR_BY_KEY[v.k].name}) به سبد اضافه شد` });
+	const { line, v, added } = addToCart(c, ctx.body?.variantId, qty);
+	// no room left in the row — no toast; `issues` says why
+	return mutation(c, ctx, { affectedItemId: line.id, message: added ? `${v.p.n} — ${D.COLOR_BY_KEY[v.k].name} (${fa(added)} عدد) به سبد اضافه شد` : null });
 });
 route("PATCH", "/cart/items/:itemId", (ctx) => {
 	const c = resolveCart(ctx);
 	const line = c.items.find((i) => i.id === ctx.params.itemId) || fail(404, "CART_ITEM_NOT_FOUND", "این کالا توی سبدت نیست.");
+	if (ctx.body?.quantity == null && !ctx.body?.variantId) validation([{ field: "quantity", code: "QUANTITY_OR_VARIANT_REQUIRED", message: "تعداد یا رنگ تازه رو بفرست." }]);
 	if (ctx.body?.variantId) { const v = variantById(ctx.body.variantId) || fail(404, "VARIANT_NOT_FOUND", "این رنگ پیدا نشد."); line.variantId = variantId(v.p, v.k); }
 	if (ctx.body?.quantity != null) {
 		const { p } = variantById(line.variantId);
-		const q = Number(ctx.body.quantity);
-		if (q > p.stock) fail(422, "QUANTITY_EXCEEDS_STOCK", `حداکثر موجودی این کالا ${fa(p.stock)} عدده`, { meta: { availableQuantity: p.stock } });
-		line.qty = Math.max(1, q);
+		const q = Math.max(1, Number(ctx.body.quantity));
+		const cap = lineCap(c, line);
+		// an update is refused, not cut (unlike an add); going down is always fine
+		if (q > line.qty && q > Math.min(p.stock, MAX_LINE)) fail(422, "QUANTITY_EXCEEDS_STOCK", `حداکثر موجودی این کالا ${fa(cap)} عدده`, { meta: { availableQuantity: cap } });
+		if (q > line.qty && q > cap) fail(422, "QUANTITY_EXCEEDS_LIMIT", `از این کیف با رنگ‌های دیگه‌ش حداکثر ${fa(MAX_PER_ORDER)} عدد می‌شه خرید.`, { meta: { maxQuantity: cap } });
+		line.qty = q;
 	}
 	return mutation(c, ctx, { affectedItemId: line.id });
 });
@@ -1208,8 +1287,10 @@ route("PUT", "/cart/reservation", (ctx) => {
 	return cartView(c, ctx);
 });
 route("POST", "/cart/discount-code", (ctx) => {
-	const code = String(ctx.body?.code || "").toUpperCase().trim();
-	if (code.length < 2) validation([{ field: "code", code: "REQUIRED", message: "کد تخفیف رو وارد کن" }]);
+	// trim, Latin digits, upper case (`kiva10 ` and `KIVA۱۰` are both `KIVA10`)
+	const code = toEn(ctx.body?.code ?? "").toUpperCase().trim();
+	if (!code) validation([{ field: "code", code: "DISCOUNT_CODE_REQUIRED", message: "کد تخفیف رو وارد کن" }]);
+	if (code.length < 2) fail(422, "DISCOUNT_CODE_INVALID", "این کد تخفیف معتبر نیست");
 	const c = resolveCart(ctx);
 	const sub = cartView(c, ctx).totals.subtotal;
 	const d = codeDiscount(code, sub);
@@ -1226,10 +1307,13 @@ const checkoutContext = (ctx) => {
 	const c = resolveCart(ctx);
 	if (!c.items.length) fail(422, "CART_EMPTY", "سبد خریدت خالیه.");
 	const def = u.addresses.find((a) => a.isDefault) || u.addresses[0];
-	const addressId = ctx.query.addressId ? Number(ctx.query.addressId) : def ? def.id : null;
+	const asked = ctx.query.addressId != null && ctx.query.addressId !== "";
+	const addressId = asked ? Number(ctx.query.addressId) : def ? def.id : null;
+	// not mine, missing or not a number — all the same answer, so nobody learns another shopper's address exists
+	if (asked && !u.addresses.some((a) => a.id === addressId)) validation([{ field: "addressId", code: "ADDRESS_NOT_FOUND", message: "این آدرس پیدا نشد." }]);
 	const cart = cartView(c, ctx, { addressId });
 	return {
-		cart, addresses: u.addresses.map(addressView), selectedAddressId: def ? def.id : null,
+		cart, addresses: [...u.addresses].sort((a, b) => b.isDefault - a.isDefault).map(addressView), selectedAddressId: addressId,
 		messengers: D.MESSENGERS, selectedMessenger: u.defaultMessenger, messengerPhone: u.defaultMessengerPhone || u.phone,
 		shippingOptions: cart.shippingOptions, reservation: cart.reservation, consolidation: cart.consolidation,
 		paymentGateways: D.GATEWAYS, giftWrap: { available: false, price: 0 }, termsUrl: "/pages/terms",
@@ -1239,43 +1323,94 @@ route("GET", "/checkout", (ctx) => checkoutContext(ctx));
 function validateAddressInput(a, prefix = "") {
 	const errors = [];
 	const prov = D.PROVINCES.find((p) => p.id === Number(a?.provinceId));
-	if (!prov) errors.push({ field: `${prefix}provinceId`, code: "REQUIRED", message: "استان رو انتخاب کن" });
-	else if (!prov.cities.some((c) => c.id === Number(a.cityId))) errors.push({ field: `${prefix}cityId`, code: "REQUIRED", message: "شهر رو انتخاب کن" });
+	const city = D.PROVINCES.flatMap((x) => x.cities).find((c) => c.id === Number(a?.cityId));
+	if (!a?.provinceId) errors.push({ field: `${prefix}provinceId`, code: "REQUIRED", message: "استان رو انتخاب کن" });
+	else if (!prov) errors.push({ field: `${prefix}provinceId`, code: "PROVINCE_NOT_FOUND", message: "این استان توی فهرست نیست" });
+	if (!a?.cityId) errors.push({ field: `${prefix}cityId`, code: "REQUIRED", message: "شهر رو انتخاب کن" });
+	else if (!city) errors.push({ field: `${prefix}cityId`, code: "CITY_NOT_FOUND", message: "این شهر توی فهرست نیست" });
 	if (!a?.addressLine || String(a.addressLine).trim().length < 10) errors.push({ field: `${prefix}addressLine`, code: "MIN_LENGTH", message: "آدرس کامل رو بنویس" });
-	if (!/^\d{10}$/.test(toEn(a?.postalCode))) errors.push({ field: `${prefix}postalCode`, code: "PATTERN", message: "کد پستی باید ۱۰ رقم باشه" });
+	if (!/^\d{10}$/.test(postal(a?.postalCode))) errors.push({ field: `${prefix}postalCode`, code: "PATTERN", message: "کد پستی باید ۱۰ رقم باشه" });
 	if (!a?.recipientName || String(a.recipientName).trim().length < 3) errors.push({ field: `${prefix}recipientName`, code: "MIN_LENGTH", message: "نام گیرنده رو وارد کن" });
 	if (!validPhone(a?.recipientPhone)) errors.push({ field: `${prefix}recipientPhone`, code: "PHONE_INVALID", message: "موبایل معتبر وارد کن" });
 	return errors;
 }
-const toAddress = (a, id) => ({ id, title: a.title ?? null, provinceId: Number(a.provinceId), cityId: Number(a.cityId), addressLine: String(a.addressLine).trim(), postalCode: toEn(a.postalCode), recipientName: String(a.recipientName).trim(), recipientPhone: toEn(a.recipientPhone), isSelfRecipient: !!a.isSelfRecipient, isDefault: false, createdAt: iso(Date.now()) });
+/** Persian digits, spaces and «-» are accepted and dropped («۱۹۶۵۸-۴۳۱۱۷» ← 1965843117). */
+const postal = (v) => toEn(v).replace(/[\s-]/g, "");
+/** A real city of another province — `422` (the list codes above are `400`). */
+const checkCityInProvince = (a) => {
+	const prov = D.PROVINCES.find((p) => p.id === Number(a.provinceId));
+	if (!prov.cities.some((c) => c.id === Number(a.cityId))) fail(422, "CITY_NOT_IN_PROVINCE", "این شهر توی استان انتخاب‌شده نیست.");
+};
+const toAddress = (a, id) => ({ id, title: a.title ?? null, provinceId: Number(a.provinceId), cityId: Number(a.cityId), addressLine: String(a.addressLine).trim(), postalCode: postal(a.postalCode), recipientName: String(a.recipientName).trim(), recipientPhone: toEn(a.recipientPhone), isSelfRecipient: !!a.isSelfRecipient, isDefault: false, createdAt: iso(Date.now()) });
+/**
+ * `Idempotency-Key` of a route: a repeat with the same body gets the same result (with the order's **current** state),
+ * another body `409`. Only what made something is remembered — a refused request runs again.
+ */
+function idempotent(ctx, scope) {
+	const key = ctx.req.headers["idempotency-key"];
+	if (!key) validation([{ field: "Idempotency-Key", code: "IDEMPOTENCY_KEY_REQUIRED", message: "هدر Idempotency-Key لازمه." }]);
+	const id = `${scope}:${key}`;
+	const body = JSON.stringify(ctx.body ?? {});
+	const hit = idempotency.get(id);
+	if (hit && hit.body !== body) fail(409, "IDEMPOTENCY_KEY_REUSED", "این کلید قبلاً با درخواست دیگه‌ای استفاده شده.");
+	return { hit, remember: (entry) => idempotency.set(id, { body, ...entry }) };
+}
+const unpaidHolding = (u) => u.orders.filter((o) => o.paid === false && !o.cancelledAt && !isExpired(o));
+const secondsLeft = (o) => Math.max(1, Math.round((o.holdUntil - Date.now()) / 1000));
+/** The bank didn't answer: the attempt is a failed transaction, the order and its hold stay — continue with a retry of it. */
+const noAnswer = (o, pay) => {
+	const t = payments.get(pay.paymentId);
+	t.status = "FAILED"; t.failureReason = "درگاه پرداخت جواب نداد.";
+	o.failed = true;
+	return new ApiError(422, "PAYMENT_GATEWAY_UNAVAILABLE", "درگاه پرداخت جواب نداد؛ سفارشت ثبت شده و کیف‌ها برات نگه داشته شدن — دوباره پرداختش کن.", { meta: { orderCode: o.code, paymentId: pay.paymentId } });
+};
 route("POST", "/orders", (ctx) => {
 	const u = needUser(ctx);
-	const key = ctx.req.headers["idempotency-key"];
-	if (key && idempotency.has(key)) return idempotency.get(key);
+	const { hit, remember } = idempotent(ctx, "orders");
+	if (hit) { if (hit.error) throw hit.error; ctx.status = 201; return { order: orderSummary(hit.order), payment: hit.payment }; }
 	const b = ctx.body || {};
 	const c = resolveCart(ctx);
+	// 1. cart
 	if (!c.items.length) fail(422, "CART_EMPTY", "سبد خریدت خالیه.");
+	// 2. address
 	let address;
 	if (b.newAddress) {
 		const errors = validateAddressInput(b.newAddress, "newAddress.");
 		if (errors.length) validation(errors);
+		checkCityInProvince(b.newAddress);
 		address = toAddress(b.newAddress, ADDR_SEQ + 1);
 	} else {
 		address = u.addresses.find((a) => a.id === Number(b.addressId)) || fail(422, "ADDRESS_NOT_FOUND", "آدرس انتخاب‌شده پیدا نشد.");
 	}
+	// 3. messenger
 	const m = b.preShipmentMessenger || {};
 	if (!["RUBIKA", "TELEGRAM", "BALE"].includes(m.channel)) fail(422, "MESSENGER_REQUIRED", "یکی از پیام‌رسان‌ها رو انتخاب کن تا عکس کیفت رو برات بفرستیم.");
 	if (!validPhone(m.phone)) fail(422, "MESSENGER_PHONE_INVALID", "شماره موبایل معتبر وارد کن");
+	// 4. shipping
 	if (!D.SHIPPING[b.shippingMethod]) fail(422, "SHIPPING_METHOD_UNAVAILABLE", "این روش ارسال فعلاً در دسترس نیست.");
-	if (!b.acceptTerms) fail(422, "TERMS_NOT_ACCEPTED", "برای ثبت سفارش باید قوانین کیوا رو بپذیری.");
 	const resv = reservationView(c, ctx);
-	if (b.reserve === true && !resv.available) fail(422, "RESERVATION_UNAVAILABLE", RESERVATION_MSG[resv.unavailableReason], { meta: { reason: resv.unavailableReason } });
 	c.shippingMethod = b.shippingMethod;
 	if (b.reserve != null && resv.available) c.reserve = !!b.reserve;
 	// joining an active reservation is decided now, for the address the order goes to
 	const addressId = b.newAddress ? (b.saveNewAddress !== false ? address.id : null) : address.id;
 	const view = cartView(c, ctx, { addressId });
 	const group = view.consolidation ? activeGroup(u) : null;
+	// 5. gateway — off: nothing is made
+	const gateway = b.paymentGateway || "ZARINPAL";
+	if (view.totals.payable > 0 && gatewayState.get(gateway) === "OFF") fail(422, "PAYMENT_GATEWAY_UNAVAILABLE", "این درگاه پرداخت الان در دسترس نیست؛ یه درگاه دیگه انتخاب کن.");
+	// 6. terms · 7. reservation
+	if (!b.acceptTerms) fail(422, "TERMS_NOT_ACCEPTED", "برای ثبت سفارش باید قوانین کیوا رو بپذیری.");
+	if (b.reserve === true && !resv.available) fail(422, "RESERVATION_UNAVAILABLE", RESERVATION_MSG[resv.unavailableReason], { meta: { reason: resv.unavailableReason } });
+	// 8. three unpaid orders already hold stock
+	const holding = unpaidHolding(u);
+	if (holding.length >= MAX_UNPAID)
+		tooMany(ctx, "RATE_LIMITED", `${fa(MAX_UNPAID)} سفارش پرداخت‌نشده داری که کیف‌هاشون برات نگه داشته شده؛ اول یکی‌شون رو پرداخت کن یا بذار مهلتش تموم بشه.`, Math.min(...holding.map(secondsLeft)));
+	// 9. rows that left the store / sold out — the cart keeps them, the order can't
+	const off = view.items.filter((i) => !i.purchasable);
+	const gone = off.filter((i) => getP(i.productId).inactive), sold = off.filter((i) => !getP(i.productId).inactive);
+	if (gone.length) fail(422, "PRODUCT_UNAVAILABLE", `«${gone[0].product.name}» دیگه توی فروشگاه نیست؛ از سبدت حذفش کن.`, { meta: { itemIds: gone.map((i) => i.id) } });
+	if (sold.length) fail(422, "OUT_OF_STOCK", `«${sold[0].product.name}» تموم شد؛ از سبدت حذفش کن.`, { meta: { itemIds: sold.map((i) => i.id) } });
+	// 11. the price the shopper saw
 	if (b.expectedPayable != null && Number(b.expectedPayable) !== view.totals.payable) fail(409, "PRICE_CHANGED", `مبلغ سفارش به ${price(view.totals.payable)} تومان تغییر کرد.`, { meta: { payable: view.totals.payable } });
 	// every check passed — only now does anything stick (a real backend does this in one transaction)
 	if (b.newAddress && b.saveNewAddress !== false) { ADDR_SEQ++; if (!u.addresses.length) address.isDefault = true; u.addresses.push(address); }
@@ -1286,7 +1421,7 @@ route("POST", "/orders", (ctx) => {
 		messenger: m.channel, messengerPhone: toEn(m.phone), shippingMethod: view.shippingMethod, addressId, holdUntil: Date.now() + HOLD_MS,
 		group: null, returns: [], feedback: null, feedbackDeadline: null,
 		totals: { full: view.totals.itemsCompareAtTotal, prodOff: view.totals.productDiscount, code: view.totals.codeDiscount, ship: view.totals.shippingCost, total: view.totals.payable },
-		trackingCode: "", mediaViews: [], address: addressSnapshot(address), gateway: b.paymentGateway || "ZARINPAL", note: m.note || null,
+		trackingCode: "", mediaViews: [], address: addressSnapshot(address), gateway, note: m.note || null,
 		// unpaid until the (fake) bank says so; a fully discounted order is paid right away
 		paid: view.totals.payable === 0,
 	};
@@ -1295,43 +1430,62 @@ route("POST", "/orders", (ctx) => {
 	if (group) { order.group = group; group.members.push(order); } else if (order.paid && order.reserve) joinOrStartGroup(u, order);
 	c.items = []; c.code = null; c.reserve = false;
 	ctx.status = 201;
-	const res = { order: orderSummary(order), payment: order.paid ? null : startPayment(order, u, order.gateway) };
-	if (key) idempotency.set(key, res);
-	return res;
+	const payment = order.paid ? null : startPayment(order, u, order.gateway);
+	// placed and held, but the bank didn't answer — the same key replays this answer
+	if (payment && gatewayState.get(gateway) === "NO_ANSWER") { const error = noAnswer(order, payment); remember({ error }); throw error; }
+	remember({ order, payment });
+	return { order: orderSummary(order), payment };
 });
 /** A new PENDING transaction that leaves for the fake bank page (`/mock-gateway/:id`); `balance` pays `balanceDue` of a paid order. */
 function startPayment(o, u, gateway, balance = false) {
 	const paymentId = rid("pay");
 	const amount = balance ? o.balanceDue : o.totals.total;
+	o.attempts = (o.attempts || 0) + 1;
 	payments.set(paymentId, { orderCode: o.code, phone: u.phone, gateway, amount, balance, status: "PENDING", paidAt: null });
-	return { paymentId, gateway, amount, redirect: { url: `${ORIGIN}/mock-gateway/${paymentId}`, method: "GET", fields: {} }, expiresAt: iso(Date.now() + 15 * 60e3) };
+	// the order's payment window — the same for every attempt, never extended
+	const expiresAt = !balance && o.holdUntil ? o.holdUntil : Date.now() + HOLD_MS;
+	return { paymentId, gateway, amount, redirect: { url: `${ORIGIN}/mock-gateway/${paymentId}`, method: "GET", fields: {} }, expiresAt: iso(expiresAt) };
 }
 const myPayment = (ctx) => {
 	const u = needUser(ctx);
 	const pay = payments.get(ctx.params.paymentId);
-	if (!pay || pay.phone !== u.phone) fail(404, "PAYMENT_NOT_FOUND", "این پرداخت پیدا نشد.");
+	if (!/^pay_/.test(ctx.params.paymentId) || !pay || pay.phone !== u.phone) fail(404, "PAYMENT_NOT_FOUND", "این پرداخت پیدا نشد.");
 	return { u, pay, o: u.orders.find((x) => x.code === pay.orderCode) };
 };
+/** Shared by retry and «pay from the account»: the contract's order of rules after the transaction is found. */
+function newAttempt(ctx, o, u, gateway, balance, remember) {
+	if (!D.GATEWAYS.some((g) => g.code === gateway)) validation([{ field: "gateway", code: "ENUM", message: "درگاه پرداخت معتبر نیست" }]);
+	if (balance ? !(o.balanceDue > 0) : o.paid !== false) fail(422, "ORDER_ALREADY_PAID", "این سفارش قبلاً پرداخت شده.");
+	if (isExpired(o) || o.cancelledAt) fail(422, "PAYMENT_EXPIRED", "مهلت پرداخت این سفارش تموم شده و کیف‌ها به فروشگاه برگشتن.");
+	if (gatewayState.get(gateway) === "OFF") fail(422, "PAYMENT_GATEWAY_UNAVAILABLE", "این درگاه پرداخت الان در دسترس نیست؛ با یه درگاه دیگه پرداخت کن.");
+	if ((o.attempts || 0) >= MAX_ATTEMPTS)
+		tooMany(ctx, "RATE_LIMITED", `این سفارش ${fa(MAX_ATTEMPTS)} بار تلاش پرداخت داشته؛ بعد از پایان مهلتش با «خرید دوباره» از نو سفارش بده.`, balance ? 900 : secondsLeft(o));
+	ctx.status = 201;
+	const res = startPayment(o, u, gateway, balance);
+	if (gatewayState.get(gateway) === "NO_ANSWER") { const error = noAnswer(o, res); remember({ error }); throw error; }
+	remember({ res });
+	return res;
+}
 route("POST", "/payments/:paymentId/retry", (ctx) => {
 	const { u, pay, o } = myPayment(ctx);
-	if (pay.balance ? !(o.balanceDue > 0) : o.paid !== false) fail(422, "ORDER_ALREADY_PAID", "این سفارش قبلاً پرداخت شده.");
-	if (isExpired(o) || o.cancelledAt) fail(422, "PAYMENT_EXPIRED", "مهلت پرداخت این سفارش تموم شده و کیف‌ها به فروشگاه برگشتن.");
-	const key = ctx.req.headers["idempotency-key"];
-	if (key && idempotency.has(key)) return idempotency.get(key);
-	ctx.status = 201;
-	const res = startPayment(o, u, ctx.body?.gateway || pay.gateway, pay.balance);
-	if (key) idempotency.set(key, res);
-	return res;
+	const { hit, remember } = idempotent(ctx, "retry");
+	if (hit) { if (hit.error) throw hit.error; ctx.status = 201; return hit.res; }
+	return newAttempt(ctx, o, u, ctx.body?.gateway || pay.gateway, pay.balance, remember);
 });
 route("GET", "/payments/:paymentId", (ctx) => {
 	const { pay, o } = myPayment(ctx);
-	const ok = pay.status === "SUCCEEDED";
+	// a slow verify (test aid) finishes on its own
+	if (pay.status === "PENDING" && pay.verifyAt && Date.now() >= pay.verifyAt) settle(pay, "ok");
+	const ok = pay.status === "SUCCEEDED", pending = pay.status === "PENDING";
+	const payable = pay.balance ? o.balanceDue > 0 : o.paid === false && !isExpired(o) && !o.cancelledAt;
 	return {
 		paymentId: ctx.params.paymentId, status: pay.status, amount: pay.amount, gateway: pay.gateway,
 		referenceId: ok ? "201843917" : null, cardMask: ok ? "6037-99**-****-1234" : null, paidAt: ok ? iso(pay.paidAt) : null,
-		failureReason: pay.status === "CANCELLED" ? "تراکنش توسط کاربر لغو شد" : null, canRetry: !ok && (pay.balance ? o.balanceDue > 0 : o.paid === false),
+		failureReason: ok || pending ? null : pay.failureReason ?? (pay.status === "CANCELLED" ? "تراکنش توسط کاربر لغو شد" : "تراکنش ناموفق بود."),
+		// not paid, not being verified, and the order is still inside its window
+		canRetry: !ok && !pending && payable,
 		order: { code: o.code, status: statusOf(o).status, reserved: !!o.reserve, consolidatedInto: o.group && o.group.rootCode !== o.code ? o.group.rootCode : null },
-		nextSteps: pay.balance ? [
+		nextSteps: !ok ? [] : pay.balance ? [
 			"مابه‌التفاوت پرداخت شد و سفارشت دوباره در حال آماده‌سازیه.",
 			`قبل از ارسال، عکس و ویدیوی کیف جدید رو توی ${MSGR_NAME[o.messenger]} برات می‌فرستیم.`,
 			`بعد از تحویل به ${shipName(o.shippingMethod)}، کد رهگیری توی حسابت قرار می‌گیره.`,
@@ -1469,17 +1623,18 @@ route("GET", "/me/dashboard", (ctx) => {
 route("GET", "/me/orders", (ctx) => {
 	const u = needUser(ctx);
 	const filter = ctx.query.filter || "all";
+	if (!["all", "current", "delivered", "cancelled"].includes(filter)) validation([{ field: "filter", code: "ORDER_FILTER_INVALID", message: "فیلتر سفارش‌ها معتبر نیست." }]);
 	const sorted = [...u.orders].sort((a, b) => b.placedAt - a.placedAt);
 	const list = sorted.filter((o) => filter === "all" || bucketOf(o) === filter);
 	const count = (b) => u.orders.filter((o) => bucketOf(o) === b).length;
 	return { ...paginate(list.map(orderSummary), ctx.query, 20), counts: { all: u.orders.length, current: count("current"), delivered: count("delivered"), cancelled: count("cancelled") } };
 });
 const myOrder = (ctx) => needUser(ctx).orders.find((o) => o.code === ctx.params.code) || fail(404, "ORDER_NOT_FOUND", "این سفارش پیدا نشد.");
-/** Tabs of «سفارش‌های من»: current / delivered (incl. returns) / cancelled (incl. expired). */
+/** Tabs of «سفارش‌های من» (contract 1.7.0): delivered = delivered / return requested / returned · cancelled = expired / cancelled / refunded. */
 function bucketOf(o) {
 	const s = statusOf(o).status;
-	if (["DELIVERED", "RETURN_REQUESTED", "RETURNED", "REFUNDED"].includes(s)) return "delivered";
-	if (["CANCELLED", "EXPIRED"].includes(s)) return "cancelled";
+	if (["DELIVERED", "RETURN_REQUESTED", "RETURNED"].includes(s)) return "delivered";
+	if (["CANCELLED", "EXPIRED", "REFUNDED"].includes(s)) return "cancelled";
 	return "current";
 }
 route("GET", "/me/orders/:code", (ctx) => orderDetail(myOrder(ctx)));
@@ -1494,37 +1649,38 @@ route("GET", "/me/reservation", (ctx) => {
 route("POST", "/me/orders/:code/payments", (ctx) => {
 	const u = needUser(ctx);
 	const o = myOrder(ctx);
-	// a paid order pays only what a change request left due (`totals.balanceDue`)
-	const balance = o.paid !== false && o.balanceDue > 0 && !o.cancelledAt;
-	if (o.paid !== false && !balance) fail(422, "ORDER_ALREADY_PAID", "این سفارش قبلاً پرداخت شده.");
-	if (isExpired(o) || o.cancelledAt) fail(422, "PAYMENT_EXPIRED", "مهلت پرداخت این سفارش تموم شده و کیف‌ها به فروشگاه برگشتن.");
-	const key = ctx.req.headers["idempotency-key"];
-	if (key && idempotency.has(key)) return idempotency.get(key);
+	const { hit, remember } = idempotent(ctx, "pay-order");
+	if (hit) { if (hit.error) throw hit.error; ctx.status = 201; return hit.res; }
+	// a paid order pays only what a change request left due (`totals.balanceDue`); `BALANCE_PAYMENTS = false` = the contract's current phase
+	const balance = BALANCE_PAYMENTS && o.paid !== false && o.balanceDue > 0 && !o.cancelledAt;
 	const gateway = ctx.body?.gateway || o.gateway;
-	if (!D.GATEWAYS.some((g) => g.code === gateway)) validation([{ field: "gateway", code: "ENUM", message: "درگاه پرداخت معتبر نیست" }]);
 	// demo of the design: Saman is «not available» from the account
-	if (gateway === "SAMAN") fail(422, "PAYMENT_GATEWAY_UNAVAILABLE", "درگاه بانک سامان الان در دسترس نیست؛ با یه درگاه دیگه پرداخت کن.");
+	if (gateway === "SAMAN" && !gatewayState.has("SAMAN")) fail(422, "PAYMENT_GATEWAY_UNAVAILABLE", "درگاه بانک سامان الان در دسترس نیست؛ با یه درگاه دیگه پرداخت کن.");
+	const res = newAttempt(ctx, o, u, gateway, balance, remember);
 	if (!balance) o.gateway = gateway;
-	ctx.status = 201;
-	const res = startPayment(o, u, gateway, balance);
-	if (key) idempotency.set(key, res);
 	return res;
 });
 route("POST", "/me/orders/:code/reorder", (ctx) => {
 	const o = myOrder(ctx);
 	const c = resolveCart(ctx);
 	const added = [], skipped = [];
+	let addedCount = 0;
 	o.items.forEach((i) => {
 		const p = getP(i.id);
 		const label = `${p.n} (${D.COLOR_BY_KEY[i.color].name})`;
-		if (!p.stock) return skipped.push({ productId: p.id, name: label, reason: "OUT_OF_STOCK" });
-		addToCart(c, variantId(p, i.color), i.qty);
-		added.push(p.n);
+		try {
+			const { added: n } = addToCart(c, variantId(p, i.color), i.qty);
+			if (!n) return skipped.push({ productId: p.id, name: label, reason: "ALREADY_AT_MAX" });
+			addedCount += n;
+			added.push(p.n);
+		} catch (e) {
+			skipped.push({ productId: p.id, name: label, reason: e.code === "OUT_OF_STOCK" ? "OUT_OF_STOCK" : e.code === "QUANTITY_EXCEEDS_LIMIT" ? "ALREADY_AT_MAX" : "UNAVAILABLE" });
+		}
 	});
 	const message = !added.length
 		? "کیف‌های این سفارش دیگه موجود نیستن."
 		: skipped.length ? `${skipped.map((s) => s.name).join("، ")} دیگه موجود نیست؛ ${added.join("، ")} به سبدت اضافه شد` : `${fa(added.length)} کیف به سبد اضافه شد`;
-	return { cart: cartView(c, ctx), addedCount: added.length, skipped, message };
+	return { cart: cartView(c, ctx), addedCount, skipped, message };
 });
 const CANCEL_REASONS = ["CHANGED_MIND", "NOT_AS_PICTURED", "ORDERED_BY_MISTAKE", "FOUND_CHEAPER", "DELIVERY_TOO_LONG", "OTHER"];
 route("POST", "/me/orders/:code/cancel", (ctx) => {
@@ -1662,11 +1818,13 @@ route("GET", "/me/reviews", (ctx) => {
 });
 
 // addresses
+// default first, then the oldest
 route("GET", "/me/addresses", (ctx) => [...needUser(ctx).addresses].sort((a, b) => b.isDefault - a.isDefault).map(addressView));
 route("POST", "/me/addresses", (ctx) => {
 	const u = needUser(ctx);
 	const errors = validateAddressInput(ctx.body);
 	if (errors.length) validation(errors);
+	checkCityInProvince(ctx.body);
 	if (u.addresses.length >= 20) fail(422, "ADDRESS_LIMIT_REACHED", "حداکثر ۲۰ آدرس می‌تونی ذخیره کنی.");
 	const a = toAddress(ctx.body, ++ADDR_SEQ);
 	if (!u.addresses.length || ctx.body.setAsDefault) { u.addresses.forEach((x) => (x.isDefault = false)); a.isDefault = true; }
@@ -1680,7 +1838,10 @@ route("PUT", "/me/addresses/:id", (ctx) => {
 	const a = myAddress(ctx);
 	const errors = validateAddressInput(ctx.body);
 	if (errors.length) validation(errors);
+	checkCityInProvince(ctx.body);
 	Object.assign(a, toAddress(ctx.body, a.id), { isDefault: a.isDefault, createdAt: a.createdAt });
+	// `true` makes it the default; `false` never unsets it (one is always the default)
+	if (ctx.body.setAsDefault) needUser(ctx).addresses.forEach((x) => (x.isDefault = x === a));
 	return addressView(a);
 });
 route("DELETE", "/me/addresses/:id", (ctx) => {
@@ -1733,8 +1894,12 @@ route("POST", "/me/wishlist/add-to-cart", (ctx) => {
 	const skipped = [];
 	ids.forEach((id) => {
 		const p = getP(id); const w = u.wishlist.find((x) => x.productId === id);
-		if (!p.stock) { skipped.push({ productId: id, name: p.n, reason: "OUT_OF_STOCK" }); return; }
-		addToCart(c, variantId(p, w?.colorKey || p.colors[0]), 1); added++;
+		try {
+			const { added: n } = addToCart(c, variantId(p, w?.colorKey || p.colors[0]), 1);
+			if (n) added += n; else skipped.push({ productId: id, name: p.n, reason: "ALREADY_AT_MAX" });
+		} catch (e) {
+			skipped.push({ productId: id, name: p.n, reason: e.code === "OUT_OF_STOCK" ? "OUT_OF_STOCK" : e.code === "QUANTITY_EXCEEDS_LIMIT" ? "ALREADY_AT_MAX" : "UNAVAILABLE" });
+		}
 	});
 	return { cart: cartView(c, ctx), addedCount: added, skipped, message: `${fa(added)} کیف به سبد اضافه شد` };
 });
@@ -1797,33 +1962,56 @@ function sendMedia(res, path, query) {
 	return false;
 }
 
-/** Stand-in for the bank: `/mock-gateway/:id` shows the amount; `/ok` or `/cancel` settles it and returns to the FE result page. */
+/**
+ * The bank's answer for a transaction. Verified only while the order still waits for this money — if it expired or another
+ * attempt paid it, this one `FAILED` and the bank returns the money (contract 1.7.0).
+ */
+function settle(pay, outcome) {
+	if (pay.status !== "PENDING") return;
+	pay.verifyAt = null;
+	const u = getUserByPhone(pay.phone);
+	const o = u?.orders.find((x) => x.code === pay.orderCode);
+	if (outcome !== "ok") {
+		pay.status = "CANCELLED";
+		if (o && o.paid === false) o.failed = true;
+		return;
+	}
+	const payable = o && (pay.balance ? o.balanceDue > 0 : o.paid === false && !isExpired(o) && !o.cancelledAt);
+	if (!payable) {
+		pay.status = "FAILED";
+		pay.failureReason = o?.paid !== false && !o?.cancelledAt
+			? "این سفارش با یه پرداخت دیگه پرداخت شده بود؛ مبلغ این تراکنش رو بانک به کارتت برمی‌گردونه."
+			: "مهلت پرداخت این سفارش تموم شده بود؛ مبلغ این تراکنش رو بانک به کارتت برمی‌گردونه.";
+		return;
+	}
+	pay.status = "SUCCEEDED";
+	pay.paidAt = Date.now();
+	if (pay.balance) {
+		// the difference is now part of what was paid
+		o.totals.total += pay.amount; o.balanceDue = 0;
+	} else {
+		o.paid = true; o.failed = false; o.placedAt = Date.now();
+		// the reservation clock starts at the first order's successful payment
+		if (o.reserve && !o.group) joinOrStartGroup(u, o);
+	}
+}
+
+/**
+ * Stand-in for the bank: `/mock-gateway/:id` shows the amount; `/ok` or `/cancel` settles it and returns to the FE result page.
+ * Test aids: `/slow` (verify ends 8 s later — the result page polls), `/stuck` (45 s — longer than the page waits),
+ * `/lost` (the callback finds no transaction → back without `paymentId`).
+ */
 function sendGateway(res, path) {
-	const m = path.match(/^\/mock-gateway\/(\w+)(?:\/(ok|cancel))?$/);
+	const m = path.match(/^\/mock-gateway\/(\w+)(?:\/(ok|cancel|slow|stuck|lost))?$/);
 	if (!m) return false;
 	const pay = payments.get(m[1]);
 	if (!pay) { res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }); res.end("این پرداخت پیدا نشد."); return true; }
 	if (m[2]) {
 		if (pay.status === "PENDING") {
-			pay.status = m[2] === "ok" ? "SUCCEEDED" : "CANCELLED";
-			if (pay.status === "SUCCEEDED") {
-				pay.paidAt = Date.now();
-				const u = getUserByPhone(pay.phone);
-				const o = u?.orders.find((x) => x.code === pay.orderCode);
-				if (o && pay.balance) {
-					// the difference is now part of what was paid
-					o.totals.total += pay.amount; o.balanceDue = 0;
-				} else if (o) {
-					o.paid = true; o.failed = false; o.placedAt = Date.now();
-					// the reservation clock starts at the first order's successful payment
-					if (o.reserve && !o.group) joinOrStartGroup(u, o);
-				}
-			} else {
-				const o = getUserByPhone(pay.phone)?.orders.find((x) => x.code === pay.orderCode);
-				if (o && o.paid === false) o.failed = true;
-			}
+			if (m[2] === "slow" || m[2] === "stuck") pay.verifyAt = Date.now() + (m[2] === "slow" ? 8e3 : 45e3);
+			else settle(pay, m[2] === "ok" ? "ok" : "cancel");
 		}
-		res.writeHead(302, { Location: `${FE_ORIGIN}/checkout/result?paymentId=${m[1]}` });
+		res.writeHead(302, { Location: `${FE_ORIGIN}/checkout/result${m[2] === "lost" ? "" : `?paymentId=${m[1]}`}` });
 		res.end();
 		return true;
 	}
@@ -1833,7 +2021,8 @@ function sendGateway(res, path) {
 <style>body{font-family:Tahoma,sans-serif;background:#F3EEFA;display:grid;place-items:center;min-height:100vh;margin:0}main{background:#fff;border-radius:20px;padding:32px;width:min(380px,90vw);text-align:center;box-shadow:0 20px 50px -30px rgba(91,62,140,.6)}
 h1{font-size:18px}p{color:#6b6280}b{font-size:22px;display:block;margin:12px 0 24px}a{display:block;padding:14px;border-radius:12px;text-decoration:none;font-weight:700;margin-top:10px}.ok{background:#5B3E8C;color:#fff}.no{border:1.5px solid #ddd;color:#2A1F3D}</style></head>
 <body><main><h1>درگاه آزمایشی ${esc(name)}</h1><p>سفارش ${esc(pay.orderCode)} — فقط برای محیط توسعه</p><b>${price(pay.amount)} تومان</b>
-<a class="ok" href="/mock-gateway/${m[1]}/ok">پرداخت موفق</a><a class="no" href="/mock-gateway/${m[1]}/cancel">انصراف از پرداخت</a></main></body></html>`);
+<a class="ok" href="/mock-gateway/${m[1]}/ok">پرداخت موفق</a><a class="no" href="/mock-gateway/${m[1]}/cancel">انصراف از پرداخت</a>
+<p style="margin-top:22px;font-size:12px">آزمایشی: <a style="display:inline;padding:0" href="/mock-gateway/${m[1]}/slow">تأیید با ۸ ثانیه تأخیر</a> · <a style="display:inline;padding:0" href="/mock-gateway/${m[1]}/stuck">۴۵ ثانیه</a> · <a style="display:inline;padding:0" href="/mock-gateway/${m[1]}/lost">برگشت بدون شناسه</a></p></main></body></html>`);
 	return true;
 }
 

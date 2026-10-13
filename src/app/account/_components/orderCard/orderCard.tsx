@@ -49,6 +49,8 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 	}>({ open: null, last: null, seq: 0 });
 	const { status, actions } = order;
 	const reservation = order.reservation?.active ? order.reservation : null;
+	/** The hold ended; the group moves to `PROCESSING` shortly (`active = false`, contract 1.7.0). */
+	const holdEnded = status === "RESERVED" && order.reservation?.active === false;
 	const shipment = order.shipment;
 	const photo = photoCheckState(order);
 	const progress = !NO_PROGRESS.includes(status);
@@ -160,6 +162,14 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 								افزودن محصول
 							</Link>
 						</div>
+					) : holdEnded ? (
+						<div className="reserve-bar">
+							<Icon name="timer" />
+							<span>
+								<b>مهلت رزرو تموم شد</b>
+								<small>سفارش‌های رزروت به‌زودی با هم آماده‌ی ارسال می‌شن؛ قبلش عکس کیف‌ها رو برات می‌فرستیم.</small>
+							</span>
+						</div>
 					) : photo ? (
 						<PhotoCheck order={order} state={photo} onRequestChange={() => openModal("change")} />
 					) : null}
@@ -167,7 +177,7 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 					<div className="thumbs-row">
 						{order.itemsPreview.map((item, i) => (
 							<span key={`${item.productId}-${item.colorKey}-${i}`}>
-								<MediaImage src={item.imageUrl} alt={item.name} />
+								<MediaImage src={item.imageUrl} alt={item.name} placeholderColor={item.colorKey} />
 								{item.quantity > 1 && <em>×{toPersianDigits(item.quantity)}</em>}
 							</span>
 						))}

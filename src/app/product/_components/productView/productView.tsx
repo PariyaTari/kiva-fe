@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
 import { Icon } from "@/app/_components/icon/icons";
 import { CartEndpoints } from "@/app/cart/_api/cartEndpoints";
+import { announceCartIssues, nothingAdded } from "@/app/cart/_utils/cartIssues";
 import { useAuthStore } from "@/store/auth.store";
 import { toast } from "@/store/notification.store";
 import { useUiStore } from "@/store/ui.store";
@@ -95,10 +96,14 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 	const add = useMutation({
 		mutationFn: ({ variantId, quantity }: AddVariables) => withMappedError(() => CartEndpoints.addItem({ variantId, quantity })),
 		meta: { showNotification: true },
-		onSuccess: (_data, { quantity, colorName }) => {
-			flyToCart(document.getElementById("im"));
+		onSuccess: (res, { quantity, colorName }) => {
+			announceCartIssues(res.cart);
 			queryClient.invalidateQueries({ queryKey: ["cart"] });
-			toast(`${data?.name} — ${colorName} (${toPersianDigits(quantity)} عدد) به سبد اضافه شد`, {
+			// the product's cap was already full in the cart — the issue above says so
+			if (nothingAdded(res)) return;
+			flyToCart(document.getElementById("im"));
+			// the server's text has the quantity that really went in (less than asked when the cap cut it)
+			toast(res.message ?? `${data?.name} — ${colorName} (${toPersianDigits(quantity)} عدد) به سبد اضافه شد`, {
 				icon: "bag",
 				action: { label: "تسویه حساب", href: "/cart" },
 			});
@@ -175,7 +180,7 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 	};
 
 	const addToCart = (flash: boolean) =>
-		add.mutate({ variantId: variant.id, quantity, colorName: variant.color.name }, { onSuccess: () => flash && setAdded(true) });
+		add.mutate({ variantId: variant.id, quantity, colorName: variant.color.name }, { onSuccess: (res) => flash && !nothingAdded(res) && setAdded(true) });
 
 	const notify = () => {
 		if (!signedIn) {

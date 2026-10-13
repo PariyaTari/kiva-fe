@@ -1,5 +1,6 @@
 import { generateID } from "@/utils/generateId";
 import { PaymentRedirect } from "@/types/order.type";
+import { ResultError } from "@/types/result";
 
 /** Leaves for the bank page: a plain navigation for GET, an auto-submitted form for POST gateways (Saman/Mellat). */
 export function redirectToGateway({ url, method, fields }: PaymentRedirect) {
@@ -43,6 +44,17 @@ export function isBalancePayment(paymentId: string) {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * `422 PAYMENT_GATEWAY_UNAVAILABLE` **with** `meta.orderCode` + `meta.paymentId` (`POST /orders`, retry): the order / transaction
+ * was created and the stock is held, only the bank didn't answer — go on with a retry of that `paymentId`, never place it again.
+ * Without the meta nothing was created (the gateway is off) — pick another one.
+ */
+export function createdPaymentOf(error: ResultError | null | undefined): { orderCode: string; paymentId: string } | null {
+	if (error?.code !== "PAYMENT_GATEWAY_UNAVAILABLE") return null;
+	const { orderCode, paymentId } = error.meta ?? {};
+	return typeof orderCode === "string" && typeof paymentId === "string" ? { orderCode, paymentId } : null;
 }
 
 /** `Idempotency-Key` value — a UUID where the browser offers one. */

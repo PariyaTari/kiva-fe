@@ -47,5 +47,8 @@ export interface CreateReviewPayload {
 	/** Mobile or e-mail (the design form has it; defaults to the account's mobile). */
 	contact?: string;
 	text: string;
+	/** With `orderItemId` — a row number is unique only inside its order (like `ReviewablePurchase`). */
+	orderCode?: string | null;
+	/** Links the review to the purchase → the «خریدار» tag. */
 	orderItemId?: number | null;
 }

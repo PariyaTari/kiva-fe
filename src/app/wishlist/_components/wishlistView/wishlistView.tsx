@@ -10,6 +10,7 @@ import Reveal from "@/app/_components/common/reveal/reveal";
 import { Icon } from "@/app/_components/icon/icons";
 import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import ProductCard from "@/app/_components/shop/productCard/productCard";
+import { announceCartIssues } from "@/app/cart/_utils/cartIssues";
 import { useAuthStore } from "@/store/auth.store";
 import { toast } from "@/store/notification.store";
 import { toErrorView } from "@/utils/apiError";
@@ -48,6 +49,7 @@ export default function WishlistView() {
 		mutationFn: () => withMappedError(() => WishlistEndpoints.addAllToCart()),
 		meta: { showNotification: true },
 		onSuccess: (res) => {
+			announceCartIssues(res.cart);
 			queryClient.invalidateQueries({ queryKey: ["cart"] });
 			toast(res.message || `${toPersianDigits(res.addedCount)} کیف به سبد اضافه شد`, { icon: "bag", action: { label: "مشاهده سبد", href: "/cart" } });
 		},

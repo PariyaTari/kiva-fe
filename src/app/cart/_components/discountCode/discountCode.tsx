@@ -11,6 +11,7 @@ import { formatPrice } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { CartEndpoints } from "../../_api/cartEndpoints";
 import { DISCOUNT_CODES } from "../../_utils/apiError";
+import { announceCartIssues } from "../../_utils/cartIssues";
 
 /** The prototype lists the mock backend's codes under the field — useful while developing, wrong in production. */
 const SHOW_TEST_CODES = process.env.NODE_ENV !== "production";
@@ -27,19 +28,26 @@ export default function DiscountCode({ discount }: { discount?: AppliedDiscount 
 	const apply = useMutation({
 		mutationFn: (value: string) => withMappedError(() => CartEndpoints.applyDiscountCode(value)),
 		onSuccess: (cart) => {
+			announceCartIssues(cart);
 			queryClient.invalidateQueries({ queryKey: ["cart"] });
 			setCode("");
 			setError(null);
 			toast(`کد تخفیف اعمال شد: ${formatPrice(cart.discount?.amount ?? cart.totals.codeDiscount)} تومان کمتر پرداخت می‌کنی`, { icon: "tag" });
 		},
-		// a rejected code is an answer for the field; anything else is a real failure
-		onError: (e: ResultError) => (DISCOUNT_CODES.includes(e.code) ? showError(e.description) : toast(e.description, { type: "error" })),
+		// a rejected code is an answer for the field (an empty one comes as the `code` field's message); anything else is a real failure
+		onError: (e: ResultError) =>
+			DISCOUNT_CODES.includes(e.code)
+				? showError(e.errorDetails?.find((d) => d.field === "code")?.message ?? e.description)
+				: toast(e.description, { type: "error" }),
 	});
 
 	const remove = useMutation({
 		mutationFn: () => withMappedError(() => CartEndpoints.removeDiscountCode()),
 		meta: { showNotification: true },
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
+		onSuccess: (cart) => {
+			announceCartIssues(cart);
+			queryClient.invalidateQueries({ queryKey: ["cart"] });
+		},
 	});
 
 	const submit = (e: FormEvent<HTMLFormElement>) => {

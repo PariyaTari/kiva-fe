@@ -41,8 +41,11 @@ export interface AuthResponse extends AuthTokens {
 	/** `true` → show the optional «دوست داری چی صدات کنیم؟» step. */
 	isNewUser: boolean;
 	user: User;
-	/** The cart after the guest cart was merged in — always `null` until the backend's cart phase. */
-	cart: Cart | null;
+	/**
+	 * The shopper's cart after the guest cart (`guestCartToken`) was merged in — always there, even empty. Synced like `GET /cart`,
+	 * so `issues` carries what changed (once). The guest token is dead after it.
+	 */
+	cart: Cart;
 }
 
 /** `POST /me/phone-change/verify` — a new session for this device (every other one ended). */
