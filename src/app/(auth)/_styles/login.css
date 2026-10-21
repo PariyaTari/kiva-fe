@@ -26,7 +26,9 @@
 	.phone-in .pre svg{width:20px;height:20px}
 	/* `.otp` (the code boxes) is global — `tailwind/components.css`; the phone-change modal of the account uses it too */
 	.sent-to{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--lilac-50);border-radius:var(--r);padding:10px 14px;margin-bottom:22px;font-size:13.5px}
-	.sent-to b{direction:ltr;font-size:15px;letter-spacing:.04em}
+	/* fix (the design has the same bug): `direction` alone does nothing on an inline element, so inside the RTL line
+	   the three digit groups were laid out right-to-left (0901 177 2560 showed as 2560 177 0901) — `isolate` makes it its own LTR run */
+	.sent-to b{direction:ltr;unicode-bidi:isolate;font-size:15px;letter-spacing:.04em}
 	.sent-to button{background:none;border:0;color:var(--purple);font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:13px}
 	.sent-to button svg{width:15px;height:15px}
 	.timer{display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--ink-50);margin-bottom:18px}

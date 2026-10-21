@@ -1,4 +1,4 @@
-import { Fragment, Ref } from "react";
+import { Fragment, ReactNode, Ref } from "react";
 import classNames from "classnames";
 import { Icon } from "@/app/_components/icon/icons";
 import { RefundMethod } from "@/types/order.type";
@@ -19,8 +19,23 @@ type ReturnRefundBlockProps = {
 
 /** Block ۴ «مبلغ به کجا برگرده؟» — the same card, an IBAN (with its field), or store credit. */
 export default function ReturnRefundBlock({ blockRef, method, onMethod, iban, onIban, ibanError, cardMask }: ReturnRefundBlockProps) {
-	const hint: Record<RefundMethod, string> = {
-		ORIGINAL_PAYMENT: `${cardMask ? `کارت ${toPersianDigits(cardMask)}` : "همون کارتی که باهاش پرداخت کردی"} · ۳ تا ۷ روز کاری بعد از رسیدن کیف به ما`,
+	const hint: Record<RefundMethod, ReactNode> = {
+		ORIGINAL_PAYMENT: (
+			<>
+				{cardMask ? (
+					<>
+						{/* its own LTR run — inside the RTL line the digit groups were laid out right to left */}
+						کارت{" "}
+						<span className="ltr" style={{ display: "inline-block" }}>
+							{toPersianDigits(cardMask)}
+						</span>
+					</>
+				) : (
+					"همون کارتی که باهاش پرداخت کردی"
+				)}{" "}
+				· ۳ تا ۷ روز کاری بعد از رسیدن کیف به ما
+			</>
+		),
 		BANK_TRANSFER: "اگه کارتت عوض شده یا می‌خوای به حساب دیگه‌ای واریز بشه",
 		STORE_CREDIT: "بعد از رسیدن کیف، توی حسابت می‌شینه و برای خرید بعدی استفاده می‌شه",
 	};
