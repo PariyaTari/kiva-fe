@@ -29,8 +29,17 @@ export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
 export const isOrderAlreadyPaidError = (e: ResultError | null | undefined) => e?.code === "ORDER_ALREADY_PAID";
 export const isPaymentExpiredError = (e: ResultError | null | undefined) => e?.code === "PAYMENT_EXPIRED";
 export const isGatewayUnavailableError = (e: ResultError | null | undefined) => e?.code === "PAYMENT_GATEWAY_UNAVAILABLE";
-/** Shipped meanwhile — «دیگه نمی‌شه لغوش / تغییرش داد». */
-export const isTooLateError = (e: ResultError | null | undefined) => e?.code === "ORDER_NOT_CANCELLABLE" || e?.code === "CHANGE_REQUEST_NOT_ALLOWED";
+/**
+ * The order's state changed meanwhile (photos sent, shipped, another request open, answered in another tab) — «دیگه نمی‌شه لغوش /
+ * تغییرش داد»; `INVALID_STATUS_TRANSITION` = «همونه!» on photos that no longer wait for an answer.
+ */
+export const isOrderMovedOnError = (e: ResultError | null | undefined) =>
+	e?.code === "ORDER_NOT_CANCELLABLE" || e?.code === "CHANGE_REQUEST_NOT_ALLOWED" || e?.code === "INVALID_STATUS_TRANSITION";
+/** A payment of the order is being verified right now — try again in a moment. */
+export const isPaymentInProgressError = (e: ResultError | null | undefined) => e?.code === "PAYMENT_IN_PROGRESS";
+/** Change request: the colour / model asked for can't be sold (`422 PRODUCT_UNAVAILABLE`) or doesn't fit the change (`400 DESIRED_VARIANT_INVALID`). */
+export const isDesiredVariantError = (e: ResultError | null | undefined) =>
+	e?.code === "PRODUCT_UNAVAILABLE" || !!e?.errorDetails?.some((d) => d.code === "DESIRED_VARIANT_INVALID");
 /** Re-subscribing from «برگردون»: already on / back in stock meanwhile — an info toast, not an error (as on the product page). */
 export const isStockAlertAnswer = (e: ResultError | null | undefined) => e?.code === "STOCK_ALERT_EXISTS" || e?.code === "PRODUCT_IN_STOCK";
 /** `PATCH /me`: the profile was saved elsewhere meanwhile and nothing was stored — re-read it and start the form over. */

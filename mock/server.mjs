@@ -274,7 +274,6 @@ const carts = new Map(); // cartId → cart
 const payments = new Map(); // paymentId → { orderCode, phone, gateway, amount, paidAt }
 const idempotency = new Map(); // `${route}:${key}` → { body, order?, res?, error? } — the same key with another body is `409`
 const gatewayState = new Map(); // test aid: gateway code → "OFF" (refused before anything is made) | "NO_ANSWER" (made, then the bank didn't answer)
-let BALANCE_PAYMENTS = true; // test aid: `false` = the contract's current phase (a paid order answers `ORDER_ALREADY_PAID`)
 const stockAlerts = [];
 const pendingReviews = []; // user-submitted reviews (status PENDING)
 const uploads = new Map(); // mediaId → { phone, asset }
@@ -283,7 +282,9 @@ const HOLD_MS = 15 * 60e3; // unpaid orders keep their stock this long
 const MAX_PER_ORDER = 5; // the product's purchase cap — shared by its colours (contract 1.7.0)
 const MAX_LINE = 20; // no row holds more
 const MAX_UNPAID = 3; // unpaid orders still holding stock — the 4th gets `429`
-const MAX_ATTEMPTS = 10; // payment attempts per order
+const MAX_ATTEMPTS = 10; // payment attempts per order (and, apart, balance attempts per order)
+const BALANCE_WINDOW_MS = 20 * 60e3; // a balance attempt's window at the bank — the balance itself has no deadline (contract 1.12.0)
+const trackHits = new Map(); // ip → lookup times — 10 per 10 minutes (contract 1.12.0)
 const RETURN_DAYS = 7;
 
 const newCart = () => { const c = { id: rid("cart"), items: [], shippingMethod: "POST", reserve: false, code: null, issues: [] }; carts.set(c.id, c); return c; };
@@ -310,6 +311,7 @@ function seedUser(u) {
 		order("KV-217902", 2.4, 1, false, [{ id: 2, color: "olive", qty: 1 }], "BALE", "TIPAX", { full: 1750000, prodOff: 300000, code: 0, ship: 145000, total: 1595000 }, "", [0, 3, 1, "v"], { feedbackDeadline: now + 1.3 * DAY }),
 		order("KV-217455", 2, 1, false, [{ id: 4, color: "caramel", qty: 1 }, { id: 15, color: "brown", qty: 1 }], "RUBIKA", "POST", { full: 4080000, prodOff: 600000, code: 0, ship: 0, total: 3480000 }, "", [0, 3, 1, 2, "v", 1], { feedbackDeadline: now + 1.8 * DAY }),
 		order("KV-216880", 3, 1, false, [{ id: 1, color: "black", qty: 1 }], "TELEGRAM", "POST", { full: 1890000, prodOff: 0, code: 0, ship: 75000, total: 1965000 }, "", [0, 3, 1], {
+			messengerUsername: "@sara_m",
 			feedback: { decision: "REQUEST_CHANGE", changeType: "COLOR", orderItemId: 1, desiredVariantId: 102, note: "اگه یاسی‌اش موجوده همون رو بفرستید؛ مشکی برام زیادی رسمیه.", at: now - 5 * HOUR },
 		}),
 		order("KV-216120", 1.5, 1, false, [{ id: 6, color: "cream", qty: 1 }], "TELEGRAM", "POST", { full: 1290000, prodOff: 0, code: 0, ship: 75000, total: 1365000 }, "", [0, 1, 3], { feedback: { decision: "APPROVE", note: null, at: now - 20 * HOUR } }),
@@ -333,7 +335,7 @@ function seedUser(u) {
 		returned,
 		order("KV-212200", 2.2, 0, false, [{ id: 8, color: "lilac", qty: 1 }], "TELEGRAM", "POST", { full: 590000, prodOff: 0, code: 0, ship: 75000, total: 665000 }, "", [], {
 			cancelledAt: now - 2 * HOUR,
-			refund: newRefund(665000, "ORDER_CANCELLED", { status: "PROCESSING", createdAt: iso(now - 2 * HOUR), expectedBy: iso(now + DAY) }),
+			refund: newRefund(665000, "لغو سفارش", { status: "PROCESSING", createdAt: iso(now - 2 * HOUR), expectedBy: iso(now + DAY), statusNote: "شماره شبات رو گرفتیم؛ تا آخر امروز واریز می‌شه." }),
 		}),
 		order("KV-209117", 19, 3, false, [{ id: 1, color: "black", qty: 1 }], "TELEGRAM", "TIPAX", { full: 1890000, prodOff: 0, code: 189000, ship: 145000, total: 1846000 }, "TPX4821760", [0, 1, 3]),
 	);
@@ -637,8 +639,11 @@ const RETURN_ENDED = ["REJECTED", "CLOSED"];
 const liveReturn = (o) => [...(o.returns || [])].reverse().find((r) => !RETURN_ENDED.includes(r.status));
 /** How many of line `j` can still be returned. */
 const remainingQty = (o, j) => o.items[j].qty - (o.returns || []).filter((r) => !RETURN_ENDED.includes(r.status)).flatMap((r) => r.items).filter((i) => i.orderItemId === j + 1).reduce((n, i) => n + i.quantity, 0);
-/** Every refund of the order: cancellation, change requests, returns. */
-const refundsOf = (o) => [o.refund, ...(o.changeRefunds || []), ...(o.returns || []).map((r) => r.refund)].filter(Boolean);
+/** Every refund of the order: cancellation, change requests, returns — oldest first. */
+const refundsOf = (o) =>
+	[o.refund, ...(o.changeRefunds || []), ...(o.returns || []).map((r) => r.refund)].filter(Boolean).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+/** Paid so far minus the refunds that didn't fail — what cancelling gives back (contract 1.12.0). */
+const refundable = (o) => Math.max(0, o.totals.total - refundsOf(o).filter((r) => r.status !== "FAILED").reduce((n, r) => n + r.amount, 0));
 const canReturn = (o) => o.status === 3 && !o.cancelledAt && Date.now() < returnDeadline(o) && o.items.some((_, j) => remainingQty(o, j) > 0);
 function statusOf(o) {
 	if (o.cancelledAt) return { status: "CANCELLED", statusLabel: "لغو شده", statusTone: "DANGER" };
@@ -685,7 +690,12 @@ const feedbackView = (f) =>
 		decision: f.decision, changeType: f.changeType ?? null, orderItemId: f.orderItemId ?? null, desiredVariantId: f.desiredVariantId ?? null, note: f.note ?? null, at: iso(f.at),
 		resolution: f.resolution ? { ...f.resolution, at: iso(f.resolution.at) } : null,
 	};
-const CANCELLABLE = ["PENDING_PAYMENT", "PAYMENT_FAILED", "RESERVED", "PROCESSING", "PHOTO_SENT", "CHANGE_REQUESTED"];
+/** The shopper cancels only while the state hasn't changed: `RESERVED` / `PROCESSING` and no photo ever sent; unpaid orders just expire (contract 1.12.0). */
+const canCancel = (o) => ["RESERVED", "PROCESSING"].includes(statusOf(o).status) && !o.mediaViews.length;
+/** `PHOTO_SENT` with the photos `SENT` or `APPROVED` — so after «همونه!» too — and no request open. */
+const canRequestChange = (o) => statusOf(o).status === "PHOTO_SENT" && (!o.feedback || o.feedback.decision === "APPROVE");
+/** A payment of the order is being verified right now (test aid `/slow` of the fake bank). */
+const verifying = (o) => [...payments.values()].some((x) => x.orderCode === o.code && x.status === "PENDING" && x.verifyAt);
 function orderSummary(o) {
 	const st = statusOf(o);
 	const s = D.SHIPPING[o.shippingMethod];
@@ -706,7 +716,7 @@ function orderSummary(o) {
 			count: o.mediaViews.length, hasVideo: o.mediaViews.includes("v"), sentAt: o.mediaViews.length ? iso(o.placedAt + 0.9 * DAY) : null,
 		},
 		actions: {
-			canCancel: CANCELLABLE.includes(st.status), canRequestChange: st.status === "PHOTO_SENT" && !o.feedback, canApproveMedia: st.status === "PHOTO_SENT" && !o.feedback,
+			canCancel: canCancel(o), canRequestChange: canRequestChange(o), canApproveMedia: st.status === "PHOTO_SENT" && !o.feedback,
 			canReturn: canReturn(o), canPay: st.status === "PENDING_PAYMENT" || st.status === "PAYMENT_FAILED" || (o.balanceDue > 0 && !o.cancelledAt),
 			canAddToReservation: st.status === "RESERVED", canReview: o.status === 3 && !o.cancelledAt,
 		},
@@ -720,7 +730,7 @@ function orderDetail(o) {
 			const p = getP(i.id);
 			return {
 				id: j + 1, productId: p.id, variantId: variantId(p, i.color), sku: `KV-${1000 + p.id}`, name: p.n, slug: p.slug, color: color(i.color),
-				image: media(p, i.color), quantity: i.qty, unitPrice: p.price, unitCompareAtPrice: p.old || null, lineTotal: p.price * i.qty,
+				image: p.noPhoto ? null : img(p, i.color), quantity: i.qty, unitPrice: p.price, unitCompareAtPrice: p.old || null, lineTotal: p.price * i.qty,
 				reviewed: false, returnableUntil: o.status === 3 && !o.cancelledAt ? iso(returnDeadline(o)) : null,
 			};
 		}),
@@ -732,10 +742,10 @@ function orderDetail(o) {
 			refunded: refundsOf(o).filter((r) => r.status === "COMPLETED").reduce((n, r) => n + r.amount, 0), balanceDue: o.balanceDue || 0, currency: "IRT",
 		},
 		payment: o.paid === false
-			? { gateway: o.gateway, gatewayName: D.GATEWAYS.find((g) => g.code === o.gateway).name, status: isExpired(o) ? "EXPIRED" : o.failed ? "FAILED" : "PENDING", referenceId: null, paidAt: null, cardMask: null }
-			: { gateway: o.gateway, gatewayName: D.GATEWAYS.find((g) => g.code === o.gateway).name, status: "SUCCEEDED", referenceId: String(201843917 + o.placedAt % 1000), paidAt: iso(o.placedAt), cardMask: "6037-99**-****-1234" },
+			? { purpose: "ORDER", amount: o.totals.total, gateway: o.gateway, gatewayName: D.GATEWAYS.find((g) => g.code === o.gateway).name, status: isExpired(o) ? "EXPIRED" : o.failed ? "FAILED" : "PENDING", referenceId: null, paidAt: null, cardMask: null }
+			: { purpose: "ORDER", amount: o.totals.total - (o.balancePaid || 0), gateway: o.gateway, gatewayName: D.GATEWAYS.find((g) => g.code === o.gateway).name, status: "SUCCEEDED", referenceId: String(201843917 + o.placedAt % 1000), paidAt: iso(o.placedAt), cardMask: "6037-99**-****-1234" },
 		preShipmentMediaDetail: {
-			status: mediaStatus(o), channel: o.messenger, channelName: MSGR_NAME[o.messenger], phone: o.messengerPhone, note: o.note,
+			status: mediaStatus(o), channel: o.messenger, channelName: MSGR_NAME[o.messenger], phone: o.messengerPhone, username: o.messengerUsername ?? null, note: o.note,
 			sentAt: o.mediaViews.length ? iso(o.placedAt + 0.9 * DAY) : null,
 			waitingMessage: o.mediaViews.length ? null : `${isReserved(o) ? "سفارشت در حالت رزروه. " : ""}قبل از ارسال، از کیفت عکس و ویدیو می‌گیریم و توی ${MSGR_NAME[o.messenger]} برات می‌فرستیم؛ یه نسخه هم همین‌جا قرار می‌گیره.`,
 			items: mediaItems(o),
@@ -744,7 +754,7 @@ function orderDetail(o) {
 			feedbackDeadline: o.feedbackDeadline && !o.feedback ? iso(o.feedbackDeadline) : null,
 		},
 		timeline: progressOf(o).steps.filter((x) => x.at).map((x, i) => ({ status: ["PROCESSING", "PHOTO_SENT", "SHIPPED", "DELIVERED"][i], label: x.label, at: x.at, note: null })),
-		customerNote: null, gift: null, returns: (o.returns || []).map(returnView),
+		customerNote: null, gift: null, returns: (o.returns || []).map(returnView), refunds: refundsOf(o),
 		invoiceUrl: o.paid !== false && !o.cancelledAt ? `/api/v1/me/orders/${o.code}/invoice` : null,
 		shipmentCarrierUrl: s.trackingUrl,
 	};
@@ -758,9 +768,12 @@ const returnView = (r) => ({
 	createdAt: iso(r.createdAt), decidedAt: r.decidedAt ? iso(r.decidedAt) : null, receivedAt: r.receivedAt ? iso(r.receivedAt) : null,
 	closedAt: r.closedAt ? iso(r.closedAt) : null, closeReason: r.closeReason ?? null,
 });
-/** A new `Refund` as the contract shows it — always `PENDING` first (`PATCH /admin/refunds/{id}` moves it on). */
+/**
+ * A new `Refund` as the contract shows it — always `PENDING` first (`PATCH /admin/refunds/{id}` moves it on). Manual since 1.12.0:
+ * cancellations and change requests are `BANK_TRANSFER` (a colleague calls for the IBAN); `reason` is the operator's text.
+ */
 const newRefund = (amount, reason, extra = {}) => ({
-	id: ++REFUND_SEQ, amount, method: "ORIGINAL_PAYMENT", status: "PENDING", reason, returnId: null, createdAt: iso(Date.now()),
+	id: ++REFUND_SEQ, amount, method: "BANK_TRANSFER", status: "PENDING", reason, returnId: null, createdAt: iso(Date.now()),
 	expectedBy: iso(Date.now() + 3 * DAY), completedAt: null, referenceId: null, statusNote: null, ...extra,
 });
 function findOrderByCode(code) {
@@ -891,7 +904,8 @@ route("GET", "/geo/provinces/:id/cities", (ctx) => (D.PROVINCES.find((p) => p.id
 
 // content
 route("GET", "/faq", (ctx) => {
-	const q = ctx.query.q ? normQ(ctx.query.q) : "";
+	const q = ctx.query.q ? normQ(ctx.query.q).replace(/\s+/g, " ") : "";
+	if ([...q].length > 100) validation([{ field: "q", code: "TEXT_TOO_LONG", message: "عبارت جستجو حداکثر ۱۰۰ حرف باشه" }]);
 	const hl = (s) => (q ? esc(s).split(esc(q)).join(`<mark>${esc(q)}</mark>`) : null);
 	let total = 0;
 	const groups = D.FAQ_GROUPS.map((g, gi) => {
@@ -1021,11 +1035,12 @@ route("POST", "/__mock/gateways/:code", (ctx) => {
 	if (state === "UP") gatewayState.delete(ctx.params.code); else gatewayState.set(ctx.params.code, state);
 	return Object.fromEntries(gatewayState);
 });
-/** Test aid: `{ enabled: false }` = the contract's current phase — a paid order with a balance answers `ORDER_ALREADY_PAID`. */
-route("POST", "/__mock/balance-payments", (ctx) => {
-	BALANCE_PAYMENTS = ctx.body?.enabled !== false;
-	return { enabled: BALANCE_PAYMENTS };
-});
+/** Money coming back after a change request: first off the balance still due, only the rest becomes a `PENDING` refund. */
+function giveBack(o, amount, reason) {
+	const off = Math.min(o.balanceDue || 0, amount);
+	o.balanceDue = (o.balanceDue || 0) - off;
+	if (amount > off) (o.changeRefunds ||= []).push(newRefund(amount - off, reason));
+}
 /** Test aid: the panel's `POST /admin/orders/{code}/change-request/resolution` (`{ decision, variantId?, note? }`). */
 route("POST", "/__mock/orders/:code/change-request/resolution", (ctx) => {
 	const { o } = findOrderByCode(ctx.params.code) || fail(404, "ORDER_NOT_FOUND", "سفارش پیدا نشد.");
@@ -1047,13 +1062,17 @@ route("POST", "/__mock/orders/:code/change-request/resolution", (ctx) => {
 			o.items[j] = { id: v.p.id, color: v.k, qty: line.qty };
 			const diff = v.p.price * line.qty - paid;
 			if (diff > 0) o.balanceDue = (o.balanceDue || 0) + diff;
-			if (diff < 0) (o.changeRefunds ||= []).push(newRefund(-diff, "CHANGE_REQUEST"));
+			if (diff < 0) giveBack(o, -diff, "تغییر کیف به مدل ارزون‌تر");
 		} else if (f.changeType === "CANCEL_ITEM" && o.items.length > 1) {
 			o.items.splice(j, 1);
-			(o.changeRefunds ||= []).push(newRefund(paid, "CHANGE_REQUEST"));
+			// the line's share: its total minus its part of the code discount, rounded down (contract 1.12.0)
+			const subtotal = o.totals.full - o.totals.prodOff;
+			giveBack(o, paid - (subtotal > 0 ? Math.floor((paid * o.totals.code) / subtotal) : 0), "حذف کیف از سفارش");
 		} else if (f.changeType === "CANCEL_ITEM") {
+			// the only line — cancelled like the panel's cancel: everything paid that wasn't refunded comes back
+			o.refund = newRefund(refundable(o), "لغو سفارش");
 			o.cancelledAt = Date.now();
-			o.refund = newRefund(o.totals.total, "ORDER_CANCELLED");
+			o.balanceDue = 0;
 		}
 	}
 	f.resolution = { decision, variantId: applied, note, at: Date.now() };
@@ -1083,9 +1102,9 @@ route("POST", "/__mock/returns/:code", (ctx) => {
 	if (["RECEIVED", "REFUNDED"].includes(r.status) || (r.status === "CLOSED" && b.received)) r.receivedAt ??= now;
 	if (r.status === "CLOSED") Object.assign(r, { closedAt: now, closeReason: b.closeReason ?? r.closeReason ?? null });
 	const amount = r.items.reduce((n, i) => n + getP(i.productId).price * i.quantity, 0);
-	if (b.refund !== undefined) r.refund = b.refund && { ...(r.refund ?? newRefund(amount, "RETURN", { returnId: r.id, method: r.refundMethod })), ...b.refund };
+	if (b.refund !== undefined) r.refund = b.refund && { ...(r.refund ?? newRefund(amount, `مرجوعی ${r.code}`, { returnId: r.id, method: r.refundMethod })), ...b.refund };
 	if (r.status === "REFUNDED") {
-		r.refund ??= newRefund(amount, "RETURN", { returnId: r.id, method: r.refundMethod });
+		r.refund ??= newRefund(amount, `مرجوعی ${r.code}`, { returnId: r.id, method: r.refundMethod });
 		Object.assign(r.refund, { status: "COMPLETED", completedAt: r.refund.completedAt ?? iso(now), referenceId: r.refund.referenceId ?? "140507181234567" });
 	}
 	return returnView(r);
@@ -1440,10 +1459,11 @@ route("POST", "/orders", (ctx) => {
 function startPayment(o, u, gateway, balance = false) {
 	const paymentId = rid("pay");
 	const amount = balance ? o.balanceDue : o.totals.total;
-	o.attempts = (o.attempts || 0) + 1;
+	if (balance) o.balanceAttempts = (o.balanceAttempts || 0) + 1;
+	else o.attempts = (o.attempts || 0) + 1;
 	payments.set(paymentId, { orderCode: o.code, phone: u.phone, gateway, amount, balance, status: "PENDING", paidAt: null });
-	// the order's payment window — the same for every attempt, never extended
-	const expiresAt = !balance && o.holdUntil ? o.holdUntil : Date.now() + HOLD_MS;
+	// the order's payment window — the same for every attempt, never extended; a balance attempt has its own 20 minutes at the bank
+	const expiresAt = balance ? Date.now() + BALANCE_WINDOW_MS : o.holdUntil ? o.holdUntil : Date.now() + HOLD_MS;
 	return { paymentId, gateway, amount, redirect: { url: `${ORIGIN}/mock-gateway/${paymentId}`, method: "GET", fields: {} }, expiresAt: iso(expiresAt) };
 }
 const myPayment = (ctx) => {
@@ -1458,8 +1478,10 @@ function newAttempt(ctx, o, u, gateway, balance, remember) {
 	if (balance ? !(o.balanceDue > 0) : o.paid !== false) fail(422, "ORDER_ALREADY_PAID", "این سفارش قبلاً پرداخت شده.");
 	if (isExpired(o) || o.cancelledAt) fail(422, "PAYMENT_EXPIRED", "مهلت پرداخت این سفارش تموم شده و کیف‌ها به فروشگاه برگشتن.");
 	if (gatewayState.get(gateway) === "OFF") fail(422, "PAYMENT_GATEWAY_UNAVAILABLE", "این درگاه پرداخت الان در دسترس نیست؛ با یه درگاه دیگه پرداخت کن.");
-	if ((o.attempts || 0) >= MAX_ATTEMPTS)
-		tooMany(ctx, "RATE_LIMITED", `این سفارش ${fa(MAX_ATTEMPTS)} بار تلاش پرداخت داشته؛ بعد از پایان مهلتش با «خرید دوباره» از نو سفارش بده.`, balance ? 900 : secondsLeft(o));
+	if (balance && (o.balanceAttempts || 0) >= MAX_ATTEMPTS)
+		tooMany(ctx, "RATE_LIMITED", `مابه‌التفاوت این سفارش ${fa(MAX_ATTEMPTS)} بار تلاش پرداخت داشته؛ برای پرداختش با پشتیبانی تماس بگیر.`, 900);
+	if (!balance && (o.attempts || 0) >= MAX_ATTEMPTS)
+		tooMany(ctx, "RATE_LIMITED", `این سفارش ${fa(MAX_ATTEMPTS)} بار تلاش پرداخت داشته؛ بعد از پایان مهلتش با «خرید دوباره» از نو سفارش بده.`, secondsLeft(o));
 	ctx.status = 201;
 	const res = startPayment(o, u, gateway, balance);
 	if (gatewayState.get(gateway) === "NO_ANSWER") { const error = noAnswer(o, res); remember({ error }); throw error; }
@@ -1477,7 +1499,7 @@ route("GET", "/payments/:paymentId", (ctx) => {
 	// a slow verify (test aid) finishes on its own
 	if (pay.status === "PENDING" && pay.verifyAt && Date.now() >= pay.verifyAt) settle(pay, "ok");
 	const ok = pay.status === "SUCCEEDED", pending = pay.status === "PENDING";
-	const payable = pay.balance ? o.balanceDue > 0 : o.paid === false && !isExpired(o) && !o.cancelledAt;
+	const payable = pay.balance ? o.balanceDue > 0 && !o.cancelledAt : o.paid === false && !isExpired(o) && !o.cancelledAt;
 	return {
 		paymentId: ctx.params.paymentId, status: pay.status, amount: pay.amount, gateway: pay.gateway,
 		referenceId: ok ? "201843917" : null, cardMask: ok ? "6037-99**-****-1234" : null, paidAt: ok ? iso(pay.paidAt) : null,
@@ -1506,6 +1528,10 @@ function demoTracking(code) {
 	return { code, placedAt: Date.now() - (st + 1) * DAY, status: st, reserve: false, items: [{ id: p.id, color: p.colors[0], qty: 1 }], messenger: msgr, shippingMethod: ship, trackingCode: st >= 2 ? (n % 2 ? "TPX" + String(n).padStart(7, "0") : String(1839206745 + n).padEnd(24, "0")) : "", mediaViews: st >= 1 ? [0, 3, 1, "v"] : [] };
 }
 route("POST", "/tracking/lookup", (ctx) => {
+	const ip = ctx.req.socket.remoteAddress || "-";
+	const recent = (trackHits.get(ip) || []).filter((t) => t > Date.now() - 10 * 60e3);
+	if (recent.length >= 10) tooMany(ctx, "RATE_LIMITED", "زیاد امتحان کردی؛ چند دقیقه بعد دوباره پیگیری کن.", Math.ceil((recent[0] + 10 * 60e3 - Date.now()) / 1000));
+	trackHits.set(ip, [...recent, Date.now()]);
 	const raw = toEn(ctx.body?.orderCode).trim().toUpperCase().replace(/^(KV)?-?/, "KV-");
 	const phone = toEn(ctx.body?.phone).replace(/\D/g, "");
 	const errors = [];
@@ -1513,7 +1539,8 @@ route("POST", "/tracking/lookup", (ctx) => {
 	if (!validPhone(phone)) errors.push({ field: "phone", code: "PHONE_INVALID", message: "موبایل ۱۱ رقمی وارد کن" });
 	if (errors.length) validation(errors);
 	const hit = findOrderByCode(raw);
-	const o = hit && (hit.u.phone === phone || hit.o.address.recipientPhone === phone) ? hit.o : raw.endsWith("0000") ? null : demoTracking(raw);
+	// only paid orders; unpaid / expired ones answer exactly like a wrong number
+	const o = hit ? ((hit.u.phone === phone || hit.o.address.recipientPhone === phone) && hit.o.paid !== false ? hit.o : null) : raw.endsWith("0000") ? null : demoTracking(raw);
 	if (!o) fail(404, "TRACKING_NOT_FOUND", "سفارشی با این شماره و موبایل پیدا نکردیم.");
 	const s = orderSummary({ address: {}, totals: { total: 0 }, ...o });
 	const { p, k } = firstItem(o);
@@ -1550,14 +1577,17 @@ route("GET", "/tracking/daily", (ctx) => {
 	const date = ctx.query.date;
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) validation([{ field: "date", code: "PATTERN", message: "تاریخ معتبر نیست" }]);
 	const t = new Date(`${date}T12:00:00+03:30`).getTime();
-	const q = toEn(ctx.query.q || "").trim();
-	const all = dayShipments(t);
+	const q = normQ(ctx.query.q || "");
+	// only the last 30 days (Tehran) — older or future dates are an empty list
+	const inRange = date <= tehranDate(Date.now()) && date > tehranDate(Date.now() - 30 * DAY);
+	const all = inRange ? dayShipments(t) : [];
+	const match = (x) => (!q ? true : /^\d{4}$/.test(q) ? x.phoneLast4 === q : [...q].length === 1 ? x._name.startsWith(q) : x.city.includes(q));
 	// the full first name is only for matching — it never leaves the server
-	const list = all.filter((x) => !q || x.phoneLast4.includes(q) || x._name.startsWith(q) || x.city.includes(q)).map((x) => { const rest = { ...x }; delete rest._name; return rest; });
+	const list = all.filter(match).map((x) => { const rest = { ...x }; delete rest._name; return rest; });
 	const friday = tehranWeekday(t) === "Fri";
 	return {
 		date, label: jdate(t, { weekday: "long", day: "numeric", month: "long", year: "numeric" }), isNonShippingDay: friday,
-		emptyMessage: friday && !q ? "جمعه‌ها ارسال نداریم" : list.length ? null : "موردی پیدا نشد. ۴ رقم آخر موبایلت رو دوباره چک کن.",
+		emptyMessage: !inRange ? "فقط کدهای رهگیری ۳۰ روز اخیر این‌جا هست." : friday && !q ? "جمعه‌ها ارسال نداریم" : list.length ? null : "موردی پیدا نشد. ۴ رقم آخر موبایلت رو دوباره چک کن.",
 		...paginate(list, ctx.query, 100),
 	};
 });
@@ -1651,8 +1681,8 @@ route("POST", "/me/orders/:code/payments", (ctx) => {
 	const o = myOrder(ctx);
 	const { hit, remember } = idempotent(ctx, "pay-order");
 	if (hit) { if (hit.error) throw hit.error; ctx.status = 201; return hit.res; }
-	// a paid order pays only what a change request left due (`totals.balanceDue`); `BALANCE_PAYMENTS = false` = the contract's current phase
-	const balance = BALANCE_PAYMENTS && o.paid !== false && o.balanceDue > 0 && !o.cancelledAt;
+	// a paid order pays only what a change request left due (`totals.balanceDue`, `purpose = BALANCE`); none left → `ORDER_ALREADY_PAID`
+	const balance = o.paid !== false && !o.cancelledAt;
 	const gateway = ctx.body?.gateway || o.gateway;
 	// demo of the design: Saman is «not available» from the account
 	if (gateway === "SAMAN" && !gatewayState.has("SAMAN")) fail(422, "PAYMENT_GATEWAY_UNAVAILABLE", "درگاه بانک سامان الان در دسترس نیست؛ با یه درگاه دیگه پرداخت کن.");
@@ -1686,30 +1716,61 @@ const CANCEL_REASONS = ["CHANGED_MIND", "NOT_AS_PICTURED", "ORDERED_BY_MISTAKE",
 route("POST", "/me/orders/:code/cancel", (ctx) => {
 	const o = myOrder(ctx);
 	const b = ctx.body || {};
-	if (!CANCELLABLE.includes(statusOf(o).status)) fail(422, "ORDER_NOT_CANCELLABLE", "این سفارش ارسال شده و دیگه نمی‌شه لغوش کرد؛ بعد از تحویل تا ۷ روز می‌تونی مرجوعش کنی.");
-	if (!CANCEL_REASONS.includes(b.reason)) validation([{ field: "reason", code: "REQUIRED", message: "دلیل لغو رو انتخاب کن" }]);
-	if (b.note && String(b.note).length > 500) validation([{ field: "note", code: "MAX_LENGTH", message: "توضیح حداکثر ۵۰۰ حرف باشه" }]);
-	const paid = o.paid !== false;
+	const errors = [];
+	if (!CANCEL_REASONS.includes(b.reason)) errors.push({ field: "reason", code: "REQUIRED", message: "دلیل لغو رو انتخاب کن" });
+	if (b.reason === "OTHER" && !String(b.note || "").trim()) errors.push({ field: "note", code: "NOTE_REQUIRED", message: "توضیح بده چرا لغو می‌کنی" });
+	if (b.note && String(b.note).length > 500) errors.push({ field: "note", code: "MAX_LENGTH", message: "توضیح حداکثر ۵۰۰ حرف باشه" });
+	if (errors.length) validation(errors);
+	if (!canCancel(o))
+		fail(422, "ORDER_NOT_CANCELLABLE", o.paid === false && !o.cancelledAt
+			? "سفارش پرداخت‌نشده لغو نمی‌شه؛ اگه پرداختش نکنی خودش منقضی می‌شه."
+			: "وضعیت این سفارش عوض شده و دیگه از این‌جا لغو نمی‌شه؛ با درخواست تغییر یا پشتیبانی لغوش کن.");
+	if (verifying(o)) fail(422, "PAYMENT_IN_PROGRESS", "یه پرداخت این سفارش همین الان در حال تأییده؛ چند لحظه بعد دوباره امتحان کن.");
+	const amount = refundable(o);
+	o.refund = amount > 0 ? newRefund(amount, "لغو سفارش") : null;
 	o.cancelledAt = Date.now();
-	o.refund = paid ? newRefund(o.totals.total, "ORDER_CANCELLED") : null;
-	return { order: orderSummary(o), refund: o.refund, message: paid ? "سفارش لغو شد. مبلغ حداکثر تا ۷۲ ساعت به کارتت برمی‌گرده." : "سفارش لغو شد." };
+	o.balanceDue = 0;
+	return { order: orderSummary(o), refund: o.refund, message: o.refund ? "سفارش لغو شد. برای برگردوندن پولت، همکارهامون تا ۷۲ ساعت کاری باهات تماس می‌گیرن." : "سفارش لغو شد." };
 });
 route("POST", "/me/orders/:code/media-feedback", (ctx) => {
 	const o = myOrder(ctx);
 	const b = ctx.body || {};
-	if (o.status >= 2 || o.cancelledAt) fail(422, "CHANGE_REQUEST_NOT_ALLOWED", "این سفارش ارسال شده و دیگه نمی‌شه تغییرش داد.");
-	if (statusOf(o).status !== "PHOTO_SENT" || o.feedback) fail(422, "CHANGE_REQUEST_NOT_ALLOWED", "به عکس‌های این سفارش قبلاً جواب دادی.");
 	if (!["APPROVE", "REQUEST_CHANGE"].includes(b.decision)) validation([{ field: "decision", code: "ENUM", message: "پاسخ معتبر نیست" }]);
-	if (b.decision === "REQUEST_CHANGE") {
-		const errors = [];
-		if (!["COLOR", "MODEL", "CANCEL_ITEM", "OTHER"].includes(b.changeType)) errors.push({ field: "changeType", code: "ENUM", message: "نوع تغییر رو انتخاب کن" });
-		if (b.orderItemId != null && !o.items[Number(b.orderItemId) - 1]) errors.push({ field: "orderItemId", code: "NOT_FOUND", message: "این کیف توی سفارش نیست" });
-		if (["COLOR", "MODEL"].includes(b.changeType) && !variantById(b.desiredVariantId)) errors.push({ field: "desiredVariantId", code: "REQUIRED", message: "رنگ یا مدل جدید رو انتخاب کن" });
-		if (b.changeType === "CANCEL_ITEM" && o.items.length < 2) errors.push({ field: "changeType", code: "NOT_ALLOWED", message: "سفارش یه کیف بیشتر نداره؛ لغوش کن" });
-		if (b.changeType === "OTHER" && String(b.note || "").trim().length < 5) errors.push({ field: "note", code: "REQUIRED", message: "بنویس چه تغییری می‌خوای" });
-		if (errors.length) validation(errors);
+	const sent = statusOf(o).status === "PHOTO_SENT";
+	if (b.decision === "APPROVE") {
+		// approving approved photos again changes nothing; otherwise only photos that wait for an answer (`SENT`)
+		if (sent && o.feedback?.decision === "APPROVE") return orderDetail(o);
+		if (!sent || o.feedback) fail(422, "INVALID_STATUS_TRANSITION", "عکسی منتظر جوابت نیست.");
+		o.feedback = { decision: "APPROVE", at: Date.now() };
+		o.prevFeedback = null;
+		return orderDetail(o);
 	}
-	o.feedback = { decision: b.decision, changeType: b.changeType ?? null, orderItemId: b.orderItemId ?? null, desiredVariantId: b.desiredVariantId ?? null, note: b.note ?? null, at: Date.now() };
+	// shape first, all together
+	const type = b.changeType, note = String(b.note || "").trim();
+	const errors = [];
+	if (!type) errors.push({ field: "changeType", code: "CHANGE_TYPE_REQUIRED", message: "نوع تغییر رو انتخاب کن" });
+	else if (!["COLOR", "MODEL", "CANCEL_ITEM", "OTHER"].includes(type)) errors.push({ field: "changeType", code: "CHANGE_TYPE_INVALID", message: "نوع تغییر معتبر نیست" });
+	if (["COLOR", "MODEL", "CANCEL_ITEM"].includes(type) && b.orderItemId == null) errors.push({ field: "orderItemId", code: "ORDER_ITEM_REQUIRED", message: "کیفی که می‌خوای عوض بشه رو انتخاب کن" });
+	if (["COLOR", "MODEL"].includes(type) && b.desiredVariantId == null) errors.push({ field: "desiredVariantId", code: "DESIRED_VARIANT_REQUIRED", message: "رنگ یا مدل جدید رو انتخاب کن" });
+	if (type === "OTHER" && !note) errors.push({ field: "note", code: "NOTE_REQUIRED", message: "بنویس چه تغییری می‌خوای" });
+	if (note.length > 500) errors.push({ field: "note", code: "STATUS_NOTE_TOO_LONG", message: "توضیح حداکثر ۵۰۰ حرف باشه" });
+	if (errors.length) validation(errors);
+	const wrongVariant = (message) => validation([{ field: "desiredVariantId", code: "DESIRED_VARIANT_INVALID", message }]);
+	const v = ["COLOR", "MODEL"].includes(type) ? variantById(b.desiredVariantId) || wrongVariant("این رنگ یا مدل پیدا نشد.") : null;
+	if (v?.p.inactive) fail(422, "PRODUCT_UNAVAILABLE", "این رنگ یا مدل دیگه توی فروشگاه نیست؛ یه رنگ یا مدل دیگه انتخاب کن.");
+	// any time from the photos until shipping (after «همونه!» too), one request at a time
+	if (!sent || (o.feedback && o.feedback.decision !== "APPROVE"))
+		fail(422, "CHANGE_REQUEST_NOT_ALLOWED", o.status === 1 && o.feedback?.decision === "REQUEST_CHANGE" && !o.feedback.resolution
+			? "یه درخواست تغییر برای این سفارش باز هست؛ اپراتور باهات هماهنگ می‌کنه."
+			: "این سفارش الان درخواست تغییر نمی‌پذیره.");
+	const line = type === "OTHER" ? null : o.items[Number(b.orderItemId) - 1];
+	if (type !== "OTHER" && !line) validation([{ field: "orderItemId", code: "ORDER_ITEM_NOT_FOUND", message: "این کیف دیگه توی سفارش نیست." }]);
+	if (type === "COLOR" && (v.p.id !== line.id || v.k === line.color)) wrongVariant("برای «رنگ دیگه» یه رنگ دیگه از همین کیف انتخاب کن.");
+	if (type === "MODEL" && v.p.id === line.id) wrongVariant("برای «مدل دیگه» یه کیف دیگه انتخاب کن.");
+	o.feedback = {
+		decision: "REQUEST_CHANGE", changeType: type, orderItemId: type === "OTHER" ? null : Number(b.orderItemId),
+		desiredVariantId: v ? Number(b.desiredVariantId) : null, note: note || null, at: Date.now(),
+	};
 	o.prevFeedback = null;
 	return orderDetail(o);
 });
@@ -1735,7 +1796,7 @@ route("POST", "/me/orders/:code/returns", (ctx) => {
 	const mediaIds = Array.isArray(b.mediaIds) ? b.mediaIds : [];
 	if (mediaIds.length > 6 || mediaIds.some((id) => uploads.get(id)?.phone !== u.phone)) errors.push({ field: "mediaIds", code: "INVALID", message: "فایل‌های پیوست معتبر نیستن" });
 	const refundMethod = b.refundMethod || "ORIGINAL_PAYMENT";
-	if (!["ORIGINAL_PAYMENT", "BANK_TRANSFER", "STORE_CREDIT"].includes(refundMethod)) errors.push({ field: "refundMethod", code: "ENUM", message: "روش برگشت وجه معتبر نیست" });
+	if (!["ORIGINAL_PAYMENT", "BANK_TRANSFER"].includes(refundMethod)) errors.push({ field: "refundMethod", code: "ENUM", message: "روش برگشت وجه معتبر نیست" });
 	if (refundMethod === "BANK_TRANSFER" && !/^IR\d{24}$/.test(String(b.iban || ""))) errors.push({ field: "iban", code: "PATTERN", message: "شماره شبا باید ۲۴ رقم باشه" });
 	if (errors.length) validation(errors);
 	const id = ++RETURN_SEQ;
@@ -1976,19 +2037,22 @@ function settle(pay, outcome) {
 		if (o && o.paid === false) o.failed = true;
 		return;
 	}
-	const payable = o && (pay.balance ? o.balanceDue > 0 : o.paid === false && !isExpired(o) && !o.cancelledAt);
+	// a balance attempt is verified only while the balance is still exactly its amount (contract 1.12.0)
+	const payable = o && (pay.balance ? o.balanceDue === pay.amount && !o.cancelledAt : o.paid === false && !isExpired(o) && !o.cancelledAt);
 	if (!payable) {
 		pay.status = "FAILED";
-		pay.failureReason = o?.paid !== false && !o?.cancelledAt
-			? "این سفارش با یه پرداخت دیگه پرداخت شده بود؛ مبلغ این تراکنش رو بانک به کارتت برمی‌گردونه."
-			: "مهلت پرداخت این سفارش تموم شده بود؛ مبلغ این تراکنش رو بانک به کارتت برمی‌گردونه.";
+		pay.failureReason = pay.balance
+			? "مابه‌التفاوت این سفارش عوض شده یا قبلاً پرداخت شده بود؛ مبلغ این تراکنش رو بانک به کارتت برمی‌گردونه."
+			: o?.paid !== false && !o?.cancelledAt
+				? "این سفارش با یه پرداخت دیگه پرداخت شده بود؛ مبلغ این تراکنش رو بانک به کارتت برمی‌گردونه."
+				: "مهلت پرداخت این سفارش تموم شده بود؛ مبلغ این تراکنش رو بانک به کارتت برمی‌گردونه.";
 		return;
 	}
 	pay.status = "SUCCEEDED";
 	pay.paidAt = Date.now();
 	if (pay.balance) {
 		// the difference is now part of what was paid
-		o.totals.total += pay.amount; o.balanceDue = 0;
+		o.totals.total += pay.amount; o.balancePaid = (o.balancePaid || 0) + pay.amount; o.balanceDue = 0;
 	} else {
 		o.paid = true; o.failed = false; o.placedAt = Date.now();
 		// the reservation clock starts at the first order's successful payment

@@ -2,19 +2,21 @@
 
 import { Fragment, useState } from "react";
 import Link from "next/link";
+import classNames from "classnames";
 import { useQuery } from "@tanstack/react-query";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
 import Loading from "@/app/_components/common/loading/loading";
 import { Icon } from "@/app/_components/icon/icons";
 import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
-import { OrderCode, OrderDetail } from "@/types/order.type";
+import { OrderCode, OrderDetail, Refund } from "@/types/order.type";
 import { toErrorView } from "@/utils/apiError";
 import { toPersianDigits } from "@/utils/digits";
 import { formatDate, formatPrice, pad2 } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
+import { dayLong, REFUND_DESTINATION, REFUND_STATUS, refundNeedsCall, UNPAID } from "../../_utils/orderActions";
 import InvoiceButton from "../invoiceButton/invoiceButton";
 import MediaLightbox from "../mediaLightbox/mediaLightbox";
 
@@ -129,7 +131,7 @@ function Details({ order, onOpenMedia }: { order: OrderDetail; onOpenMedia: (ind
 				{order.items.map((item) => (
 					<div key={item.id} className="it-row">
 						<span className="th">
-							<MediaImage src={item.image?.url} alt={item.image?.alt ?? item.name} placeholderColor={item.color.hex} />
+							<MediaImage src={item.image} alt={item.name} placeholderColor={item.color.hex} />
 						</span>
 						<span>
 							<Link href={`/product/${item.slug ?? item.productId}?color=${item.color.key}`}>
@@ -183,8 +185,9 @@ function Details({ order, onOpenMedia }: { order: OrderDetail; onOpenMedia: (ind
 							<span>ارسال</span>
 							<span>{totals.shippingCost ? formatPrice(totals.shippingCost) : "رایگان"}</span>
 						</div>
+						{/* `payable` is everything paid so far once the order is paid (`payment` may be a later balance attempt) */}
 						<div className="t">
-							<span>{order.payment?.status === "SUCCEEDED" ? "پرداخت شده" : "قابل پرداخت"}</span>
+							<span>{UNPAID.includes(order.status) ? "قابل پرداخت" : order.status === "EXPIRED" ? "مبلغ سفارش" : "پرداخت شده"}</span>
 							<span>{formatPrice(totals.payable)} تومان</span>
 						</div>
 						{/* after a change request: still to pay for a pricier bag, or refunds (cheaper bag, dropped bag, return) */}
@@ -203,13 +206,67 @@ function Details({ order, onOpenMedia }: { order: OrderDetail; onOpenMedia: (ind
 					</div>
 					{media && (
 						<p style={{ marginTop: 8, fontSize: 12.5 }} className="muted">
-							عکس قبل از ارسال: {media.channelName} ({toPersianDigits(media.phone)})
+							عکس قبل از ارسال: {media.channelName} (
+							{media.username ? (
+								<>
+									<span className="ltr" style={{ display: "inline-block" }}>
+										{media.username}
+									</span>
+									،{" "}
+								</>
+							) : null}
+							{toPersianDigits(media.phone)})
 						</p>
 					)}
 					{/* paid orders only — the backend renders the PDF */}
 					{order.invoiceUrl && <InvoiceButton code={order.code} variant="link" />}
 				</div>
 			</div>
+
+			{!!order.refunds?.length && <Refunds refunds={order.refunds} />}
 		</>
+	);
+}
+
+/**
+ * «بازگشت وجه» — every refund of the order (cancellation, change requests, returns) with where it stands. Refunds are manual
+ * (contract 1.12.0): a colleague calls for the IBAN, then transfers; `statusNote` is written for the shopper.
+ */
+function Refunds({ refunds }: { refunds: Refund[] }) {
+	return (
+		<div>
+			<h4>
+				<Icon name="refresh" /> بازگشت وجه
+			</h4>
+			<div className="rfd">
+				{refunds.map((r) => {
+					const state = REFUND_STATUS[r.status];
+					const call = refundNeedsCall(r);
+					return (
+						<div key={r.id} className="rfd-row">
+							<Icon name={r.status === "COMPLETED" ? "check" : r.status === "FAILED" ? "alert" : call ? "phone" : "bank"} />
+							<span className="tx">
+								<b>
+									{formatPrice(r.amount)} تومان{r.reason ? <small className="muted"> · {r.reason}</small> : null}
+								</b>
+								<small>
+									{r.status === "COMPLETED"
+										? `${r.completedAt ? `${dayLong(r.completedAt)} ` : ""}به ${REFUND_DESTINATION[r.method]} واریز شد${r.referenceId ? ` · شماره پیگیری ${toPersianDigits(r.referenceId)}` : ""}`
+										: r.status === "FAILED"
+											? "واریز انجام نشد؛ دوباره باهات تماس می‌گیریم یا با پشتیبانی در تماس باش."
+											: r.status === "PROCESSING"
+												? `در حال واریز به ${REFUND_DESTINATION[r.method]}.`
+												: call
+													? `همکارهامون${r.expectedBy ? ` تا ${dayLong(r.expectedBy)}` : ""} برای گرفتن شماره شبا باهات تماس می‌گیرن.`
+													: `به‌زودی به ${REFUND_DESTINATION[r.method]} واریز می‌شه.`}
+								</small>
+								{r.statusNote && <small className="note-line">{r.statusNote}</small>}
+							</span>
+							<span className={classNames("tag", state.tone)}>{call ? "در انتظار تماس" : state.label}</span>
+						</div>
+					);
+				})}
+			</div>
+		</div>
 	);
 }

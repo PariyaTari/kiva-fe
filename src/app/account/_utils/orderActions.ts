@@ -1,4 +1,4 @@
-import { CancelReason, OrderStatus, OrderSummary, RefundMethod, ReturnReason, ReturnStatus } from "@/types/order.type";
+import { CancelReason, OrderDetail, OrderItem, OrderStatus, OrderSummary, Refund, RefundMethod, ReturnReason, ReturnStatus } from "@/types/order.type";
 import { toPersianDigits } from "@/utils/digits";
 import { formatDate } from "@/utils/format";
 
@@ -50,12 +50,36 @@ export const PAYER_TAG: Record<"KIVA" | "CUSTOMER" | "null", { tone: string; lab
 	null: { tone: "", label: "بعد از بررسی مشخص می‌شه" },
 };
 
-/** «… به کارتت / حسابت / اعتبار حسابت برمی‌گرده». */
+/** «… به کارتت / حسابت برمی‌گرده». */
 export const REFUND_DESTINATION: Record<RefundMethod, string> = {
 	ORIGINAL_PAYMENT: "کارتت",
 	BANK_TRANSFER: "حسابت",
-	STORE_CREDIT: "اعتبار حسابت",
 };
+
+/** A refund's state for the shopper — refunds are manual (contract 1.12.0); see `refundNeedsCall` for «در انتظار تماس». */
+export const REFUND_STATUS: Record<Refund["status"], { tone: string; label: string }> = {
+	PENDING: { tone: "tag-warn", label: "در صف واریز" },
+	PROCESSING: { tone: "", label: "در حال واریز" },
+	COMPLETED: { tone: "tag-success", label: "واریز شد" },
+	FAILED: { tone: "tag-danger", label: "انجام نشد" },
+};
+
+/**
+ * A pending refund of a cancellation / change request goes to an IBAN a colleague asks for on the phone (`BANK_TRANSFER`);
+ * a return's refund already has its card or IBAN from the return form.
+ */
+export const refundNeedsCall = (r: Refund) => r.status === "PENDING" && r.method === "BANK_TRANSFER" && !r.returnId;
+
+/** Paid so far minus the refunds that didn't fail — what cancelling the whole order gives back. */
+export const refundableTotal = (order: Pick<OrderDetail, "totals" | "refunds">) =>
+	Math.max(0, order.totals.payable - (order.refunds ?? []).filter((r) => r.status !== "FAILED").reduce((n, r) => n + r.amount, 0));
+
+/**
+ * What dropping one line gives back: its total minus its share of the code discount, rounded down (contract 1.12.0). The backend
+ * uses the totals of the moment the order was placed; after an earlier change the current ones make this an estimate.
+ */
+export const lineRefund = (item: Pick<OrderItem, "lineTotal">, totals: Pick<OrderDetail["totals"], "codeDiscount" | "subtotal">) =>
+	item.lineTotal - (totals.subtotal > 0 ? Math.floor((item.lineTotal * totals.codeDiscount) / totals.subtotal) : 0);
 
 /** Return status → tag tone and the step reached on the 4-step strip (design `RS`). */
 export const RETURN_STEP: Record<ReturnStatus, { tone: string; step: number }> = {

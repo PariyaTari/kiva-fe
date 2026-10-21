@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import classNames from "classnames";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/app/_components/icon/icons";
 import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
 import Modal from "@/app/_components/ui/modal/modal";
@@ -13,7 +13,7 @@ import { toPersianDigits } from "@/utils/digits";
 import { formatPrice } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
-import { isTooLateError } from "../../_utils/apiError";
+import { isOrderMovedOnError, isPaymentInProgressError } from "../../_utils/apiError";
 import { CANCEL_REASONS, dayShort, itemsLabel, UNPAID } from "../../_utils/orderActions";
 import MiniSteps from "../miniSteps/miniSteps";
 import ModalHead from "../modalHead/modalHead";
@@ -30,7 +30,10 @@ const NOTE_MAX = 500;
 /** Reasons after which changing the colour / model is offered instead (when the order allows it). */
 const CHANGE_INSTEAD: CancelReason[] = ["NOT_AS_PICTURED", "CHANGED_MIND"];
 
-/** Cancel before shipping with a reason (`POST /me/orders/{code}/cancel`) — design `order-cancel.html`. */
+/**
+ * Cancel with a reason (`POST /me/orders/{code}/cancel`) — design `order-cancel.html`. Only while the order's state hasn't changed
+ * (no photo sent yet); the refund is manual — a colleague calls for the IBAN (contract 1.12.0).
+ */
 export default function CancelModal({ order, open, onClose, onRequestChange }: CancelModalProps) {
 	const queryClient = useQueryClient();
 	const paid = !UNPAID.includes(order.status);
@@ -39,14 +42,6 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 	const [reasonError, setReasonError] = useState(0);
 	const [noteError, setNoteError] = useState<string | null>(null);
 	const [result, setResult] = useState<{ view: "done"; res: CancelOrderResponse } | { view: "late" } | null>(null);
-
-	// only for the card mask in the refund line — the sentence reads fine without it
-	const detail = useQuery({
-		queryKey: ["me", "orders", "detail", order.code],
-		queryFn: () => withMappedError(() => AccountEndpoints.getOrder(order.code)),
-		enabled: open && paid,
-	});
-	const cardMask = detail.data?.payment?.cardMask;
 
 	const refreshOrders = () => {
 		queryClient.invalidateQueries({ queryKey: ["me", "orders"] });
@@ -60,11 +55,13 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 			setResult({ view: "done", res });
 		},
 		onError: (e) => {
-			// shipped meanwhile — tell it in the modal and show the new state behind it
-			if (isTooLateError(e)) {
+			// the state changed meanwhile (photos sent, shipped) — tell it in the modal and show the new state behind it
+			if (isOrderMovedOnError(e)) {
 				refreshOrders();
 				return setResult({ view: "late" });
 			}
+			// a payment of the order is being verified — nothing changed, a moment later it works
+			if (isPaymentInProgressError(e)) return toast(e.description, { type: "warning", duration: 6000 });
 			const noteDetail = e.errorDetails?.find((d) => d.field === "note");
 			if (noteDetail) return setNoteError(noteDetail.message);
 			toast(e.description, { type: "error" });
@@ -83,11 +80,7 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 	const reasons = CANCEL_REASONS.filter((r) => r.key !== "NOT_AS_PICTURED" || !!order.preShipmentMedia?.count);
 	const suggestChange = !!order.actions?.canRequestChange && !!reason && CHANGE_INSTEAD.includes(reason);
 	const amount = formatPrice(order.payable);
-	const mask = cardMask ? (
-		<span className="ltr" style={{ display: "inline-block" }}>
-			{toPersianDigits(cardMask)}
-		</span>
-	) : null;
+	const refund = result?.view === "done" ? result.res.refund : null;
 
 	return (
 		<Modal open={open} onClose={onClose} width={580}>
@@ -99,20 +92,20 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 						</div>
 						<h3>سفارش لغو شد</h3>
 						<p>
-							{result.res.refund
-								? `سفارش ${order.code} لغو شد و ${formatPrice(result.res.refund.amount)} تومان حداکثر تا ۷۲ ساعت به کارتت برمی‌گرده؛ پیامکش رو هم برات فرستادیم.`
+							{refund
+								? `سفارش ${order.code} لغو شد. برای برگردوندن ${formatPrice(refund.amount)} تومان، همکارهامون${refund.expectedBy ? ` تا ${dayShort(refund.expectedBy)}` : ""} باهات تماس می‌گیرن و شماره شبات رو می‌پرسن.`
 								: `سفارش ${order.code} لغو شد. پرداختی نداشت، پس چیزی از حسابت کم نشده.`}
 						</p>
-						{result.res.refund && (
+						{refund && (
 							<div style={{ margin: "24px 0 4px" }}>
 								<MiniSteps
 									steps={[
 										{ label: "لغو شد", at: "امروز" },
-										{ label: "برگشت وجه", at: "در حال انجام" },
-										{ label: "واریز به کارت", at: result.res.refund.expectedBy ? `تا ${dayShort(result.res.refund.expectedBy)}` : undefined },
+										{ label: "تماس همکارها", at: refund.expectedBy ? `تا ${dayShort(refund.expectedBy)}` : "به‌زودی" },
+										{ label: "واریز به حسابت" },
 									]}
 									current={1}
-									icons={["ban", "refresh", "card"]}
+									icons={["ban", "phone", "bank"]}
 								/>
 							</div>
 						)}
@@ -128,16 +121,20 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 				) : result?.view === "late" ? (
 					<div className="m-done">
 						<div className="ck danger">
-							<Icon name="truck" />
+							<Icon name="info" />
 						</div>
-						<h3>دیگه نمی‌شه لغوش کرد</h3>
+						<h3>دیگه از این‌جا نمی‌شه لغوش کرد</h3>
 						<p>
-							سفارش {order.code} همین الان تحویل {order.shippingMethod.name} شد. بعد از تحویل، اگه کیف رو نخواستی، تا ۷ روز می‌تونی درخواست مرجوعی بدی.
+							وضعیت سفارش {order.code} همین الان عوض شد. اگه هنوز ارسال نشده، با «درخواست تغییر» روی عکس کیفت یا تماس با پشتیبانی می‌تونی لغوش کنی؛ بعد از تحویل
+							هم تا ۷ روز می‌تونی مرجوعش کنی.
 						</p>
 						<div className="acts">
 							<button type="button" className="btn btn-primary btn-block" onClick={onClose}>
 								باشه
 							</button>
+							<Link className="btn btn-outline btn-block" href="/contact">
+								تماس با پشتیبانی
+							</Link>
 						</div>
 					</div>
 				) : (
@@ -146,7 +143,11 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 							icon="ban"
 							tone="danger"
 							title={`لغو سفارش ${order.code}`}
-							sub={paid ? "تا قبل از ارسال می‌تونی لغوش کنی و مبلغ کامل بهت برمی‌گرده." : "این سفارش هنوز پرداخت نشده؛ با لغو، کیف‌ها به فروشگاه برمی‌گردن."}
+							sub={
+								paid
+									? "تا وقتی عکس کیفت برات فرستاده نشده، می‌تونی لغوش کنی و کل مبلغش بهت برمی‌گرده."
+									: "این سفارش هنوز پرداخت نشده؛ با لغو، کیف‌ها به فروشگاه برمی‌گردن."
+							}
 						/>
 						<div className="m-items">
 							<span className="ths">
@@ -168,10 +169,10 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 						</div>
 						{paid && (
 							<div className="rf">
-								<Icon name="card" />
+								<Icon name="phone" />
 								<span>
 									<b>{amount} تومان برمی‌گرده</b>
-									<small>به همون کارتی که باهاش پرداخت کردی{mask && <> ({mask})</>}، حداکثر تا ۷۲ ساعت بعد از لغو.</small>
+									<small>بعد از لغو، همکارهامون تا ۷۲ ساعت باهات تماس می‌گیرن، شماره شبات رو می‌پرسن و مبلغ رو به حسابت واریز می‌کنن.</small>
 								</span>
 							</div>
 						)}

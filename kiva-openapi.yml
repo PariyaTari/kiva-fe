@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: KIVA Store API — کیوا
-  version: 1.7.0
+  version: 1.12.0
   contact:
     name: KIVA Engineering
     email: support@kiva.ir
@@ -76,7 +76,10 @@ info:
 
     * **لاگ تغییرات:** هر درخواست **موفقِ** نوشتنی زیر `/admin/*` (`POST`، `PUT`، `PATCH`، `DELETE`؛ به‌جز آپلود مدیا) یک ردیف در لاگ تغییرات می‌گذارد:
       چه کسی، کِی، چه کاری، روی چه چیزی، و هر فیلد از چه به چه شد. خواندن‌ها و کارهای خودکار سیستم (مثل پایان مهلت رزرو) ثبت نمی‌شوند.
-      لاگ فقط اضافه می‌شود و ویرایش یا حذف ندارد: `GET /admin/audit-log`.
+      **یک ردیف برای هر درخواست**: درخواستی که چند چیز را عوض می‌کند (ساخت محصول با رنگ‌هایش) یک ردیف با همه‌ی تغییرها دارد،
+      و درخواستی که چیزی را عوض نکرد (ذخیره‌ی فرم بی‌تغییر، آرشیو ِ محصولِ از قبل آرشیو) ردیفی ندارد.
+      `actor` (نام و موبایل) موقع خواندن از حساب **فعلی** کاربر خوانده می‌شود، نه از ردیف. نوع `MEDIA` استفاده نمی‌شود، چون آپلود ثبت نمی‌شود.
+      لاگ فقط اضافه می‌شود و ویرایش ندارد؛ هر ردیف **۹۰ روز** نگه داشته می‌شود و هر شب ردیف‌های قدیمی‌تر پاک می‌شوند: `GET /admin/audit-log`.
 
     * **محدودیت‌ها** (همه با `429`، هدر `Retry-After` و `meta.retryAfterSeconds`):
 
@@ -127,9 +130,15 @@ info:
         و وگرنه `PROCESSING` می‌شود.
       * **کالای غیرقابل‌رزرو:** اگر حتی یک کالای سبد `reservable = false` باشد، رزرو در دسترس نیست (`ITEM_NOT_RESERVABLE`).
       * **پایان مهلت:** همه‌ی سفارش‌های گروه **خودکار** از `RESERVED` به `PROCESSING` می‌روند (عکس قبل از ارسال، سپس ارسال گروهی با **یک کد رهگیری**).
-      * **لغو:** هر سفارش گروه تا قبل از `SHIPPED` قابل لغو است (بازگشت کامل وجه). لغو سفارش اصلی گروه یا مهلتش را از بین نمی‌برد و
+      * **لغو:** مشتری سفارش گروه را تا وقتی وضعیتش عوض نشده (`RESERVED` یا `PROCESSING` و هیچ عکسی برایش فرستاده نشده) لغو می‌کند؛
+        پنل هر سفارش گروه را تا قبل از `SHIPPED`. لغو سفارش اصلی گروه یا مهلتش را از بین نمی‌برد و
         ارسال رایگان سفارش‌های پیوسته حفظ می‌شود. هزینه‌ی ارسال سفارش اصلی بعد از پیوستن سفارش‌های دیگر دوباره محاسبه نمی‌شود.
-    * **عکس قبل از ارسال (امضای کیوا):** انتخاب پیام‌رسان (روبیکا/تلگرام/بله) و شماره‌ی آن در تسویه **اجباری** است. اپراتور قبل از بسته‌بندی عکس/ویدیو را آپلود و ارسال می‌کند؛ یک نسخه برای همیشه در جزئیات سفارش می‌ماند. تا قبل از `SHIPPED` مشتری می‌تواند تأیید کند، تغییر رنگ/مدل بخواهد یا لغو کند (بازگشت کامل وجه).
+    * **عکس قبل از ارسال (امضای کیوا):** انتخاب پیام‌رسان (روبیکا/تلگرام/بله) و شماره‌ی آن در تسویه **اجباری** است. اپراتور قبل از بسته‌بندی عکس/ویدیو را آپلود می‌کند،
+      خودش در پیام‌رسان مشتری می‌فرستد و ارسال را ثبت می‌کند؛ یک نسخه برای همیشه در جزئیات سفارش می‌ماند. مشتری عکس را تأیید می‌کند یا تغییر رنگ/مدل می‌خواهد.
+    * **لغو سفارش:** مشتری تا وقتی وضعیت سفارش عوض نشده (`RESERVED` یا `PROCESSING` و هیچ عکسی فرستاده نشده) لغو می‌کند؛
+      بعد از آن لغو با درخواست تغییر یا پشتیبانی است. پنل تا قبل از `SHIPPED` لغو می‌کند. سفارش پرداخت‌نشده لغو نمی‌شود (خودش منقضی می‌شود).
+      **بازگشت وجه دستی است:** با هر لغو یک استرداد `PENDING` به اندازه‌ی کل مبلغ پرداخت‌شده (منهای استردادهای قبلی) ثبت می‌شود
+      و همکاران برای گرفتن شماره شبا با مشتری تماس می‌گیرند؛ شماره شبا در سیستم ذخیره نمی‌شود. موجودی آزاد و استفاده‌ی کد تخفیف برگردانده می‌شود.
     * **بازگشت کالا:** تا ۷ روز بعد از تحویل. اگر مشکل از کیوا باشد (`NOT_AS_PICTURED`، `MANUFACTURING_DEFECT`، ...) هزینه‌ی برگشت با کیواست؛ در `CHANGED_MIND` با مشتری.
     * **جمعه‌ها** ارسال نداریم (`nonShippingWeekdays`). سفارشی که جمعه (به وقت تهران) ثبت می‌شود شنبه ارسال می‌شود، و `estimatedDelivery`
       از روز ارسال شمرده می‌شود: `minDays` تا `maxDays` روز کاری بعد از آن، بدون جمعه‌ها. پس سفارش جمعه یک روز دیرتر از سفارش پنجشنبه می‌رسد.
@@ -151,14 +160,33 @@ info:
 
     مسیر اصلی: `PENDING_PAYMENT → (RESERVED) → PROCESSING → PHOTO_SENT → SHIPPED → DELIVERED`.
     `RESERVED → PROCESSING` فقط خودکار و در پایان مهلت رزرو انجام می‌شود؛ `RESERVED → CANCELLED` با لغو مشتری یا ادمین.
+
+    **`allowedTransitions`** (آنچه `POST /admin/orders/{orderCode}/status` می‌پذیرد):
+
+    | وضعیت فعلی | `allowedTransitions` |
+    |---|---|
+    | `RESERVED`، `PROCESSING`، `PHOTO_SENT`، `CHANGE_REQUESTED` | `[CANCELLED]` |
+    | `SHIPPED` | `[DELIVERED]` |
+    | بقیه | `[]` |
+
+    `PHOTO_SENT` (با `…/pre-shipment-media/send`)، `SHIPPED` (با `…/shipment`)، خروج از `CHANGE_REQUESTED` به‌جز لغو و وضعیت‌های مرجوعی هیچ‌وقت از `…/status` نمی‌آیند.
+
+    **عکس قبل از ارسال** (`preShipmentMedia.status`): `WAITING` (پیش‌نویس دارد یا نه؛ مشتری پیش‌نویس را نمی‌بیند) ← ثبت ارسال ← `SENT` ← تأیید مشتری،
+    یا پایان مهلت پاسخ (`feedbackDeadline` = زمان ارسال عکس + ۲۴ ساعت) ← `APPROVED`؛ `SENT` یا `APPROVED` ← درخواست تغییر ← `CHANGE_REQUESTED` ← رسیدگی ← `WAITING` (عکس تازه).
+    تأیید عکس وضعیت سفارش را عوض نمی‌کند (`PHOTO_SENT` تا ارسال می‌ماند).
+
+    **ارسال** فقط از `PHOTO_SENT` است، و فقط بعد از تأیید مشتری یا پایان مهلت پاسخ (`422 AWAITING_CUSTOMER_FEEDBACK`)، و بدون مانده‌ی پرداخت.
+    **گروه رزرو با یک درخواست و یک کد رهگیری ارسال می‌شود** و همه‌ی سفارش‌های لغونشده‌ی گروه باید آماده باشند (`422 GROUP_NOT_READY`)؛ سفارش لغوشده‌ی گروه ارسال نمی‌شود و مانع هم نیست.
+    «تحویل شد» دستی است (`…/status` با `DELIVERED`) و مهلت مرجوعی (`returnableUntil`) همان لحظه با `returnWindowDays` ِ آن لحظه ثابت می‌شود.
     سرور برای هر سفارش آبجکت آماده‌ی `progress` (۴ مرحله با تاریخ هر مرحله) و `statusLabel`/`statusTone` را برمی‌گرداند تا کلاینت منطق نگاشت نداشته باشد.
 
     **درخواست تغییر:** مشتری با `POST /me/orders/{orderCode}/media-feedback` (`REQUEST_CHANGE`) سفارش را `CHANGE_REQUESTED` می‌کند.
     اپراتور آن را با `POST /admin/orders/{orderCode}/change-request/resolution` اجرا یا رد می‌کند و سفارش به `PROCESSING` برمی‌گردد
     (`preShipmentMedia.status = WAITING`: عکس تازه، بعد ارسال). از `CHANGE_REQUESTED` فقط همین endpoint یا لغو (`CANCELLED`) بیرون می‌برد.
-    اگر رنگ/مدل تازه **ارزان‌تر** باشد، مابه‌التفاوت خودکار استرداد می‌شود؛ اگر **گران‌تر** باشد، روی سفارش `balanceDue` می‌نشیند
-    (در `OrderSummary` و `totals`) و `actions.canPay = true`؛ مشتری با `POST /me/orders/{orderCode}/payments` آن را می‌پردازد
-    و تا صفر نشود سفارش ارسال نمی‌شود (`422 BALANCE_DUE`).
+    اگر رنگ/مدل تازه **ارزان‌تر** باشد، مابه‌التفاوت اول از مانده‌ی پرداخت (`balanceDue`) کم می‌شود و باقیش خودکار استرداد می‌شود؛
+    اگر **گران‌تر** باشد، روی سفارش `balanceDue` می‌نشیند (در `OrderSummary` و `totals`) و `actions.canPay = true`؛
+    مشتری با `POST /me/orders/{orderCode}/payments` آن را می‌پردازد و تا صفر نشود سفارش ارسال نمی‌شود (`422 BALANCE_DUE`).
+    درخواست تغییر فقط در `PHOTO_SENT` (عکس `SENT` یا `APPROVED`؛ پس بعد از تأیید هم) و یکی در هر لحظه ممکن است؛ بعد از ارسال هیچ‌وقت.
 
     **چرخه‌ی مرجوعی** (`ReturnStatus`):
 
@@ -182,10 +210,13 @@ info:
     |---|---|---|
     | درخواست OTP | SMS | کد ۵ رقمی |
     | پرداخت موفق | SMS | کد سفارش + لینک `track?order=KV-...` |
-    | ارسال عکس قبل از ارسال | پیام‌رسان انتخابی + SMS | عکس‌ها/ویدیو + لینک جزئیات سفارش |
+    | ارسال عکس قبل از ارسال | پیام‌رسان انتخابی (اپراتور، دستی) + SMS (سرور) | عکس‌ها/ویدیو در پیام‌رسان؛ پیامک: کد سفارش + لینک جزئیات سفارش |
     | ۱۲ ساعت مانده به پایان رزرو | SMS | یادآوری افزودن خرید [پیشنهادی] |
-    | تحویل به پست/تیپاکس | SMS | کد رهگیری + لینک رهگیری حامل |
-    | تحویل شد | SMS | درخواست ثبت نظر |
+    | تحویل به پست/تیپاکس | SMS | کد رهگیری + اسم حامل (اصلاح کد رهگیری پیامک ندارد) |
+    | تحویل شد | SMS | درخواست ثبت نظر (با `notifyCustomer`) |
+    | لغو شد | SMS | کد سفارش؛ لغو مشتری همیشه، لغو پنل با `notifyCustomer` |
+    | پول برگشت | SMS | کد سفارش؛ وقتی استرداد `COMPLETED` می‌شود |
+    | درخواست تغییر بررسی شد | SMS | کد سفارش + «جزئیات در صفحه‌ی سفارش»؛ با `notifyCustomer`. **بدون `note`**: متن آزاد پیامک نداریم، `note` در `feedback.resolution` و تایم‌لاین دیده می‌شود |
     | موجود شد | SMS | لینک محصول (اشتراک «موجود شد خبرم کن») |
     | افت قیمت علاقه‌مندی | SMS | فقط با رضایت بازاریابی [پیشنهادی] |
 
@@ -280,6 +311,10 @@ paths:
       description: |
         یک‌بار در بارگذاری اپ گرفته و کش می‌شود. همه‌ی عددهای ثابتی که الان در `kiva.js` هاردکد شده‌اند
         (`SHIPPING`، `FREE_POST`، `MSGR`، پیام‌های نوار اطلاعیه، ساعت کاری، آستانه‌ی موجودی کم و ...) از این‌جا می‌آیند.
+        با `ETag` و `Cache-Control: public, max-age=300` کش می‌شود؛ درخواست با `If-None-Match` برابر `304` بدون بدنه می‌گیرد.
+        منبع هر بخش در `SiteConfig`: عددها و لیست‌ها همان تنظیمات `PUT /admin/settings` و همان چیزی‌اند که سبد و تسویه می‌خوانند؛
+        متن‌های برند، فوتر و نشان‌ها محتوای ثابت سایت‌اند (فعلاً بدون endpoint پنل). `support.isOpenNow` و `announcements` به لحظه‌ی
+        ساختن پاسخ وابسته‌اند، پس تا ۵ دقیقه ممکن است کهنه باشند.
       responses:
         '200':
           description: OK
@@ -288,6 +323,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SiteConfig' }
+        '304':
+          description: تغییری نکرده (`If-None-Match` همان `ETag` فعلی است)؛ بدون بدنه
   /home:
     get:
       tags: [Config & Home]
@@ -429,7 +466,11 @@ paths:
       summary: "سوالات متداول گروه‌بندی‌شده (با جستجو)"
       description: |
         گروه‌ها با `id` برای لینک مستقیم (`faq#reserve`، `faq#return`، `faq#shipping`) استفاده می‌شوند.
-        با `q` فقط سوال‌هایی که در متن سوال یا جواب شامل عبارت هستند برگردانده می‌شوند و `highlight` فعال می‌شود.
+        با `q` فقط سوال‌هایی که در متن سوال یا متن ساده‌ی جواب (بدون تگ) شامل عبارت هستند برگردانده می‌شوند، و فقط گروه‌هایی که
+        سوال جور دارند؛ `questionHighlighted`/`answerHighlighted` با `<mark>` پر می‌شوند. تطابق حرف‌به‌حرف و بی‌حساس به
+        `ي`/`ی`، `ك`/`ک`، رقم فارسی و لاتین و حروف بزرگ و کوچک است؛ فاصله‌های اضافه‌ی `q` حذف می‌شوند. `q` ِ خالی یعنی بی `q`؛
+        بیشتر از ۱۰۰ حرف ← `400 TEXT_TOO_LONG` روی `q`. بی نتیجه: `groups: []` و `emptyMessage`.
+        با `ETag` و `Cache-Control: public, max-age=300` کش می‌شود.
       parameters:
         - name: q
           in: query
@@ -437,9 +478,13 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FaqResponse' }
+        '304':
+          description: تغییری نکرده (`If-None-Match` همان `ETag` فعلی است)؛ بدون بدنه
         '400': { $ref: '#/components/responses/ValidationError' }
   /contact/topics:
     get:
@@ -516,7 +561,10 @@ paths:
     get:
       tags: [Content]
       operationId: getStaticPage
-      summary: "صفحه‌ی ثابت CMS (درباره ما، قوانین، حریم خصوصی، شرایط بازگشت) [پیشنهادی]"
+      summary: "صفحه‌ی ثابت CMS (درباره ما، قوانین، حریم خصوصی، شرایط بازگشت)"
+      description: |
+        صفحه‌هایی که پنل نوشته (`terms`، `privacy`، `returns`، `about`، …). صفحه‌ی ننوشته یا `slug` ِ بدشکل ← `404 NOT_FOUND`
+        (صفحه‌ای پیش‌فرض ساخته نمی‌شود). با `ETag` و `Cache-Control: public, max-age=300` کش می‌شود.
       parameters:
         - name: slug
           in: path
@@ -525,9 +573,13 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/StaticPage' }
+        '304':
+          description: تغییری نکرده (`If-None-Match` همان `ETag` فعلی است)؛ بدون بدنه
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ================================================================
@@ -1461,6 +1513,8 @@ paths:
         * تراکنش از روی شناسه‌ای که خود درگاه داده (زرین‌پال: `Authority`) پیدا می‌شود، و verify سرور به سرور با مبلغی انجام می‌شود که سرور خودش ذخیره کرده، نه با چیزی از این درخواست.
         * verify فقط وقتی انجام می‌شود که سفارش هنوز در انتظار پرداخت باشد. اگر سفارش منقضی شده یا با تلاش دیگری پرداخت شده، verify **نمی‌شود**،
           تراکنش `FAILED` می‌شود و درگاه مبلغ را خودش به کارت برمی‌گرداند.
+        * **پرداخت مانده** (تلاش با `purpose = BALANCE`، بعد از درخواست تغییر): verify فقط وقتی انجام می‌شود که `balanceDue` ِ سفارش هنوز **دقیقاً همان مبلغ تلاش** باشد.
+          اگر مانده صفر شده (تلاش دیگری پرداختش کرده) یا عوض شده (اپراتور دوباره تغییر داده) یا سفارش لغو شده، verify نمی‌شود و همان مسیر بالا (`FAILED`) را می‌رود.
         * اگر تلاش دیگری از **همین سفارش** همان لحظه در حال verify است، این تلاش فعلاً verify نمی‌شود و `PENDING` می‌ماند (هیچ‌وقت دو تلاش یک سفارش با هم verify نمی‌شوند).
           سرور بعداً خودش تمامش می‌کند: اگر آن تلاش موفق شد این یکی `FAILED` می‌شود و درگاه مبلغش را برمی‌گرداند، وگرنه همین یکی verify می‌شود.
         * این مسیر هیچ‌وقت JSON یا صفحه‌ی خطا نشان نمی‌دهد و **همیشه** `302` است. تراکنش پیدا نشد (یا پارامترها مال این درگاه نیست، یا درگاهی است که هنوز
@@ -1584,6 +1638,9 @@ paths:
         به‌خاطر حریم خصوصی، شماره موبایل در بدنه‌ی POST ارسال می‌شود نه در URL.
         خروجی نسخه‌ی محدود سفارش است (بدون آدرس و قیمت‌ها؛ حداکثر ۴ عکس پیش‌نمایش).
         موبایل باید موبایل خریدار یا گیرنده باشد. در صورت عدم تطابق، برای جلوگیری از حدس زدن، همان `404 TRACKING_NOT_FOUND` برمی‌گردد.
+        **فقط سفارش پرداخت‌شده** (هر وضعیتی جز `PENDING_PAYMENT`، `PAYMENT_FAILED` و `EXPIRED`). کد بدشکل، سفارش ناموجود یا پرداخت‌نشده و موبایل دیگر
+        همه همان `404 TRACKING_NOT_FOUND` با بدنه‌ی یکسان‌اند؛ فقط موبایل بدشکل `400` روی `phone` است. `orderCode` با ارقام فارسی هم پذیرفته است.
+        سقف: ۱۰ درخواست در ۱۰ دقیقه برای هر IP (`429`).
       requestBody:
         required: true
         content:
@@ -1603,6 +1660,8 @@ paths:
       tags: [Tracking]
       operationId: listDailyShipmentDays
       summary: "تب‌های روزهای اخیر (امروز، دیروز، ...) با تعداد مرسوله‌ی هر روز"
+      description: |
+        روزها از امروز (به وقت تهران) به عقب. `shipmentCount` تعداد **کدهای رهگیری** یکتای آن روز است (سفارش‌های یک گروه رزرو یک کد).
       parameters:
         - name: days
           in: query
@@ -1624,6 +1683,9 @@ paths:
       description: |
         جستجو با ۴ رقم آخر موبایل، حرف اول نام یا نام شهر. نام‌ها و موبایل‌ها **همیشه ماسک‌شده** از سرور می‌آیند
         (`س*** م***`، `09** *** 4821`) و داده‌ی کامل هرگز به این endpoint عمومی نمی‌رسد.
+        **یک ردیف برای هر کد رهگیری** (سفارش‌های یک گروه یک ردیف)، فقط مرسوله‌هایی که `showInDailyList` دارند، و **فقط ۳۰ روز اخیر**
+        (`date` ِ قدیمی‌تر یا آینده یک لیست خالی است). `q`: چهار رقم ← چهار رقم آخر موبایل گیرنده؛ یک حرف ← حرف اول نام گیرنده؛ وگرنه شهر شامل متن.
+        ترتیب: زمان ارسال، تازه‌ترین اول.
       parameters:
         - name: date
           in: query
@@ -2163,7 +2225,12 @@ paths:
         مثل `POST /payments/{paymentId}/retry`، ولی با کد سفارش؛ چون صفحه‌ی سفارش `paymentId` ندارد. همان ترتیب قانون‌ها و همان دو حالت `PAYMENT_GATEWAY_UNAVAILABLE`؛
         `gateway` نیامده = درگاه آخرین تلاش سفارش. کد سفارش کاربر دیگر یا کد بدشکل ← `404 ORDER_NOT_FOUND`.
         فقط وقتی مجاز است که `actions.canPay = true` باشد. یک تراکنش جدید ساخته می‌شود: برای سفارش پرداخت‌نشده به مبلغ `totals.payable`،
-        و برای سفارش پرداخت‌شده‌ای که بعد از درخواست تغییر مانده‌ی پرداخت دارد به مبلغ `totals.balanceDue` (فاز بعد؛ تا آن موقع سفارش پرداخت‌شده `ORDER_ALREADY_PAID` می‌گیرد).
+        و برای سفارش پرداخت‌شده‌ای که بعد از درخواست تغییر مانده‌ی پرداخت دارد به مبلغ `totals.balanceDue` ِ همین لحظه (`purpose = BALANCE`).
+
+        **پرداخت مانده:** فقط وقتی `totals.balanceDue > 0` و سفارش `PROCESSING`، `PHOTO_SENT` یا `CHANGE_REQUESTED` است؛ سفارش پرداخت‌شده بدون مانده
+        `422 ORDER_ALREADY_PAID`. مانده مهلت ندارد (موجودی از ثبت سفارش رزرو شده و سفارش تا پرداخت ارسال نمی‌شود)، پس `PaymentInit.expiresAt` پایان
+        پنجره‌ی همین تلاش روی درگاه است (۲۰ دقیقه بعد)، نه مهلت سفارش. سقف ۱۰ تلاش از تلاش‌های مانده ِ همین سفارش شمرده می‌شود.
+        بعد از تأیید، `balanceDue = 0` و `totals.payable` (پرداخت‌شده) به اندازه‌ی مانده بالا می‌رود؛ وضعیت سفارش عوض نمی‌شود.
         بازگشت از درگاه مثل تسویه است: `https://kiva.ir/checkout/result?paymentId=...`
       security: [{ bearerAuth: [] }]
       parameters:
@@ -2188,12 +2255,12 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
         '422':
-          description: "`ORDER_ALREADY_PAID`، `PAYMENT_EXPIRED` (موجودی آزاد شده) یا `PAYMENT_GATEWAY_UNAVAILABLE`"
+          description: "`ORDER_ALREADY_PAID` (پرداخت‌شده و بدون مانده)، `PAYMENT_EXPIRED` (موجودی آزاد شده) یا `PAYMENT_GATEWAY_UNAVAILABLE`"
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
         '429':
-          description: "`RATE_LIMITED` — این سفارش ۱۰ تلاش پرداخت داشته است (مثل `POST /payments/{paymentId}/retry`)"
+          description: "`RATE_LIMITED` — این سفارش ۱۰ تلاش پرداخت (یا ۱۰ تلاش پرداخت مانده) داشته است (مثل `POST /payments/{paymentId}/retry`)"
           headers:
             Retry-After: { $ref: '#/components/headers/RetryAfter' }
           content:
@@ -2211,6 +2278,9 @@ paths:
       tags: [Orders]
       operationId: listMyOrderMedia
       summary: "عکس‌ها و ویدیوهای قبل از ارسال (برای lightbox)"
+      description: |
+        فقط سفارش خود کاربر (وگرنه `404 ORDER_NOT_FOUND`). `items` آخرین دسته‌ی **فرستاده‌شده** است (پیش‌نویس اپراتور هیچ‌وقت نه)؛
+        قبل از اولین ارسال خالی است و `waitingMessage` دارد. `capturedAt` زمان آپلود همان فایل است.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -2229,9 +2299,29 @@ paths:
       summary: "پاسخ مشتری به عکس قبل از ارسال — «همونه!» یا درخواست تغییر رنگ/مدل [پیشنهادی مبتنی بر FAQ]"
       description: |
         مطابق FAQ: «تا قبل از ارسال، می‌تونی رنگ یا مدل رو عوض کنی یا سفارش رو لغو کنی».
-        `APPROVE` سفارش را برای ارسال آزاد می‌کند (بدون منتظر ماندن برای پایان مهلت پاسخ).
-        `REQUEST_CHANGE` وضعیت را `CHANGE_REQUESTED` می‌کند و اپراتور با مشتری هماهنگ می‌کند و درخواست را اجرا یا رد می‌کند
-        (`POST /admin/orders/{orderCode}/change-request/resolution`)؛ اختلاف قیمت با استرداد یا `totals.balanceDue` تسویه می‌شود (بخش ۴).
+        `APPROVE` سفارش را برای ارسال آزاد می‌کند (بدون منتظر ماندن برای پایان مهلت پاسخ). فقط وقتی عکس فرستاده شده و هنوز جواب نگرفته
+        (`preShipmentMedia.status = SENT`)؛ وگرنه `422 INVALID_STATUS_TRANSITION`. تأیید دوباره‌ی عکسی که تأیید شده `200` و بی‌اثر است.
+
+        `REQUEST_CHANGE` وضعیت را `CHANGE_REQUESTED` (و `preShipmentMedia.status` را `CHANGE_REQUESTED`) می‌کند و اپراتور با مشتری هماهنگ می‌کند
+        و درخواست را اجرا یا رد می‌کند (`POST /admin/orders/{orderCode}/change-request/resolution`)؛ اختلاف قیمت با استرداد یا `totals.balanceDue` تسویه می‌شود (بخش ۴).
+        فقط وقتی سفارش `PHOTO_SENT` است و عکس `SENT` یا `APPROVED` (**بعد از تأیید هم مجاز است**)، و **یک درخواست باز در هر لحظه**؛
+        وگرنه (قبل از عکس، درخواست باز، بعد از ارسال) `422 CHANGE_REQUEST_NOT_ALLOWED`. `actions.canRequestChange` همین را می‌گوید.
+
+        **شکل درخواست** (همه‌ی خطاها با هم، `400` روی همان فیلد):
+
+        | `changeType` | لازم | یعنی |
+        |---|---|---|
+        | `COLOR` | `orderItemId`، `desiredVariantId` | رنگ دیگری از **همان** محصول ِ قلم |
+        | `MODEL` | `orderItemId`، `desiredVariantId` | رنگی از محصول **دیگر** |
+        | `CANCEL_ITEM` | `orderItemId` | حذف قلم (تنها قلم سفارش = لغو کامل سفارش، بعد از تأیید اپراتور) |
+        | `OTHER` | `note` | هر درخواست دیگری؛ اپراتور دستی انجامش می‌دهد |
+
+        کدها: `CHANGE_TYPE_REQUIRED` / `CHANGE_TYPE_INVALID` (روی `changeType`)، `ORDER_ITEM_REQUIRED` (روی `orderItemId`)، `DESIRED_VARIANT_REQUIRED` (روی `desiredVariantId`)،
+        `NOTE_REQUIRED` / `STATUS_NOTE_TOO_LONG` (روی `note`، حداکثر ۵۰۰). فیلدی که برای آن `changeType` معنی ندارد نادیده گرفته می‌شود.
+        بعد از شکل، به این ترتیب: سفارش کاربر دیگر ← `404 ORDER_NOT_FOUND`؛ ورینت ناموجود ← `400 DESIRED_VARIANT_INVALID`؛ ورینت غیرفعال یا محصولش
+        منتشرنشده ← `422 PRODUCT_UNAVAILABLE` (موجودی این‌جا چک نمی‌شود؛ اپراتور موقع اجرا چک می‌کند)؛ وضعیت ← `422 CHANGE_REQUEST_NOT_ALLOWED`؛
+        `orderItemId` ِ ناموجود در سفارش ← `400 ORDER_ITEM_NOT_FOUND`؛ `COLOR` با رنگ محصول دیگر یا همان رنگ فعلی، یا `MODEL` با رنگی از همان محصول ← `400 DESIRED_VARIANT_INVALID`.
+        پاسخ مشتری با همین فیلدها در `preShipmentMediaDetail.feedback` دیده می‌شود.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -2247,7 +2337,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OrderDetail' }
         '422':
-          description: "`CHANGE_REQUEST_NOT_ALLOWED` — سفارش ارسال شده است"
+          description: "`INVALID_STATUS_TRANSITION` — عکسی منتظر جواب نیست؛ `CHANGE_REQUEST_NOT_ALLOWED` — درخواست تغییر الان ممکن نیست؛ `PRODUCT_UNAVAILABLE` — رنگ/مدل خواسته‌شده قابل فروش نیست"
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -2258,7 +2348,14 @@ paths:
     post:
       tags: [Orders]
       operationId: cancelMyOrder
-      summary: "لغو سفارش قبل از ارسال با بازگشت کامل وجه"
+      summary: "لغو سفارش تا وقتی وضعیتش عوض نشده، با ثبت استرداد کامل"
+      description: |
+        مشتری فقط وقتی لغو می‌کند که **وضعیت سفارش هنوز عوض نشده**: `RESERVED` یا `PROCESSING`، و هیچ عکسی برایش فرستاده نشده
+        (حتی اگر بعد از درخواست تغییر دوباره `PROCESSING` شده باشد). وگرنه `422 ORDER_NOT_CANCELLABLE` («وضعیت عوض شده»)؛
+        بعد از عکس، لغو با درخواست تغییر یا پشتیبانی است. سفارش پرداخت‌نشده لغو نمی‌شود (خودش منقضی می‌شود). لغو دوباره هم `422 ORDER_NOT_CANCELLABLE` است.
+        لغو یک استرداد `PENDING` به اندازه‌ی کل پرداخت‌شده می‌سازد (`refund`؛ برای سفارشی که چیزی پرداخت نشده `null`)،
+        موجودی را آزاد و استفاده‌ی کد تخفیف را برمی‌گرداند، و پیامک «لغو شد» می‌فرستد. `note` برای `reason = OTHER` لازم است (`400 NOTE_REQUIRED`).
+        اگر پرداختی همین حالا در حال تأیید است ← `422 PAYMENT_IN_PROGRESS`.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -2274,7 +2371,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/CancelOrderResponse' }
         '422':
-          description: "`ORDER_NOT_CANCELLABLE`"
+          description: "`ORDER_NOT_CANCELLABLE` — وضعیت سفارش عوض شده (یا لغو شده)؛ `PAYMENT_IN_PROGRESS` — پرداختی در حال تأیید است"
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -2379,6 +2476,8 @@ paths:
       tags: [Orders]
       operationId: listMyTrackingCodes
       summary: "کدهای رهگیری من، گروه‌بندی‌شده بر اساس روز ارسال"
+      description: |
+        سفارش‌های ارسال‌شده‌ی خود کاربر (لغوشده نه)، گروه‌بندی‌شده بر اساس روز ارسال به وقت تهران، تازه‌ترین روز اول؛ حداکثر ۵۰ کد.
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -2649,6 +2748,15 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminListProducts
       summary: "لیست محصولات پنل (همه‌ی وضعیت‌ها، موجودی دقیق)"
+      description: |
+        * **`q`** (حداکثر ۱۰۰ نویسه): محصولی که اسم، دسته، اسم رنگ‌های فعال، اسم متریال یا SKU ِ آن شامل متن است، یا SKU ِ خودش یا یکی از رنگ‌هایش
+          با `q` شروع می‌شود (بی‌توجه به حروف بزرگ و کوچک)، یا بارکد یکی از رنگ‌هایش دقیقاً `q` است.
+        * **`totalStock`** = جمع موجودی قابل فروش (`stockOnHand − stockReserved`) رنگ‌های **فعال**. **`variantsCount`** = همه‌ی رنگ‌ها (فعال و غیرفعال).
+          **`lowStockVariants`** = رنگ‌های فعالی که موجودی‌شان بیشتر از صفر و کمتر از `lowStockThreshold` است.
+        * **`stockStatus`**: `OUT_OF_STOCK` = `totalStock = 0`؛ `LOW_STOCK` = `totalStock > 0` و `lowStockVariants > 0`؛ `IN_STOCK` = بقیه.
+        * **`sort`**: `updated` آخرین تغییر (نزولی، پیش‌فرض)، `newest` تاریخ ساخت (نزولی)، `name` اسم (صعودی)، `price_asc`/`price_desc` قیمت رنگ پیش‌فرض،
+          `bestselling` تعداد فروش (نزولی)، `stock_asc` `totalStock` (صعودی). در تساوی، شناسه‌ی بزرگ‌تر اول. ناموجودها اینجا ته لیست نمی‌روند.
+        * `imageUrl` = نسخه‌ی کوچک (`thumbnailUrl`) اولین مدیای رنگ پیش‌فرض، یا `null`.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/SearchQuery'
@@ -2678,6 +2786,13 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminCreateProduct
       summary: "ساخت محصول (می‌توان ورینت‌ها را هم‌زمان فرستاد)"
+      description: |
+        ترتیب بررسی: اول همه‌ی خطاهای شکل با هم (`400` با مسیر هر فیلد، مثل `variants.1.media.0.mediaId` یا `specs.straps.0.lengthCm`)؛
+        رنگ تکراری در خود ورودی `409 COLOR_ALREADY_ON_PRODUCT` روی `variants.i.colorKey`. بعد: slug ِ گرفته‌شده `409 DUPLICATE_SLUG`؛
+        دسته، متریال و رنگ‌های ناموجود `400` روی همان فیلد؛ مدیای ناموجود یا با `purpose` ِ دیگر `400` روی `variants.i.media.j.mediaId`؛
+        SKU ِ گرفته‌شده `409 DUPLICATE_SKU`؛ و `status = ACTIVE` بدون رنگ فعال `422 NO_ACTIVE_VARIANT`.
+        `stockQuantity` ِ هر رنگ موجودی اولیه است و در همان درخواست با دلیل `RESTOCK` در تاریخچه‌ی موجودی ثبت می‌شود.
+        رنگی که `isActive = false` دارد اضافه و همان لحظه غیرفعال می‌شود. `status` پیش‌فرض `DRAFT` است.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -2687,12 +2802,19 @@ paths:
       responses:
         '201':
           description: ساخته شد
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminProduct' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '409':
-          description: slug یا SKU تکراری
+          description: '`DUPLICATE_SLUG`، `DUPLICATE_SKU` یا `COLOR_ALREADY_ON_PRODUCT` (یک رنگ دو بار در `variants`)'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: '`NO_ACTIVE_VARIANT` — `status = ACTIVE` بدون هیچ رنگ فعال'
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -2704,12 +2826,17 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminGetProduct
       summary: "جزئیات محصول در پنل"
+      description: |
+        محصول در **هر** وضعیت (پیش‌نویس و آرشیو هم). نبود یا شناسه‌ای که عدد مثبت نیست ← `404 PRODUCT_NOT_FOUND`.
+        هدر `ETag` همان `etag` ِ بدنه است: `W/"{نسخه}"`، که با هر تغییر محصول یا رنگ‌هایش یک پله بالا می‌رود (تغییر موجودی نه).
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProductId'
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminProduct' }
@@ -2721,6 +2848,15 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminUpdateProduct
       summary: "ویرایش کامل محصول"
+      description: |
+        **`If-Match`** (اختیاری؛ پنل همیشه می‌فرستد): `ETag` ِ نسخه‌ای که فرم از آن پر شده (`W/"12"`، `"12"` و `12` هر سه پذیرفته‌اند؛
+        شکل دیگر ← `400 IF_MATCH_INVALID` روی `If-Match`). اگر با نسخه‌ی فعلی جور نباشد ← `412` با کد `CHANGED_BY_SOMEONE_ELSE`
+        و `meta.currentEtag`، **قبل از** هر قانون دیگری و بدون ذخیره‌ی هیچ‌چیز. `If-Match` ِ نیامده یعنی بدون این بررسی.
+        دو ذخیره در یک لحظه با یک نسخه: یکی ذخیره می‌شود و دیگری `409 CHANGED_BY_SOMEONE_ELSE` می‌گیرد.
+
+        `slug` و `sku` بعد از ساخت عوض نمی‌شوند: مقدار دیگر ← `400 SLUG_IMMUTABLE` / `SKU_IMMUTABLE` (`sku` ِ نیامده یا خالی یعنی همان).
+        `status` و `variants` در این درخواست **نادیده** گرفته می‌شوند: وضعیت با `PATCH …/status` و `DELETE`، رنگ‌ها با endpointهای ورینت.
+        ذخیره‌ی بی‌تغییر `200` است و در لاگ تغییرات ردیفی ندارد. محصول آرشیوشده ← `422 PRODUCT_ARCHIVED`.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProductId'
@@ -2733,13 +2869,23 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminProduct' }
         '412':
-          description: نسخه تغییر کرده (optimistic locking با ETag)
+          description: '`CHANGED_BY_SOMEONE_ELSE` — نسخه‌ی `If-Match` کهنه است (`meta.currentEtag`)؛ هیچ‌چیز ذخیره نشد. صفحه را تازه کنید.'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '409':
-          description: "`CHANGED_BY_SOMEONE_ELSE` — همزمان با این درخواست کس دیگه‌ای محصول را تغییر داد؛ هیچ‌چیز ذخیره نشد. صفحه را تازه کنید. یا `DUPLICATE_SLUG` / `DUPLICATE_SKU`"
+          description: "`CHANGED_BY_SOMEONE_ELSE` — همزمان با این درخواست کس دیگه‌ای محصول را تغییر داد؛ هیچ‌چیز ذخیره نشد. صفحه را تازه کنید."
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: '`PRODUCT_ARCHIVED`'
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -2752,6 +2898,9 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminArchiveProduct
       summary: "آرشیو محصول (حذف نرم؛ سفارش‌های قبلی سالم می‌مانند)"
+      description: |
+        محصولِ از قبل آرشیو هم `204` است (بدون تغییر و بدون ردیف لاگ). سفارش‌های قبلی و رزروهای باز دست نمی‌خورند؛
+        ردیف این محصول در سبدها `purchasable = false` می‌شود.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProductId'
@@ -2766,6 +2915,20 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminSetProductStatus
       summary: "انتشار / پیش‌نویس / آرشیو"
+      description: |
+        | وضعیت فعلی | `status` | `publishAt` | نتیجه |
+        |---|---|---|---|
+        | `DRAFT` | `ACTIVE` | نیامده یا الان/گذشته | منتشر می‌شود (برنامه‌ی قبلی هم پاک). بدون رنگ فعال ← `422 NO_ACTIVE_VARIANT` |
+        | `DRAFT` | `ACTIVE` | آینده | `DRAFT` می‌ماند و برای همان زمان برنامه‌ریزی می‌شود (`AdminProduct.publishAt`). بدون رنگ فعال ← `422 NO_ACTIVE_VARIANT`؛ بیشتر از ۳۶۵ روز بعد ← `400 PUBLISH_AT_TOO_FAR` |
+        | `DRAFT` | `DRAFT` | نیامده | برنامه دارد ← برنامه لغو می‌شود؛ ندارد ← `422 PRODUCT_ALREADY_DRAFT` |
+        | `ACTIVE` | `ACTIVE` | نیامده | `422 PRODUCT_ALREADY_ACTIVE` |
+        | `ACTIVE` | `DRAFT` | نیامده | از انتشار درمی‌آید |
+        | `DRAFT` یا `ACTIVE` | `ARCHIVED` | نیامده | آرشیو می‌شود |
+        | `ARCHIVED` | `DRAFT` یا `ACTIVE` | — | `422 INVALID_STATUS_TRANSITION` (`meta.from`، `meta.to`) |
+        | `ARCHIVED` | `ARCHIVED` | — | `422 PRODUCT_ALREADY_ARCHIVED` |
+        | هر | `DRAFT` یا `ARCHIVED`، یا محصولِ `ACTIVE` | آمده | `400 PUBLISH_AT_NOT_ALLOWED` روی `publishAt` |
+
+        محصول برنامه‌ریزی‌شده در موعد (با دقت یک دقیقه) خودکار منتشر می‌شود؛ اگر تا آن موقع رنگ فعالی نداشته باشد منتشر نمی‌شود و برنامه‌اش پاک می‌شود.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProductId'
@@ -2778,13 +2941,20 @@ paths:
               required: [status]
               properties:
                 status: { $ref: '#/components/schemas/ProductStatus' }
-                publishAt: { type: string, format: date-time, nullable: true, description: انتشار زمان‌بندی‌شده }
+                publishAt: { type: string, format: date-time, nullable: true, description: 'انتشار زمان‌بندی‌شده؛ فقط با `status = ACTIVE` روی محصول پیش‌نویس' }
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminProduct' }
+        '422':
+          description: '`NO_ACTIVE_VARIANT`، `PRODUCT_ALREADY_ACTIVE`، `PRODUCT_ALREADY_DRAFT`، `PRODUCT_ALREADY_ARCHIVED` یا `INVALID_STATUS_TRANSITION`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2795,6 +2965,11 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminCreateVariant
       summary: "افزودن ورینت رنگی"
+      description: |
+        ترتیب: شکل (`400`) ← محصول هست (`404`) ← آرشیو نیست (`422 PRODUCT_ARCHIVED`) ← رنگ در پالت (`400 COLOR_NOT_FOUND` روی `colorKey`)
+        ← رنگ از قبل روی محصول نیست، حتی غیرفعال (`409 COLOR_ALREADY_ON_PRODUCT`) ← SKU گرفته نشده (`409 DUPLICATE_SKU`) ← مدیاها.
+        `stockQuantity` موجودی اولیه است (با دلیل `RESTOCK` در تاریخچه)؛ `isActive = false` یعنی اضافه و همان لحظه غیرفعال.
+        پاسخ `AdminVariant` ِ همین رنگ است و هدر `ETag` نسخه‌ی تازه‌ی **محصول**.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProductId'
@@ -2806,11 +2981,18 @@ paths:
       responses:
         '201':
           description: ساخته شد
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminVariant' }
         '409':
-          description: این رنگ قبلاً برای محصول تعریف شده
+          description: '`COLOR_ALREADY_ON_PRODUCT` (این رنگ قبلاً برای محصول تعریف شده) یا `DUPLICATE_SKU`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: '`PRODUCT_ARCHIVED`'
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -2823,7 +3005,15 @@ paths:
       tags: [Admin · Catalog]
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminUpdateVariant
-      summary: "ویرایش ورینت (قیمت اختصاصی، موجودی، مدیا، وضعیت)"
+      summary: "ویرایش ورینت (قیمت اختصاصی، مدیا، وضعیت)"
+      description: |
+        رنگی که مال همین محصول نیست، نیست، یا شناسه‌اش عدد مثبت نیست ← `404 VARIANT_NOT_FOUND`.
+        `colorKey` و `sku` عوض نمی‌شوند (`400 COLOR_KEY_IMMUTABLE` / `SKU_IMMUTABLE`؛ `sku` ِ نیامده یعنی همان). `stockQuantity` نادیده
+        گرفته می‌شود: موجودی فقط با `POST /admin/inventory/adjustments` عوض می‌شود. `priceOverride: null` یعنی «قیمت خود محصول».
+        `isDefault: false` پیش‌فرض بودن را برنمی‌دارد؛ برای عوض کردنش رنگ دیگری را پیش‌فرض کنید.
+        ترتیب اعمال: فعال کردن، تغییر قیمت/ترتیب/پیش‌فرض/بارکد، گالری، و آخر غیرفعال کردن. پس «رنگ غیرفعال را فعال و پیش‌فرض کن» در یک درخواست کار می‌کند.
+        `isDefault: true` با `isActive: false` ← `422 INACTIVE_VARIANT_CANNOT_BE_DEFAULT`؛ غیرفعال کردن آخرین رنگ فعال محصول منتشرشده ← `422 LAST_ACTIVE_VARIANT`.
+        درخواست بی‌تغییر `200` است و ردیف لاگ ندارد.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProductId'
@@ -2836,9 +3026,16 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminVariant' }
+        '422':
+          description: '`PRODUCT_ARCHIVED`، `INACTIVE_VARIANT_CANNOT_BE_DEFAULT` یا `LAST_ACTIVE_VARIANT`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2848,12 +3045,20 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminDeleteVariant
       summary: "غیرفعال کردن ورینت"
+      description: |
+        رنگ روی محصول می‌ماند (سفارش‌های قبلی به آن اشاره می‌کنند) و فقط از فروشگاه خارج می‌شود. رنگِ از قبل غیرفعال هم `204` است.
+        اگر پیش‌فرض بود، رنگ فعال بعدی (به ترتیب `sortOrder`، بعد شناسه) پیش‌فرض می‌شود.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProductId'
         - $ref: '#/components/parameters/VariantId'
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
+        '422':
+          description: '`LAST_ACTIVE_VARIANT` (آخرین رنگ فعال محصول منتشرشده؛ اول محصول را از انتشار دربیاورید) یا `PRODUCT_ARCHIVED`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -2863,7 +3068,12 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminAdjustInventory
       summary: "ثبت تغییر موجودی (ورود کالا، شمارش انبار، آسیب‌دیده) با لاگ"
-      description: با موجود شدن ورینتی که قبلاً صفر بوده، پیامک «موجود شد» برای مشترکین صف می‌شود.
+      description: |
+        `delta` غیرصفر و حداکثر ±۱۰٬۰۰۰ (`STOCK_DELTA_INVALID`). جهت هر دلیل: `RESTOCK` و `RETURNED` فقط مثبت، `DAMAGED` فقط منفی،
+        `STOCKTAKE` و `MANUAL_CORRECTION` هر دو (`ADJUSTMENT_DIRECTION_INVALID`). `STOCKTAKE` هم یک **تفاوت** است، نه عدد شمارش:
+        پنل خودش تفاوت شمارش با موجودی فعلی را حساب می‌کند. رنگ ناموجود ← `400 VARIANT_NOT_FOUND` روی `variantId`.
+        موجودی بعد از تغییر نباید از رزروشده کمتر شود ← `422 QUANTITY_EXCEEDS_STOCK` با `meta.availableQuantity` (چقدر می‌شود کم کرد).
+        با موجود شدن ورینتی که قبلاً صفر بوده، پیامک «موجود شد» برای مشترکین صف می‌شود.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -2876,6 +3086,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InventoryAdjustment' }
+        '422':
+          description: '`QUANTITY_EXCEEDS_STOCK` (`meta.availableQuantity`)'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2884,10 +3099,13 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminListInventoryAdjustments
       summary: "تاریخچه‌ی تغییرات موجودی"
+      description: |
+        فقط تغییرهای دستی (و موجودی اولیه‌ی ساخت رنگ)، **تازه‌ترین اول**. رزرو، آزادسازی و ارسال سفارش‌ها در این لیست نیستند.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: variantId
           in: query
+          description: 'فقط همین رنگ؛ شناسه‌ای که عدد مثبت نیست ← `400`'
           schema: { type: integer }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
@@ -2912,7 +3130,25 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER, CONTENT_EDITOR, OPERATOR]
       operationId: adminUploadMedia
       summary: "آپلود عکس/ویدیو (محصول، بلاگ، بنر، عکس قبل از ارسال)"
-      description: سرور نسخه‌های بهینه (webp/avif در چند اندازه، poster ویدیو، blurhash) را می‌سازد.
+      description: |
+        **پردازش همگام است؛ پاسخ کامل است**: سرور نسخه‌های بهینه را همین‌جا می‌سازد و `201` با `MediaAsset` ِ کامل برمی‌گرداند.
+        عکس: webp در عرض‌های ۱۶۰، ۴۸۰، ۸۰۰، ۱۲۰۰ و ۱۶۰۰ (فقط عرض‌های کوچک‌تر از عکس اصلی، و همیشه حداقل یکی)، با چرخش از روی EXIF،
+        **همه‌ی metadata (EXIF و GPS) پاک**، و `blurhash`. اصل فایل نگه داشته نمی‌شود. **avif ساخته نمی‌شود.**
+        ویدیو: همان mp4 (H.264) بدون انکود دوباره با metadata ِ پاک، و فریم کاور (`posterUrl`) در عرض‌های ۴۸۰ و ۸۰۰.
+        `url` = بزرگ‌ترین نسخه، `thumbnailUrl` = نسخه‌ی ۱۶۰ (برای ویدیو کاور ۴۸۰)، `srcSet` = همه‌ی نسخه‌ها.
+
+        نوع فایل از روی **محتوا** تشخیص داده می‌شود، نه پسوند یا هدر. اسم فایل کلاینت هیچ‌جا استفاده یا ذخیره نمی‌شود.
+
+        | `purpose` | عکس | ویدیو |
+        |---|---|---|
+        | `PRODUCT`، `BLOG` | jpeg، png، webp؛ حداکثر ۱۵ مگابایت و ۴۰ مگاپیکسل؛ کوتاه‌ترین ضلع حداقل ۳۲۰ | mp4 با H.264؛ حداکثر ۲۰۰ مگابایت و ۱۸۰ ثانیه |
+        | `PRE_SHIPMENT` | همان | mp4 یا mov با H.264؛ حداکثر ۲۰۰ مگابایت و ۱۸۰ ثانیه |
+        | `CATEGORY`، `BANNER`، `TESTIMONIAL` | همان | ممنوع (`415`) |
+
+        SVG، GIF، HEIC و هر نوع دیگری پذیرفته نمی‌شود (`415`). ویدیوی HEVC (پیش‌فرض آیفون) هم `415` با `meta.hint = "H264"` می‌گیرد:
+        دوربین را روی «Most Compatible» بگذارید.
+        مدیایی که تا ۴۸ ساعت به چیزی (رنگ محصول، دسته، ...) وصل نشود خودکار پاک می‌شود؛ مدیای وصل‌شده هیچ‌وقت پاک نمی‌شود.
+        آپلود در لاگ تغییرات ثبت نمی‌شود.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -2922,16 +3158,32 @@ paths:
               type: object
               required: [file, purpose]
               properties:
-                file: { type: string, format: binary }
-                purpose: { type: string, enum: [PRODUCT, PRE_SHIPMENT, BLOG, BANNER, CATEGORY, TESTIMONIAL] }
-                alt: { type: string, maxLength: 200 }
+                file: { type: string, format: binary, description: 'دقیقاً یک فایل؛ بیشتر ← `400 FILE_COUNT_INVALID` روی `file`' }
+                purpose: { type: string, enum: [PRODUCT, PRE_SHIPMENT, BLOG, BANNER, CATEGORY, TESTIMONIAL], description: 'مقدار دیگر ← `400 MEDIA_PURPOSE_INVALID`' }
+                alt: { type: string, maxLength: 200, description: 'خالی = بدون متن جایگزین؛ بیشتر از ۲۰۰ ← `400 MEDIA_ALT_TOO_LONG`' }
       responses:
         '201':
           description: OK
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MediaAsset' }
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '400':
+          description: |
+            `VALIDATION_ERROR`: `file` یا `purpose` نیامده، `purpose` نامعتبر (`MEDIA_PURPOSE_INVALID`)، `alt` بلند،
+            یا ابعاد غلط: `IMAGE_TOO_SMALL` (کوتاه‌ترین ضلع کمتر از ۳۲۰)، `IMAGE_TOO_LARGE` (بیشتر از ۴۰ مگاپیکسل)، `VIDEO_TOO_LONG`.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '413':
+          description: '`UPLOAD_TOO_LARGE` — حجم از سقف همان نوع بیشتر است (`meta.maxBytes`). سرور همان لحظه‌ای که سقف رد شد خواندن را قطع می‌کند.'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '415':
+          description: '`UPLOAD_TYPE_NOT_ALLOWED` — نوع فایل مجاز نیست (`meta.allowed`: فهرست نوع‌های مجاز همین `purpose`؛ `meta.hint = "H264"` برای ویدیوی HEVC)'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /admin/categories:
@@ -2940,6 +3192,10 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminListCategories
       summary: "دسته‌بندی‌ها (همه، با شناسه‌ی مدیای عکس برای فرم)"
+      description: |
+        همه‌ی دسته‌ها به ترتیب `sortOrder`، بعد شناسه. `productCount` ِ پنل محصول‌های **همه‌ی** وضعیت‌هاست (پیش‌نویس و آرشیو هم)،
+        تا معلوم باشد چرا دسته‌ای حذف نمی‌شود؛ `GET /categories` ِ فروشگاه همان «فقط منتشرشده» را می‌شمرد.
+        `imageUrl` نسخه‌ی ۸۰۰ ِ عکس دسته است و `icon.imageUrl` فعلاً همیشه `null`.
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -2956,6 +3212,9 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminCreateCategory
       summary: "ساخت دسته‌بندی"
+      description: |
+        ترتیب: شکل (`400`، همه با هم) ← `iconColorKey` در پالت (`400 COLOR_NOT_FOUND` روی `iconColorKey`) ← `imageMediaId` (فقط مدیای
+        `CATEGORY`؛ ناموجود `400 MEDIA_NOT_FOUND`، `purpose` ِ دیگر `400 MEDIA_PURPOSE_MISMATCH`) ← slug ِ تکراری `409 DUPLICATE_SLUG`.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -2969,6 +3228,11 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AdminCategory' }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '409':
+          description: '`DUPLICATE_SLUG`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /admin/categories/{categoryId}:
@@ -2977,6 +3241,9 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminUpdateCategory
       summary: "ویرایش دسته‌بندی"
+      description: |
+        همان قانون‌های ساخت؛ دسته‌ای که نیست یا شناسه‌ای که عدد مثبت نیست ← `404 NOT_FOUND`. slug عوض می‌شود (لینک‌های قدیمی دیگر کار نمی‌کنند)
+        و تکراری‌اش (به‌جز خود همین دسته) `409 DUPLICATE_SLUG` است. اسم و slug ِ تازه در همان لحظه در جستجو و فیلتر محصولات می‌نشیند.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: categoryId
@@ -2994,6 +3261,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminCategory' }
+        '409':
+          description: '`DUPLICATE_SLUG`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -3025,6 +3297,9 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminCreateColor
       summary: "افزودن رنگ به پالت"
+      description: |
+        `hex` با حروف بزرگ ذخیره می‌شود؛ `isLight` پیش‌فرض `false`، `sortOrder` پیش‌فرض بعد از آخرین رنگ. کلید تکراری ← `409 DUPLICATE_CODE` روی `key`.
+        پالت کامل همیشه در `GET /colors` است.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -3037,6 +3312,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Color' }
+        '409':
+          description: '`DUPLICATE_CODE` — رنگی با این کلید هست'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -3046,6 +3326,9 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminUpdateColor
       summary: "ویرایش رنگ"
+      description: |
+        کلید رنگ عوض نمی‌شود: `key` ِ بدنه باید همان کلید مسیر باشد، وگرنه `400 COLOR_KEY_IMMUTABLE` روی `key`.
+        اسم تازه در همان لحظه در جستجوی محصولات می‌نشیند.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: colorKey
@@ -3073,7 +3356,7 @@ paths:
       operationId: adminDeleteColor
       summary: "حذف رنگ از پالت (فقط اگر هیچ‌جا استفاده نشده باشد)"
       description: |
-        رنگی که روی ورینتی از هر محصولی هست (فعال یا غیرفعال، در هر وضعیت محصول) یا پیام رضایتی به آن اشاره می‌کند حذف نمی‌شود.
+        رنگی که روی ورینتی از هر محصولی هست (فعال یا غیرفعال، در هر وضعیت محصول)، آیکن دسته‌ای است، یا پیام رضایتی به آن اشاره می‌کند حذف نمی‌شود.
         برای کنار گذاشتن چنین رنگی، ورینت‌هایش را غیرفعال کنید.
       security: [{ bearerAuth: [] }]
       parameters:
@@ -3084,7 +3367,7 @@ paths:
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '409':
-          description: "`IN_USE` — رنگ استفاده شده است؛ `meta.productCount`"
+          description: "`IN_USE` — رنگ استفاده شده است؛ `meta.productCount` (ورینت‌ها)، `meta.categoryCount` (آیکن دسته‌ها)، `meta.testimonialCount`"
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -3097,6 +3380,7 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminListMaterials
       summary: "متریال‌ها (همه، با تعداد محصول)"
+      description: '`productCount` ِ پنل محصول‌های **همه‌ی** وضعیت‌هاست؛ `GET /materials` ِ فروشگاه همان «فقط منتشرشده» را می‌شمرد.'
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -3125,7 +3409,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Material' }
-
+        '409':
+          description: '`DUPLICATE_SLUG`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -3135,7 +3423,9 @@ paths:
       x-roles: [ADMIN, CATALOG_MANAGER]
       operationId: adminUpdateMaterial
       summary: "ویرایش متریال"
-      description: نام و توضیح تازه در متن جستجوی محصولات همین متریال هم می‌نشیند.
+      description: |
+        اسم تازه در همان لحظه در متن جستجوی محصولات همین متریال می‌نشیند (توضیح متریال در جستجو نیست).
+        slug عوض می‌شود و تکراری‌اش (به‌جز خود همین متریال) `409 DUPLICATE_SLUG` است. متریالی که نیست ← `404 NOT_FOUND`.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: materialId
@@ -3228,6 +3518,16 @@ paths:
       x-roles: [ADMIN, OPERATOR]
       operationId: adminListOrders
       summary: "صف سفارش‌ها (فیلتر وضعیت، رزرو، روش ارسال، بازه‌ی تاریخ، جستجو با کد/موبایل/نام)"
+      description: |
+        * بدون `status`، سفارش‌های پرداخت‌نشده و منقضی (`PENDING_PAYMENT`، `PAYMENT_FAILED`، `EXPIRED`) نمی‌آیند؛ با `status` همان وضعیت‌ها (مقدار ناشناخته ← `400`).
+        * **`q`** (حداکثر ۱۰۰ نویسه، ارقام فارسی هم): به شکل کد سفارش (`KV-…` یا فقط ۴ تا ۸ رقم) ← همان کد؛ به شکل موبایل ← موبایل حساب یا گیرنده (دقیق)؛
+          وگرنه اسم حساب، اسم یا موبایل گیرنده، کد یا شهر شامل متن.
+        * **`reserved = true`**: سفارش عضو یک گروه رزرو است (هنوز `RESERVED` یا آزادشده). **`awaitingPhotos = true`**: `PROCESSING` و عکس در وضعیت `WAITING`
+          (پیش‌نویس داشته باشد یا نه؛ سفارشی که بعد از درخواست تغییر دوباره عکس لازم دارد هم).
+        * **`refundStatus`**: سفارش‌هایی که استردادی در این وضعیت دارند (صف استرداد دستی).
+        * **`from`/`to`**: روز تهران، شامل هر دو، روی زمان ثبت.
+        * **`statusCounts`**: هر ۱۳ وضعیت (صفر هم)، با همه‌ی فیلترها **جز** `status`، تا شمارنده‌ی تب‌ها با انتخاب یک تب عوض نشود.
+        * `customerName` اسم حساب، وگرنه اسم گیرنده؛ `customerPhone` موبایل حساب؛ `mediaCount` تعداد دسته‌ی آخر فرستاده‌شده، وگرنه پیش‌نویس.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: status
@@ -3239,7 +3539,7 @@ paths:
             items: { $ref: '#/components/schemas/OrderStatus' }
         - name: q
           in: query
-          schema: { type: string }
+          schema: { type: string, maxLength: 100 }
         - name: shippingMethod
           in: query
           schema: { $ref: '#/components/schemas/ShippingMethodCode' }
@@ -3248,14 +3548,22 @@ paths:
           schema: { type: boolean }
         - name: awaitingPhotos
           in: query
-          description: سفارش‌هایی که باید عکاسی شوند (PROCESSING بدون مدیا)
+          description: سفارش‌هایی که باید عکاسی شوند (`PROCESSING` با عکس در وضعیت `WAITING`)
           schema: { type: boolean }
+        - name: refundStatus
+          in: query
+          description: سفارش‌هایی که استردادی در این وضعیت دارند
+          schema: { type: string, enum: [PENDING, PROCESSING] }
         - name: from
           in: query
           schema: { type: string, format: date }
         - name: to
           in: query
           schema: { type: string, format: date }
+        - name: sort
+          in: query
+          description: '`newest` (پیش‌فرض) یا `oldest` (برای کار کردن صف به ترتیب ثبت)'
+          schema: { type: string, enum: [newest, oldest], default: newest }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
       responses:
@@ -3273,6 +3581,10 @@ paths:
       x-roles: [ADMIN, OPERATOR]
       operationId: adminGetOrder
       summary: "جزئیات سفارش در پنل (+ مشتری، پرداخت‌ها، گروه ارسال رزرو، یادداشت‌های داخلی)"
+      description: |
+        همه‌ی `OrderDetail` به‌علاوه‌ی مشتری، گروه ارسال (کد سفارش‌های لغونشده‌ی گروه به ترتیب پرداخت)، **همه‌ی** تلاش‌های پرداخت (قدیمی‌ترین اول)،
+        استردادها، یادداشت‌های داخلی (قدیمی‌ترین اول) و `allowedTransitions`. پیش‌نویس عکس‌ها فقط این‌جا (`draftItems`) دیده می‌شود.
+        کد ناموجود یا بدشکل ← `404 ORDER_NOT_FOUND`.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -3294,7 +3606,12 @@ paths:
       description: |
         فقط به وضعیت‌های `allowedTransitions` همان سفارش. وضعیت‌هایی که endpoint خودشان را دارند این‌جا پذیرفته نمی‌شوند:
         `PHOTO_SENT` (`…/pre-shipment-media/send`)، `SHIPPED` (`…/shipment`)، خروج از `CHANGE_REQUESTED` به‌جز لغو (`…/change-request/resolution`)،
-        و وضعیت‌های مرجوعی (`/admin/returns/*`).
+        و وضعیت‌های مرجوعی (`/admin/returns/*`). انتقال نامجاز ← `422 INVALID_STATUS_TRANSITION` با `meta.from`، `meta.to` و `meta.allowed`.
+
+        * **`CANCELLED`** (از `RESERVED`، `PROCESSING`، `PHOTO_SENT`، `CHANGE_REQUESTED`): موجودی آزاد، استفاده‌ی کد تخفیف برگشت، و **یک استرداد `PENDING`
+          به اندازه‌ی کل مبلغ پرداخت‌شده منهای استردادهای قبلی** (روش `BANK_TRANSFER`) ساخته می‌شود. پرداختی در حال تأیید ← `422 PAYMENT_IN_PROGRESS`.
+        * **`DELIVERED`** (از `SHIPPED`): لحظه‌ی تحویل همین لحظه است و `returnableUntil` ِ ردیف‌های قابل مرجوعی همین حالا ثابت می‌شود.
+        * `note` در تایم‌لاین مشتری به‌عنوان `note` ِ همان ردیف **دیده می‌شود**. با `notifyCustomer` پیامک «لغو شد» یا «تحویل شد» می‌رود.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -3324,6 +3641,12 @@ paths:
       x-roles: [ADMIN, OPERATOR]
       operationId: adminSetPreShipmentMedia
       summary: "اتصال عکس‌ها/ویدیوهای آپلودشده به سفارش (به ازای هر قلم کالا)"
+      description: |
+        **پیش‌نویس** را کامل جایگزین می‌کند؛ مشتری پیش‌نویس را نمی‌بیند تا ارسال ثبت شود. فقط در `PROCESSING` با عکس `WAITING`
+        (وگرنه `422 INVALID_STATUS_TRANSITION`). ۱ تا ۲۰ مورد، فقط مدیای آپلودشده با `purpose = PRE_SHIPMENT`
+        (`400 MEDIA_NOT_FOUND` / `MEDIA_PURPOSE_MISMATCH` روی `items.i.mediaId`؛ تکراری `MEDIA_DUPLICATE`)؛ `orderItemId` باید ردیفی از همین سفارش باشد
+        (`400 ORDER_ITEM_NOT_FOUND` روی `items.i.orderItemId`). `sortOrder` ِ نیامده = ترتیب آرایه.
+        پاسخ نمای پنل است: `items` همین پیش‌نویس است.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -3338,6 +3661,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PreShipmentMedia' }
+        '422':
+          description: "`INVALID_STATUS_TRANSITION` — سفارش در مرحله‌ی عکس (`PROCESSING` با عکس `WAITING`) نیست"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -3349,8 +3677,12 @@ paths:
       operationId: adminSendPreShipmentMedia
       summary: "ارسال عکس‌ها به پیام‌رسان مشتری و تغییر وضعیت به PHOTO_SENT"
       description: |
-        اگر بات/API پیام‌رسان در دسترس باشد ارسال خودکار است؛ در غیر این صورت اپراتور دستی می‌فرستد و `manual=true` ثبت می‌کند.
-        بعد از ارسال، پیامک «عکس کیفت فرستاده شد» هم ارسال می‌شود.
+        **ارسال همیشه دستی است:** اپراتور عکس‌ها را خودش در پیام‌رسان مشتری می‌فرستد و این‌جا ثبت می‌کند؛ بات پیام‌رسان نداریم.
+        `manual` پیش‌فرض `true` است و `false` ← `400 MANUAL_ONLY`. `channelOverride` کانالی است که واقعاً استفاده شده (پیش‌فرض: کانال سفارش).
+        `message` فقط ثبت می‌شود و سرور آن را به کسی تحویل نمی‌دهد.
+        پیش‌نویس «فرستاده» می‌شود: سفارش `PHOTO_SENT`، عکس `SENT`، و `feedbackDeadline` = همین لحظه + ۲۴ ساعت. فقط در `PROCESSING` با عکس `WAITING` و پیش‌نویس ناخالی
+        (`422 INVALID_STATUS_TRANSITION`)؛ سفارش چندردیفه برای هر ردیف حداقل یک عکس با `orderItemId` ِ همان ردیف لازم دارد (`422 PHOTOS_INCOMPLETE` با `meta.missingItemIds`).
+        بعد از ثبت، پیامک «عکس کیفت فرستاده شد» به موبایل حساب خریدار می‌رود.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -3360,15 +3692,20 @@ paths:
             schema:
               type: object
               properties:
-                manual: { type: boolean, default: false }
+                manual: { type: boolean, default: true, description: 'همیشه `true`؛ `false` ← `400 MANUAL_ONLY`' }
                 channelOverride: { $ref: '#/components/schemas/PhotoMessengerChannel' }
-                message: { type: string, maxLength: 500, example: 'این کیف خودته؛ همین الان برات کنار گذاشتیمش.' }
+                message: { type: string, maxLength: 500, description: فقط ثبت می‌شود, example: 'این کیف خودته؛ همین الان برات کنار گذاشتیمش.' }
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminOrder' }
+        '422':
+          description: "`INVALID_STATUS_TRANSITION` یا `PHOTOS_INCOMPLETE` (`meta.missingItemIds`)"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -3388,13 +3725,27 @@ paths:
         |---|---|---|
         | `REJECT` | هر کدام | همان کالا ارسال می‌شود. `note` (دلیل، برای مشتری) لازم است. |
         | `APPLY` | `COLOR`، `MODEL` | قلم `orderItemId` به `variantId` (پیش‌فرض: `desiredVariantId`) عوض می‌شود: رزرو انبار ورینت قبلی آزاد و ورینت تازه رزرو می‌شود. نام، SKU و قیمت قلم از ورینت تازه با قیمت **امروزش** است. |
-        | `APPLY` | `CANCEL_ITEM` | قلم حذف و رزروش آزاد می‌شود و سهم پرداخت‌شده‌ی آن استرداد می‌شود. اگر تنها قلم سفارش بود، سفارش `CANCELLED` با استرداد کامل. |
+        | `APPLY` | `CANCEL_ITEM` | قلم حذف و رزروش آزاد می‌شود و سهم پرداخت‌شده‌ی آن استرداد می‌شود. **اگر تنها قلم سفارش بود، سفارش `CANCELLED` می‌شود، دقیقاً مثل لغو پنل** (`POST …/status` با `CANCELLED`: موجودی آزاد، استفاده‌ی کد تخفیف برگشت، استرداد کامل ِ مانده‌ی پرداخت‌شده). |
         | `APPLY` | `OTHER` | کار دستی انجام شده؛ فقط وضعیت برمی‌گردد. `note` لازم است. |
 
-        **اختلاف قیمت** = (قیمت ورینت تازه − قیمت پرداخت‌شده‌ی قلم) × تعداد. منفی ← یک `Refund` با وضعیت `PENDING` خودکار ساخته می‌شود.
-        مثبت ← `totals.balanceDue` و `actions.canPay`؛ مشتری با `POST /me/orders/{orderCode}/payments` می‌پردازد و تا آن موقع ارسال ممکن نیست.
+        شماره‌ی قلم (`orderItemId`) هیچ‌وقت عوض نمی‌شود (عکس‌ها و مرجوعی به آن اشاره می‌کنند)؛ قلم حذف‌شده از `items` بیرون می‌رود و شماره‌اش دوباره استفاده نمی‌شود.
+
+        **اختلاف قیمت** = (قیمت امروز ِ ورینت تازه − قیمت پرداخت‌شده‌ی قلم) × تعداد، و همان لحظه ثابت می‌شود.
+        مثبت ← به `totals.balanceDue` اضافه می‌شود و `actions.canPay = true`؛ مشتری با `POST /me/orders/{orderCode}/payments` می‌پردازد و تا آن موقع ارسال ممکن نیست.
+        منفی ← **اول از `balanceDue` ِ موجود کم می‌شود**، و فقط باقیش یک `Refund` با وضعیت `PENDING` (`BANK_TRANSFER`) می‌شود.
         هزینه‌ی ارسال و کد تخفیف سفارش دوباره حساب نمی‌شوند.
-        با `notifyCustomer` نتیجه (و `note`) برای مشتری پیامک می‌شود.
+
+        **سهم پرداخت‌شده‌ی قلم حذف‌شده** = `lineTotal − floor(lineTotal × codeDiscount ÷ subtotal)` (کد تخفیف و `subtotal` ِ موقع ثبت سفارش؛ هزینه‌ی ارسال برنمی‌گردد،
+        و گرد کردن رو به پایین یعنی هیچ‌وقت بیشتر از پرداخت‌شده برنمی‌گردد). این سهم هم مثل اختلاف منفی اول از `balanceDue` کم می‌شود.
+
+        **ترتیب قانون‌ها:** شکل (`400`: `decision` لازم، `RESOLUTION_DECISION_INVALID`؛ `note` حداکثر ۵۰۰ (`STATUS_NOTE_TOO_LONG`)؛ `REJECT` بدون `note` ← `NOTE_REQUIRED`؛ `variantId` با `REJECT` ← `VARIANT_NOT_ALLOWED`)
+        ← سفارش ← `404` ← پرداخت مانده‌ای در حال تأیید ← `422 PAYMENT_IN_PROGRESS` ← سفارش `CHANGE_REQUESTED` نیست ← `422 INVALID_STATUS_TRANSITION`
+        ← `APPLY` با `OTHER` بدون `note` ← `400 NOTE_REQUIRED`؛ `variantId` با `CANCEL_ITEM`/`OTHER` ← `400 VARIANT_NOT_ALLOWED`
+        ← `COLOR`/`MODEL`: ورینت ناموجود یا نامتناسب با نوع تغییر ← `400 DESIRED_VARIANT_INVALID` روی `variantId`؛ غیرفعال یا محصولش منتشرنشده ← `422 PRODUCT_UNAVAILABLE`؛
+        موجودی کم ← `422 QUANTITY_EXCEEDS_STOCK` (`meta.availableQuantity`)؛ بیش از سقف هر سفارش ِ محصول ← `422 QUANTITY_EXCEEDS_LIMIT`. با هر خطا **هیچ‌چیز** عوض نمی‌شود.
+
+        با `notifyCustomer` (پیش‌فرض) پیامک «درخواستت بررسی شد؛ جزئیات تو صفحه‌ی سفارش» می‌رود، **بدون `note`** (متن آزاد پیامک نداریم)؛
+        `note` در `feedback.resolution.note` و تایم‌لاین سفارش دیده می‌شود. برای `CANCEL_ITEM` ِ تنها قلم پیامک «لغو شد» می‌رود.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -3410,7 +3761,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AdminOrder' }
         '422':
-          description: "`INVALID_STATUS_TRANSITION` (سفارش `CHANGE_REQUESTED` نیست)، `QUANTITY_EXCEEDS_STOCK` (`meta.availableQuantity`) یا `PRODUCT_UNAVAILABLE` (ورینت تازه فعال یا قابل فروش نیست)"
+          description: "`INVALID_STATUS_TRANSITION` (سفارش `CHANGE_REQUESTED` نیست)، `PAYMENT_IN_PROGRESS` (پرداخت مانده در حال تأیید)، `QUANTITY_EXCEEDS_STOCK` (`meta.availableQuantity`)، `QUANTITY_EXCEEDS_LIMIT` یا `PRODUCT_UNAVAILABLE` (ورینت تازه فعال یا قابل فروش نیست)"
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -3425,8 +3776,18 @@ paths:
       operationId: adminSetShipment
       summary: "ثبت تحویل به حامل و کد رهگیری (وضعیت SHIPPED + پیامک)"
       description: |
-        برای سفارش‌های یک گروه رزرو، همین کد روی همه‌ی سفارش‌های گروه ثبت می‌شود.
+        فقط از `PHOTO_SENT`، و فقط وقتی مشتری عکس را تأیید کرده یا مهلت پاسخش (`feedbackDeadline`) گذشته
+        (`422 AWAITING_CUSTOMER_FEEDBACK` با `meta.feedbackDeadline`). `carrier` باید همان روش ارسال سفارش باشد (`400 CARRIER_MISMATCH`).
+        `trackingCode`: ۶ تا ۴۰ نویسه از `[0-9A-Za-z-]` (به حروف بزرگ ذخیره می‌شود؛ وگرنه `400 TRACKING_CODE_INVALID`).
+        `shippedAt` (پیش‌فرض الان) نه در آینده، نه بیشتر از ۷ روز پیش، نه قبل از ارسال عکس (`400 SHIPPED_AT_INVALID`).
+
+        **گروه رزرو:** یک درخواست **همه‌ی** سفارش‌های لغونشده‌ی گروه را با همین کد ارسال می‌کند. اگر حتی یکی آماده نیست (عکس تأییدنشده،
+        مانده‌ی پرداخت، درخواست تغییر باز) ← `422 GROUP_NOT_READY` با `meta.orderCodes` و هیچ‌کدام ارسال نمی‌شوند. گروهی که هنوز در مهلت رزرو است
+        ← `422 INVALID_STATUS_TRANSITION`. سفارش لغوشده‌ی گروه ارسال نمی‌شود و مانع هم نیست.
         سفارشی که مانده‌ی پرداخت دارد (`totals.balanceDue > 0`، بعد از درخواست تغییر به رنگ/مدل گران‌تر) ارسال نمی‌شود.
+
+        **روی سفارش `SHIPPED` = اصلاح:** فقط کد، `shippedAt` و `showInDailyList` عوض می‌شوند (برای گروه روی همه‌ی سفارش‌های ارسال‌شده‌ی آن)،
+        بدون پیامک. روی `DELIVERED` ← `422 INVALID_STATUS_TRANSITION`. بعد از ارسال (نه اصلاح) پیامک «ارسال شد» با کد رهگیری و اسم حامل می‌رود.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -3442,7 +3803,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AdminOrder' }
         '422':
-          description: "`BALANCE_DUE` (`meta.balanceDue`) یا `INVALID_STATUS_TRANSITION`"
+          description: "`AWAITING_CUSTOMER_FEEDBACK` (`meta.feedbackDeadline`)، `GROUP_NOT_READY` (`meta.orderCodes`)، `BALANCE_DUE` (`meta.balanceDue`) یا `INVALID_STATUS_TRANSITION`"
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -3456,6 +3817,9 @@ paths:
       x-roles: [ADMIN, OPERATOR]
       operationId: adminAddOrderNote
       summary: "یادداشت داخلی روی سفارش"
+      description: |
+        فقط پنل می‌بیند؛ ویرایش و حذف ندارد. `text` بعد از حذف فاصله‌های دو طرف ۱ تا ۱۰۰۰ نویسه (`400 NOTE_REQUIRED` / `NOTE_TOO_LONG`).
+        `author` اسم نمایشی اپراتور است. در لاگ تغییرات فقط ثبت یادداشت می‌آید، نه متنش.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -3485,9 +3849,13 @@ paths:
       operationId: adminCreateRefund
       summary: "ثبت استرداد وجه (کامل یا جزئی)"
       description: |
-        استرداد با وضعیت `PENDING` ساخته می‌شود و با `PATCH /admin/refunds/{refundId}` پیش می‌رود.
-        جمع استردادهای غیر `FAILED` یک سفارش از مبلغ پرداخت‌شده‌اش بیشتر نمی‌شود (`400`، فیلد `amount`).
+        استرداد **دستی** است: سرور فقط ثبتش می‌کند و هیچ تماس بانکی یا درگاهی برای برگرداندن پول نمی‌گیرد.
+        استرداد با وضعیت `PENDING` ساخته می‌شود (`expectedBy` = زمان ثبت + ۷۲ ساعت) و با `PATCH /admin/refunds/{refundId}` پیش می‌رود.
+        جمع استردادهای غیر `FAILED` یک سفارش از مبلغ پرداخت‌شده‌اش بیشتر نمی‌شود (`400 REFUND_EXCEEDS_PAID` روی `amount` با `meta.refundable`).
+        `reason` اجباری است (`400 REFUND_REASON_REQUIRED`). `method` پیش‌فرض `ORIGINAL_PAYMENT` (برگشت به همان کارت با کارت‌به‌کارت دستی)؛
+        `BANK_TRANSFER` به شبایی که تلفنی گرفته شده.
         با `returnId`، مرجوعی باید `RECEIVED` باشد و مال همین سفارش؛ وقتی این استرداد `COMPLETED` شود مرجوعی `REFUNDED` می‌شود.
+        تا ساخته شدن مرجوعی، هر `returnId` ← `400 RETURN_NOT_FOUND` روی `returnId`.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/OrderCode'
@@ -3520,9 +3888,11 @@ paths:
       description: |
         انتقال‌های مجاز: `PENDING → PROCESSING`، `PENDING|PROCESSING → COMPLETED`، `PENDING|PROCESSING → FAILED`. `COMPLETED` و `FAILED` پایانی‌اند؛
         برای استرداد ناموفق یک استرداد تازه ثبت کنید.
-        `COMPLETED`: `completedAt` همین لحظه است و برای `ORIGINAL_PAYMENT` و `BANK_TRANSFER` فیلد `referenceId` لازم است.
-        مبلغ به `totals.refunded` سفارش اضافه می‌شود، اگر به مرجوعی وصل است آن مرجوعی `REFUNDED` می‌شود، و به مشتری پیامک می‌رود.
-        `note` به‌عنوان `statusNote` برای مشتری هم دیده می‌شود (مثلاً «شماره شبا اشتباه بود؛ با پشتیبانی تماس بگیر»).
+        `COMPLETED`: `completedAt` همین لحظه است و `referenceId` (شماره‌ی پیگیری انتقال بانکی، تا ۶۴ نویسه از `[0-9A-Za-z-]`)
+        **برای `COMPLETED` همیشه لازم است** (`400 REFERENCE_ID_REQUIRED`).
+        مبلغ به `totals.refunded` سفارش اضافه می‌شود (و یک ردیف در تایم‌لاین)، اگر به مرجوعی وصل است آن مرجوعی `REFUNDED` می‌شود، و به مشتری پیامک می‌رود.
+        `note` به‌عنوان `statusNote` برای مشتری هم دیده می‌شود (مثلاً «شماره شبا تأیید نشد؛ دوباره باهات تماس می‌گیریم»).
+        استرداد ناموجود یا شناسه‌ای که عدد مثبت نیست ← `404 REFUND_NOT_FOUND`.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: refundId
@@ -3724,10 +4094,14 @@ paths:
       x-roles: [ADMIN]
       operationId: adminListDiscountCodes
       summary: "کدهای تخفیف"
+      description: |
+        تازه‌ترین ساخته‌شده اول. `active` یعنی پرچم `isActive` (نه «الان در بازه‌ی زمانی‌اش است»)؛ نیامده = همه.
+        `usedCount` و `totalDiscountGiven` از سفارش‌های پرداخت‌شده‌ی برنگشته‌اند (سفارش لغوشده شمرده نمی‌شود).
       security: [{ bearerAuth: [] }]
       parameters:
         - name: active
           in: query
+          description: '`true` فقط فعال‌ها، `false` فقط غیرفعال‌ها؛ مقدار دیگر ← `400 BOOLEAN_INVALID`'
           schema: { type: boolean }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
@@ -3751,6 +4125,7 @@ paths:
       x-roles: [ADMIN]
       operationId: adminCreateDiscountCode
       summary: "ساخت کد تخفیف"
+      description: 'قانون‌ها در `DiscountCodeUpsertRequest`. ترتیب: شکل (همه با هم) ← دسته‌ها و محصولات هستند (`400`) ← متن تکراری (`409 DUPLICATE_CODE`). یک ردیف `DISCOUNT_CODE_CREATED` در لاگ تغییرات.'
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -3766,12 +4141,21 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: "`DUPLICATE_CODE`: کد دیگری همین متن را دارد"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
   /admin/discount-codes/{discountId}:
     put:
       tags: [Admin · Marketing]
       x-roles: [ADMIN]
       operationId: adminUpdateDiscountCode
       summary: "ویرایش کد تخفیف"
+      description: |
+        کل کد را جایگزین می‌کند (فیلد نیامده = پیش‌فرضش). ترتیب: شکل (همه با هم) ← کد هست (`404`؛ شناسه‌ی بدشکل هم `404`) ← دسته‌ها و محصولات هستند (`400`)
+        ← متن تکراری به‌جز خودش (`409 DUPLICATE_CODE`). دو ذخیره‌ی همزمان ← دومی `409 CHANGED_BY_SOMEONE_ELSE`.
+        ذخیره‌ی بی‌تغییر ردیفی در لاگ تغییرات نمی‌گذارد؛ بقیه یک ردیف `DISCOUNT_CODE_UPDATED` با فیلدهای عوض‌شده.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: discountId
@@ -3793,11 +4177,19 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: "`DUPLICATE_CODE` (کد دیگری همین متن را دارد) یا `CHANGED_BY_SOMEONE_ELSE` (ذخیره‌ی همزمان)"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
     delete:
       tags: [Admin · Marketing]
       x-roles: [ADMIN]
       operationId: adminDeleteDiscountCode
       summary: "غیرفعال کردن کد تخفیف"
+      description: |
+        هیچ‌وقت حذف واقعی نیست (سفارش‌ها به کد اشاره می‌کنند): `isActive = false` و `204`، با یک ردیف `DISCOUNT_CODE_DEACTIVATED` در لاگ تغییرات.
+        کد از قبل غیرفعال هم `204` و بی‌اثر است (بدون ردیف). کد ناموجود یا شناسه‌ی بدشکل ← `404`.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: discountId
@@ -3997,7 +4389,9 @@ paths:
       summary: "پیام‌های نوار اطلاعیه‌ی بالای سایت (جایگزینی کل لیست مرتب)"
       description: |
         پیامی که در لیست نباشد حذف می‌شود؛ پس لیست را از `GET /admin/announcements` بخوانید، نه از `GET /config`.
-        پیام با `id` همان پیام قبلی است و بی `id` پیام تازه.
+        پیام با `id` همان پیام قبلی است و بی `id` پیام تازه. ترتیب = ترتیب آرایه. حداکثر ۱۰ پیام (`400 TOO_MANY_ITEMS` روی
+        فیلد `announcements`، با `meta.maxItems`). قانون‌های هر پیام در `AnnouncementInput`؛ همه‌ی مشکل‌ها با هم و با مسیر (`1.url`). هر ذخیره‌ی
+        تغییردهنده یک ردیف `ANNOUNCEMENTS_SAVED` در لاگ تغییرات.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -4005,7 +4399,8 @@ paths:
           application/json:
             schema:
               type: array
-              items: { $ref: '#/components/schemas/Announcement' }
+              maxItems: 10
+              items: { $ref: '#/components/schemas/AnnouncementInput' }
       responses:
         '200':
           description: OK
@@ -4237,6 +4632,11 @@ paths:
       x-roles: [ADMIN, CONTENT_EDITOR]
       operationId: adminReplaceFaq
       summary: "ذخیره‌ی کامل گروه‌ها و سوالات متداول (با ترتیب)"
+      description: |
+        **کل درخت** را جایگزین می‌کند: گروه یا سؤالی که در بدنه نیست حذف می‌شود، پس فرم را از `GET /admin/faq/groups` پر کنید.
+        ترتیب = ترتیب آرایه‌ها. حداکثر ۲۰ گروه (`400 FAQ_TOO_MANY` روی فیلد `groups`، با `meta.maxItems`). قانون‌های هر گروه و سؤال در `FaqGroupInput`
+        و `FaqItemInput`؛ همه‌ی مشکل‌ها با هم و با مسیر (`2.questions.0.answer`). جواب‌ها پاک‌سازی می‌شوند. پاسخ کل درخت ذخیره‌شده است؛
+        هر ذخیره‌ی تغییردهنده یک ردیف `FAQ_SAVED` در لاگ تغییرات.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -4244,7 +4644,8 @@ paths:
           application/json:
             schema:
               type: array
-              items: { $ref: '#/components/schemas/FaqGroup' }
+              maxItems: 20
+              items: { $ref: '#/components/schemas/FaqGroupInput' }
       responses:
         '200':
           description: OK
@@ -4262,6 +4663,7 @@ paths:
       x-roles: [ADMIN, CONTENT_EDITOR]
       operationId: adminListPages
       summary: "همه‌ی صفحه‌های ثابت (بدون محتوا؛ محتوای هر صفحه از `GET /pages/{slug}`)"
+      description: به ترتیب `slug`. بدون کش.
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -4279,6 +4681,10 @@ paths:
       x-roles: [ADMIN, CONTENT_EDITOR]
       operationId: adminUpsertPage
       summary: "ساخت/ویرایش صفحه‌ی ثابت"
+      description: |
+        صفحه‌ی نبوده را می‌سازد و بوده را ویرایش می‌کند؛ هر دو `200` با صفحه‌ی ذخیره‌شده (همان `GET /pages/{slug}`).
+        `slug` ِ مسیر با الگوی slug (`400 SLUG_INVALID` روی `slug`). قانون‌های بدنه در `StaticPageUpsertRequest`؛ `content`
+        پاک‌سازی می‌شود. حذف ندارد. هر ذخیره‌ی تغییردهنده یک ردیف `PAGE_SAVED` در لاگ تغییرات (بدون متن صفحه).
       security: [{ bearerAuth: [] }]
       parameters:
         - name: slug
@@ -4289,7 +4695,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/StaticPage' }
+            schema: { $ref: '#/components/schemas/StaticPageUpsertRequest' }
       responses:
         '200':
           description: OK
@@ -4299,13 +4705,13 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
   /admin/settings:
     get:
       tags: [Admin · Content]
       x-roles: [ADMIN]
       operationId: adminGetSettings
       summary: "تنظیمات قابل ویرایش (هزینه‌ی ارسال، آستانه‌ی ارسال رایگان، روزهای رزرو و بازگشت، پشتیبانی، ...)"
+      description: همیشه کل سند با همه‌ی فیلدها (همان چیزی که `PUT` می‌گیرد؛ قانون‌ها در `AdminSettings`).
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -4320,6 +4726,9 @@ paths:
       x-roles: [ADMIN]
       operationId: adminUpdateSettings
       summary: "ذخیره‌ی تنظیمات"
+      description: |
+        **کل سند** را می‌گیرد و جایگزین می‌کند (قانون‌ها، سقف‌ها و «از کِی اثر دارد» در `AdminSettings`). شکل و سقف هر فیلد قبل از هر چیز،
+        همه با هم (`400`)؛ بعد قانون‌های بین فیلدها (روش و درگاه پیش‌فرض فعال، `freeShippingMethods` از روش‌های لیست). پاسخ کل سند تازه است.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -4332,10 +4741,14 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminSettings' }
-
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: "`CHANGED_BY_SOMEONE_ELSE`: کس دیگری همین الان تنظیمات را ذخیره کرد؛ هیچ‌چیز از این درخواست ذخیره نشد"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
   # ================================================================
   #  ADMIN — SUPPORT & REPORTS
   # ================================================================
@@ -4502,11 +4915,15 @@ paths:
       x-roles: [ADMIN, SUPPORT]
       operationId: adminListCustomers
       summary: "مشتریان (جستجو با موبایل/نام)"
+      description: '`role` فقط کاربرانی که آن نقش را دارند (برای صفحه‌ی نقش‌ها و کارمندها)؛ `CUSTOMER` = همه. نقش ناشناخته ← `400 ROLE_INVALID` روی `role`.'
       security: [{ bearerAuth: [] }]
       parameters:
         - name: q
           in: query
           schema: { type: string }
+        - name: role
+          in: query
+          schema: { $ref: '#/components/schemas/UserRole' }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
       responses:
@@ -4530,6 +4947,7 @@ paths:
       x-roles: [ADMIN, SUPPORT]
       operationId: adminGetCustomer
       summary: "جزئیات یک مشتری: پروفایل، آدرس‌ها و آخرین سفارش‌ها"
+      description: 'کاربر ناموجود یا شناسه‌ی بدشکل ← `404 NOT_FOUND`. خواندن در لاگ تغییرات ثبت نمی‌شود.'
       security: [{ bearerAuth: [] }]
       parameters:
         - name: customerId
@@ -4555,6 +4973,9 @@ paths:
         لیست کامل نقش‌ها را جایگزین می‌کند (`CUSTOMER` همیشه می‌ماند و لازم نیست فرستاده شود). بعد از تغییر، همه‌ی نشست‌های آن کاربر
         باطل می‌شوند تا با نقش‌های جدید دوباره وارد شود. هر تغییر با «چه کسی، کِی، از چه به چه» در رویدادهای امنیتی ثبت می‌شود.
         هیچ‌کس نقش‌های **خودش** را عوض نمی‌کند (`422 ROLE_CHANGE_NOT_ALLOWED`)، تا آخرین ADMIN اشتباهی خودش را بیرون نیندازد.
+        **آخرین ADMIN نقشش را از دست نمی‌دهد:** تغییری که تعداد ADMINها را صفر کند ← `422 ROLE_CHANGE_NOT_ALLOWED` با `meta.reason = LAST_ADMIN`.
+        تغییرهای نقش یکی‌یکی انجام می‌شوند و نقش‌های **فعلی** ِ انجام‌دهنده همان لحظه دوباره خوانده می‌شوند: اگر دو ADMIN همزمان ADMIN ِ همدیگر را
+        بردارند، یکی انجام می‌شود و دومی (که دیگر ADMIN نیست) `403 FORBIDDEN` می‌گیرد. هر تغییر در رویدادهای امنیتی و لاگ تغییرات (`USER_ROLES_CHANGED`) ثبت می‌شود.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: customerId
@@ -4585,7 +5006,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422':
-          description: "`ROLE_CHANGE_NOT_ALLOWED`: نقش‌های خودت را نمی‌توانی عوض کنی"
+          description: "`ROLE_CHANGE_NOT_ALLOWED`: نقش‌های خودت را نمی‌توانی عوض کنی، یا (`meta.reason = LAST_ADMIN`) این آخرین ADMIN است"
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -4595,16 +5016,24 @@ paths:
       x-roles: [ADMIN]
       operationId: adminReportOverview
       summary: "داشبورد مدیریتی (فروش، تعداد سفارش، میانگین سبد، پرفروش‌ها، نرخ تأیید عکس)"
+      description: |
+        `from` و `to` روزهای تهران‌اند و هر دو **شامل** (`from` از ساعت ۰۰:۰۰ همان روز تا پایان روز `to`). نیامده ← `400 FIELD_REQUIRED`،
+        بدشکل ← `400 DATE_INVALID`، `from` بعد از `to` ← `400 DATE_RANGE_INVALID` روی `to`، بیشتر از ۳۶۶ روز ← `400 DATE_RANGE_TOO_LONG` روی `to`.
+
+        **سفارش دوره** = سفارشی که پولش (`paidOn`، پرداخت اول) در بازه رسیده و لغو نشده. همه‌ی عددهای پولی از همین سفارش‌هاست
+        (معنی هر فیلد در `AdminReportOverview`). همه با ریاضی صحیح؛ درصدها یک رقم اعشار، نیمه به بالا.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: from
           in: query
           required: true
           schema: { type: string, format: date }
+          example: '2026-10-01'
         - name: to
           in: query
           required: true
           schema: { type: string, format: date }
+          example: '2026-10-31'
       responses:
         '200':
           description: OK
@@ -4621,8 +5050,12 @@ paths:
       operationId: adminListAuditLog
       summary: "لاگ تغییرات پنل: چه کسی، کِی، چه کاری، روی چه چیزی (تازه‌ترین اول)"
       description: |
-        هر درخواست موفق نوشتنی زیر `/admin/*` یک ردیف (بخش ۲). لاگ فقط اضافه می‌شود؛ ویرایش و حذف ندارد.
-        برای تاریخچه‌ی یک مورد: `entityType` + `entityId` (مثلاً `PRODUCT` و `12`، یا `ORDER` و `KV-218340`).
+        هر درخواست موفق نوشتنی زیر `/admin/*` یک ردیف (بخش ۲). لاگ فقط اضافه می‌شود و ویرایش ندارد؛ بعد از ۹۰ روز خودکار پاک می‌شود،
+        پس بازه‌ی قدیمی‌تر فقط خالی برمی‌گردد.
+        برای تاریخچه‌ی یک مورد: `entityType` + `entityId` (مثلاً `PRODUCT` و `12`، یا `ORDER` و `KV-218340`). `entityId` بدون `entityType` هم مجاز است.
+        `from` و `to` روزهای تهران‌اند و هر دو شامل: `from` از ساعت ۰۰:۰۰ همان روز و `to` تا پایان همان روز (۰۰:۰۰ ِ روز بعد، نابسته).
+        `from` بعد از `to` ← `400` روی `to` با `DATE_RANGE_INVALID`. ترتیب: تازه‌ترین اول (`at`، بعد `id`، نزولی).
+        `actor` موقع خواندن از حساب فعلی کاربر می‌آید (موبایل کامل، چون فقط `ADMIN` می‌بیند)؛ `summary` جمله‌ی فارسی همان ردیف است.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: entityType
@@ -4700,7 +5133,7 @@ components:
     SearchQuery:
       name: q
       in: query
-      description: جستجو روی نام، دسته، رنگ و متریال (با نرمال‌سازی ی/ک)
+      description: جستجو روی نام، دسته، رنگ‌های فعال، متریال و کد محصول (SKU)، با نرمال‌سازی ی/ک
       schema: { type: string, maxLength: 100, example: کراس‌بادی }
     CategoryFilter:
       name: category
@@ -4991,7 +5424,10 @@ components:
       example: camera
     HtmlString:
       type: string
-      description: HTML امن و sanitize‌شده در سرور (فقط تگ‌های `p, b, strong, em, a, ul, ol, li, br, mark, h2, h3, blockquote`)
+      description: |
+        HTML امن و sanitize‌شده در سرور (فقط تگ‌های `p, b, strong, em, a, ul, ol, li, br, mark, h2, h3, blockquote`).
+        `a` فقط با `href`، و فقط به آدرس کامل `http://`/`https://` یا مسیر نسبی‌ای که با یک `/` (نه `//` و نه `/\`) یا `#` شروع
+        می‌شود (`/faq#reserve`، `#top`)؛ هر لینک دیگری (`javascript:`، `//evil.com`، `faq`) `href` اش را از دست می‌دهد و متنش می‌ماند.
     Tone:
       type: string
       description: رنگ‌بندی تگ در دیزاین‌سیستم (`tag`, `tag-sale`, `tag-warn`, `tag-success`, `tag-cream`, `tag-dark`, `tag-glass`)
@@ -5024,6 +5460,14 @@ components:
             برای نمایش، `field` و `message` کافی است.
           example: PATTERN
         message: { type: string, example: کد پستی باید ۱۰ رقم باشه }
+        meta:
+          type: object
+          nullable: true
+          description: >-
+            داده‌ی کمکی همین خطا، همون عددهایی که `message` ازشون ساخته شده (`min`، `max`، `maxLength`، `maxItems`، `maxDays`، …)؛
+            خطای بی‌داده `null`. برای نمایش لازم نیست؛ برای کنار input گذاشتن سقف (از 1.11.1).
+          additionalProperties: true
+          example: { min: 0, max: 30 }
     Problem:
       type: object
       description: RFC 7807 Problem Details + کد ماشینی کیوا
@@ -5117,6 +5561,8 @@ components:
         - RESERVATION_UNAVAILABLE
         - ACCOUNT_HAS_ACTIVE_ORDERS
         - ROLE_CHANGE_NOT_ALLOWED
+        # --- پنل ادمین: کلید تکراری (رنگ) ---
+        - DUPLICATE_CODE
         # --- پنل ادمین: محصول و رنگ‌هایش ---
         - COLOR_ALREADY_ON_PRODUCT
         - PRODUCT_ARCHIVED
@@ -5136,6 +5582,12 @@ components:
         - RESERVATION_NOT_FOUND
         # --- سفارش با مانده‌ی پرداخت بعد از درخواست تغییر (meta.balanceDue) ---
         - BALANCE_DUE
+        # --- کار روی سفارش در پنل ---
+        - AWAITING_CUSTOMER_FEEDBACK
+        - GROUP_NOT_READY
+        - PHOTOS_INCOMPLETE
+        - REFUND_NOT_FOUND
+        - PAYMENT_IN_PROGRESS
       example: DISCOUNT_MIN_SUBTOTAL_NOT_MET
 
     # ============ MEDIA ============
@@ -5143,7 +5595,7 @@ components:
       type: object
       required: [id, type, url]
       properties:
-        id: { type: string, example: 'med_5Hq2' }
+        id: { type: string, pattern: '^med_[0-9A-Za-z]{22}$', example: 'med_5Hq2xT9aLmQ0vB3nR7sK1w' }
         type: { type: string, enum: [IMAGE, VIDEO] }
         url: { type: string, format: uri, example: 'https://cdn.kiva.ir/p/1/lilac/front.webp' }
         thumbnailUrl: { type: string, format: uri, nullable: true, example: 'https://cdn.kiva.ir/p/1/lilac/front_160.webp' }
@@ -5363,10 +5815,16 @@ components:
           description: همه‌ی رنگ‌ها به ترتیب نمایش (کارت ۵ تای اول + «+n»)
           items: { $ref: '#/components/schemas/ProductColorOption' }
         colorsCount: { type: integer, example: 4 }
-        defaultColorKey: { $ref: '#/components/schemas/ColorKey' }
+        defaultColorKey:
+          allOf: [{ $ref: '#/components/schemas/ColorKey' }]
+          nullable: true
+          description: فقط برای محصول بدون رنگ فعال (پیش‌نویس در پنل) `null` است؛ در فروشگاه هیچ‌وقت `null` نیست
         displayColorKey:
           allOf: [{ $ref: '#/components/schemas/ColorKey' }]
-          description: رنگی که عکس کارت با آن نمایش داده شود (اگر فیلتر رنگ فعال باشد = اولین رنگ منطبق)
+          nullable: true
+          description: |
+            رنگی که عکس کارت با آن نمایش داده شود (اگر فیلتر رنگ فعال باشد = اولین رنگ منطبق).
+            فقط برای محصول بدون رنگ فعال (پیش‌نویس در پنل) `null` است؛ در فروشگاه هیچ‌وقت `null` نیست
         image:
           allOf: [{ $ref: '#/components/schemas/MediaAsset' }]
           nullable: true
@@ -5402,7 +5860,7 @@ components:
       required: [id, sku, color, price, stock, media]
       properties:
         id: { type: integer, example: 101 }
-        sku: { type: string, example: KV-1001-LIL }
+        sku: { type: string, example: KV-1001-LILAC }
         color: { $ref: '#/components/schemas/Color' }
         isDefault: { type: boolean, example: false }
         price: { $ref: '#/components/schemas/PriceInfo' }
@@ -6254,7 +6712,7 @@ components:
               type: object
               additionalProperties: { type: string }
               example: {}
-        expiresAt: { type: string, format: date-time, description: 'پایان مهلت پرداخت سفارش و رزرو موقت موجودی (ثبت سفارش + ۱۵ دقیقه). برای همه‌ی تلاش‌های پرداخت یک سفارش یکی است و تمدید نمی‌شود.' }
+        expiresAt: { type: string, format: date-time, description: 'پایان مهلت پرداخت سفارش و رزرو موقت موجودی (ثبت سفارش + ۱۵ دقیقه). برای همه‌ی تلاش‌های پرداخت یک سفارش یکی است و تمدید نمی‌شود. برای پرداخت مانده (`purpose = BALANCE`) پایان پنجره‌ی همین تلاش روی درگاه (شروع + ۲۰ دقیقه)؛ مانده خودش مهلت ندارد.' }
     PlaceOrderResponse:
       type: object
       required: [order]
@@ -6412,7 +6870,7 @@ components:
         name: { type: string, description: snapshot نام در زمان خرید, example: کیف دستی آیدا }
         slug: { type: string, example: aida-satchel }
         color: { $ref: '#/components/schemas/Color' }
-        image: { $ref: '#/components/schemas/MediaAsset' }
+        image: { type: string, format: uri, nullable: true, description: 'عکس رنگ در لحظه‌ی خرید (نسخه‌ی ۴۸۰، snapshot)؛ سفارش‌های پیش از آپلود مدیا و رنگ بی‌عکس `null`' }
         quantity: { type: integer, example: 1 }
         unitPrice: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 2790000 }
         unitCompareAtPrice: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, example: 3290000 }
@@ -6421,20 +6879,29 @@ components:
         returnableUntil: { type: string, format: date-time, nullable: true }
     OrderTotals:
       type: object
+      description: |
+        جمع‌های سفارش. قبل از هر درخواست تغییر همان جمع‌های لحظه‌ی ثبت‌اند. **بعد از درخواست تغییر** (رنگ/مدل عوض شد یا قلمی حذف شد):
+
+        * `itemsCompareAtTotal`، `productDiscount` و `subtotal` از قلم‌های **فعلی** سفارش حساب می‌شوند (قلم تازه با قیمت لحظه‌ی رسیدگی)؛
+        * `shippingCost` همان لحظه‌ی ثبت است؛ `codeDiscount` هم، منهای سهم کد ِ قلم‌های حذف‌شده (`floor(lineTotal × codeDiscount ÷ subtotal)` ِ لحظه‌ی ثبت)؛
+          کد با قانون‌های خودش دوباره حساب نمی‌شود؛
+        * `payable` کل پرداخت‌شده تا الان است و `balanceDue` مانده؛ `refunded` استردادهای `COMPLETED`.
+
+        همیشه: `subtotal − codeDiscount + shippingCost = payable + balanceDue − (استردادهای ساخته‌شده از درخواست تغییر)`.
       properties:
         itemsCompareAtTotal: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 4080000 }
         productDiscount: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 600000 }
         subtotal: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 3480000 }
         discountCode: { type: string, nullable: true, description: کد تخفیفی که سفارش با آن ثبت شد (`codeDiscount` مال آن است), example: null }
-        codeDiscount: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 0 }
+        codeDiscount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'تخفیف کد؛ بعد از حذف قلم، منهای سهم کد ِ آن قلم', example: 0 }
         shippingCost: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 0 }
         shippingFreeReason: { type: string, nullable: true, example: THRESHOLD }
         giftWrapCost: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 0 }
-        payable: { allOf: [{ $ref: '#/components/schemas/Money' }], description: «پرداخت شده», example: 3480000 }
-        refunded: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 0 }
+        payable: { allOf: [{ $ref: '#/components/schemas/Money' }], description: '«پرداخت شده»: **کل پرداخت‌شده تا الان** (مبلغ ثبت سفارش + مانده‌های پرداخت‌شده). برای سفارش پرداخت‌نشده، مبلغی که باید پرداخت شود', example: 3480000 }
+        refunded: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'جمع استردادهای `COMPLETED`', example: 0 }
         balanceDue:
           allOf: [{ $ref: '#/components/schemas/Money' }]
-          description: مانده‌ی پرداخت بعد از درخواست تغییر به رنگ/مدل گران‌تر؛ در بقیه‌ی موارد ۰. تا صفر نشود سفارش ارسال نمی‌شود.
+          description: مانده‌ی پرداخت بعد از درخواست تغییر به رنگ/مدل گران‌تر؛ در بقیه‌ی موارد ۰. تا صفر نشود سفارش ارسال نمی‌شود. سفارش لغوشده مانده ندارد.
           example: 0
         currency: { $ref: '#/components/schemas/Currency' }
     AddressSnapshot:
@@ -6467,11 +6934,13 @@ components:
         channel: { $ref: '#/components/schemas/PhotoMessengerChannel' }
         channelName: { type: string, example: بله }
         phone: { $ref: '#/components/schemas/PhoneNumber' }
+        username: { type: string, nullable: true, description: 'شناسه‌ی مشتری در همان پیام‌رسان، اگر در تسویه داده؛ اپراتور به آن می‌فرستد', example: '@sara_m' }
         note: { type: string, nullable: true, example: از داخل کیف هم عکس بگیرید }
         sentAt: { type: string, format: date-time, nullable: true }
         waitingMessage: { type: string, nullable: true, example: قبل از ارسال، از کیفت عکس و ویدیو می‌گیریم و توی بله برات می‌فرستیم؛ یه نسخه هم همین‌جا قرار می‌گیره. }
         items:
           type: array
+          description: 'فقط آخرین دسته‌ی **فرستاده‌شده**؛ پیش‌نویس اپراتور فقط در `AdminOrder.draftItems` (و در پاسخ `PUT …/pre-shipment-media`)'
           items: { $ref: '#/components/schemas/OrderMediaItem' }
         feedback:
           type: object
@@ -6493,7 +6962,7 @@ components:
                 variantId: { type: integer, nullable: true, description: ورینتی که واقعاً جایگزین شد }
                 note: { type: string, nullable: true }
                 at: { type: string, format: date-time }
-        feedbackDeadline: { type: string, format: date-time, nullable: true, description: '[پیشنهادی] بعد از این زمان خودکار تأییدشده تلقی می‌شود' }
+        feedbackDeadline: { type: string, format: date-time, nullable: true, description: 'زمان ارسال عکس + ۲۴ ساعت؛ اگر تا آن موقع جوابی نیاید عکس خودکار تأیید می‌شود و ارسال ممکن است' }
     OrderEvent:
       type: object
       properties:
@@ -6503,7 +6972,14 @@ components:
         note: { type: string, nullable: true }
     OrderPaymentInfo:
       type: object
+      required: [purpose, amount]
       properties:
+        purpose:
+          type: string
+          enum: [ORDER, BALANCE]
+          description: '`ORDER` پرداخت خود سفارش؛ `BALANCE` پرداخت مانده بعد از درخواست تغییر'
+          example: ORDER
+        amount: { allOf: [{ $ref: '#/components/schemas/Money' }], description: مبلغ همین تلاش, example: 3480000 }
         gateway: { $ref: '#/components/schemas/PaymentGatewayCode' }
         gatewayName: { type: string, example: زرین‌پال }
         status: { $ref: '#/components/schemas/PaymentStatus' }
@@ -6538,6 +7014,10 @@ components:
               type: array
               items: { $ref: '#/components/schemas/ReturnRequest' }
             invoiceUrl: { type: string, nullable: true, example: /api/v1/me/orders/KV-215566/invoice }
+            refunds:
+              type: array
+              description: 'همه‌ی استردادهای سفارش، قدیمی‌ترین اول، با وضعیت و `statusNote`'
+              items: { $ref: '#/components/schemas/Refund' }
     OrderListResponse:
       type: object
       properties:
@@ -6556,11 +7036,16 @@ components:
     PreShipmentFeedbackRequest:
       type: object
       required: [decision]
+      description: |
+        `APPROVE` بقیه‌ی فیلدها را نمی‌خواهد. `REQUEST_CHANGE` با `changeType` (`400 CHANGE_TYPE_REQUIRED`):
+        `COLOR` و `MODEL` با `orderItemId` (`ORDER_ITEM_REQUIRED`) و `desiredVariantId` (`DESIRED_VARIANT_REQUIRED`)؛
+        `CANCEL_ITEM` با `orderItemId`؛ `OTHER` با `note` (`NOTE_REQUIRED`). فیلدی که برای آن `changeType` معنی ندارد نادیده گرفته می‌شود.
+        `COLOR` = رنگ دیگری از همان محصول ِ قلم؛ `MODEL` = رنگی از محصول دیگر (وگرنه `400 DESIRED_VARIANT_INVALID`).
       properties:
         decision: { type: string, enum: [APPROVE, REQUEST_CHANGE] }
         changeType: { type: string, nullable: true, enum: [COLOR, MODEL, CANCEL_ITEM, OTHER, null] }
-        orderItemId: { type: integer, nullable: true }
-        desiredVariantId: { type: integer, nullable: true, description: رنگ/مدل جایگزین }
+        orderItemId: { type: integer, nullable: true, description: 'قلم سفارش (`OrderItem.id`)؛ برای `COLOR`، `MODEL` و `CANCEL_ITEM`' }
+        desiredVariantId: { type: integer, nullable: true, description: 'رنگ/مدل جایگزین؛ برای `COLOR` و `MODEL`' }
         note: { type: string, maxLength: 500, nullable: true, example: می‌شه رنگ مشکی‌اش رو بفرستید؟ }
     CancelOrderRequest:
       type: object
@@ -6572,22 +7057,22 @@ components:
       type: object
       properties:
         order: { $ref: '#/components/schemas/OrderSummary' }
-        refund: { $ref: '#/components/schemas/Refund' }
-        message: { type: string, example: سفارش لغو شد. مبلغ حداکثر تا ۷۲ ساعت به کارتت برمی‌گرده. }
+        refund: { type: object, allOf: [{ $ref: '#/components/schemas/Refund' }], nullable: true, description: 'استرداد `PENDING` ِ ساخته‌شده؛ `null` وقتی چیزی پرداخت نشده بود' }
+        message: { type: string, example: سفارش لغو شد. برای برگردوندن پولت، همکارهامون تا ۷۲ ساعت کاری باهات تماس می‌گیرن. }
     Refund:
       type: object
       properties:
         id: { type: integer, example: 31 }
         amount: { $ref: '#/components/schemas/Money' }
-        method: { type: string, enum: [ORIGINAL_PAYMENT, BANK_TRANSFER, STORE_CREDIT] }
+        method: { type: string, enum: [ORIGINAL_PAYMENT, BANK_TRANSFER] }
         status: { type: string, enum: [PENDING, PROCESSING, COMPLETED, FAILED] }
         reason: { type: string, nullable: true }
         returnId: { type: integer, nullable: true, description: مرجوعی‌ای که این استرداد برای آن است }
         createdAt: { type: string, format: date-time }
-        expectedBy: { type: string, format: date-time, nullable: true }
+        expectedBy: { type: string, format: date-time, nullable: true, description: 'زمان ثبت + ۷۲ ساعت؛ تخمین تماس همکاران' }
         completedAt: { type: string, format: date-time, nullable: true }
-        referenceId: { type: string, nullable: true, description: شماره‌ی پیگیری بانک یا درگاه }
-        statusNote: { type: string, nullable: true, description: 'توضیح آخرین تغییر وضعیت (`PATCH /admin/refunds/{refundId}`)؛ به مشتری هم نشان داده می‌شود', example: شماره شبا اشتباه بود؛ با پشتیبانی تماس بگیر }
+        referenceId: { type: string, nullable: true, description: شماره‌ی پیگیری انتقال بانکی }
+        statusNote: { type: string, nullable: true, description: 'توضیح آخرین تغییر وضعیت (`PATCH /admin/refunds/{refundId}`)؛ به مشتری هم نشان داده می‌شود', example: شماره شبا تأیید نشد؛ دوباره باهات تماس می‌گیریم }
     ReturnStatus:
       type: string
       enum: [REQUESTED, APPROVED, REJECTED, PICKUP_SCHEDULED, RECEIVED, REFUNDED, CLOSED]
@@ -6615,7 +7100,7 @@ components:
           maxItems: 6
           description: عکس‌های مستندات از `POST /me/uploads`
           items: { type: string }
-        refundMethod: { type: string, enum: [ORIGINAL_PAYMENT, BANK_TRANSFER, STORE_CREDIT], default: ORIGINAL_PAYMENT }
+        refundMethod: { type: string, enum: [ORIGINAL_PAYMENT, BANK_TRANSFER], default: ORIGINAL_PAYMENT }
         iban: { type: string, nullable: true, pattern: '^IR\d{24}$', description: فقط برای BANK_TRANSFER }
     ReturnRequest:
       type: object
@@ -6641,7 +7126,7 @@ components:
           items: { $ref: '#/components/schemas/MediaAsset' }
         shippingPaidBy: { type: string, enum: [KIVA, CUSTOMER] }
         instructions: { type: string, nullable: true, example: بسته رو با تیپاکس به آدرس انبار کیوا بفرست و کد رهگیری رو این‌جا ثبت کن. }
-        refundMethod: { type: string, enum: [ORIGINAL_PAYMENT, BANK_TRANSFER, STORE_CREDIT] }
+        refundMethod: { type: string, enum: [ORIGINAL_PAYMENT, BANK_TRANSFER] }
         rejectionReason: { type: string, nullable: true, description: فقط برای `REJECTED` }
         pickup:
           type: object
@@ -7002,14 +7487,28 @@ components:
     Announcement:
       type: object
       description: پیام چرخشی نوار بالای سایت
+      required: [id, icon, text, url, sortOrder, startsAt, endsAt]
       properties:
         id: { type: integer, example: 1 }
-        icon: { $ref: '#/components/schemas/IconName' }
+        icon: { type: string, nullable: true, allOf: [{ $ref: '#/components/schemas/IconName' }] }
         text: { type: string, example: هرچی ببینی، همون می‌رسه — قبل از ارسال، عکس کیف خودت رو برات می‌فرستیم }
         url: { type: string, nullable: true }
-        sortOrder: { type: integer }
+        sortOrder: { type: integer, description: 'جای پیام در لیست (۰، ۱، …)؛ از ترتیب آرایه‌ی `PUT` ساخته می‌شود' }
         startsAt: { type: string, format: date-time, nullable: true }
         endsAt: { type: string, format: date-time, nullable: true }
+    AnnouncementInput:
+      type: object
+      description: |
+        یک پیام در بدنه‌ی `PUT /admin/announcements`. با `id` همان پیام قبلی است و بی `id` پیام تازه؛ `id` ِ ناشناخته ←
+        `400 ANNOUNCEMENT_NOT_FOUND` و `id` ِ تکراری ← `400 LIST_ITEM_DUPLICATE`. ترتیب = ترتیب آرایه (`sortOrder` اگر بیاید نادیده).
+      required: [text]
+      properties:
+        id: { type: integer, nullable: true }
+        icon: { type: string, nullable: true, description: 'اسم آیکن (`ICON_INVALID`)' }
+        text: { type: string, minLength: 1, maxLength: 200, description: '`ANNOUNCEMENT_TEXT_REQUIRED` / `TEXT_TOO_LONG`' }
+        url: { type: string, nullable: true, maxLength: 300, description: '`null`، آدرس کامل `https://`، یا مسیر نسبی که با یک `/` شروع می‌شود (نه `//`)؛ وگرنه `URL_INVALID`' }
+        startsAt: { type: string, format: date-time, nullable: true }
+        endsAt: { type: string, format: date-time, nullable: true, description: 'اگر هر دو هست، بعد از `startsAt` (`DATE_RANGE_INVALID`)' }
     SupportHours:
       type: object
       properties:
@@ -7029,9 +7528,18 @@ components:
         handle: { type: string, example: '@kiva_shop' }
     SiteConfig:
       type: object
+      description: |
+        همه‌ی فیلدها همیشه هستند (فیلد بی‌مقدار `null`). منبع هر بخش:
+        - تنظیمات فروشگاه (`PUT /admin/settings`): `shipping`، `reservation.enabled`/`holdDays`، `returns.windowDays`،
+          `inventory.lowStockThreshold`، `paymentGateways`، `support.phone`/`email`/`hours`، `social`، `features`.
+        - محتوای ثابت سایت (فعلاً فقط با به‌روزرسانی سرور): `brand`، `currency.label`، `reservation.description`، `returns.policyUrl`،
+          `preShipmentPhoto.title`/`description`، `support.emailResponseHint`/`responseTimeHint`، `productPerks`، `trustBadges`، `footerLinks`.
+        - ساخته‌ی سرور: `support.phoneDisplay`، `support.isOpenNow`، `auth`، `preShipmentPhoto.channels`/`enabled`/`required`، `currency.code`.
+      required: [brand, currency, announcements, shipping, reservation, returns, preShipmentPhoto, inventory, auth, support, social, paymentGateways, productPerks, trustBadges, footerLinks, features]
       properties:
         brand:
           type: object
+          required: [name, slogan, about, logoUrl, logoWhiteUrl, faviconUrl]
           properties:
             name: { type: string, example: کیوا }
             slogan: { type: string, example: هرچی ببینی، همون می‌رسه. }
@@ -7041,17 +7549,21 @@ components:
             faviconUrl: { type: string, format: uri }
         currency:
           type: object
+          required: [code, label]
           properties:
             code: { $ref: '#/components/schemas/Currency' }
             label: { type: string, example: تومان }
         announcements:
           type: array
+          description: 'فقط پیام‌هایی که **الان** در بازه‌شان هستند (`startsAt ≤ الان < endsAt`؛ `null` یعنی باز)، به ترتیب نمایش'
           items: { $ref: '#/components/schemas/Announcement' }
         shipping:
           type: object
+          required: [methods, freeShippingThreshold, freeShippingMethods, nonShippingWeekdays]
           properties:
             methods:
               type: array
+              description: فقط روش‌های فعال، به ترتیب تنظیمات (همان‌هایی که سبد پیشنهاد می‌دهد)
               items: { $ref: '#/components/schemas/ShippingMethod' }
             freeShippingThreshold: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 3000000 }
             freeShippingMethods:
@@ -7060,55 +7572,72 @@ components:
               example: [POST]
             nonShippingWeekdays:
               type: array
-              items: { type: string }
+              items: { type: string, enum: [SATURDAY, SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY] }
               example: [FRIDAY]
         reservation:
           type: object
+          required: [enabled, holdDays, description]
           properties:
             enabled: { type: boolean, example: true }
             holdDays: { type: integer, example: 4 }
             description: { type: string, example: الان کامل پرداخت کن، ۴ روز بعد برات ارسال می‌شه. }
         returns:
           type: object
+          required: [windowDays, policyUrl]
           properties:
             windowDays: { type: integer, example: 7 }
             policyUrl: { type: string, example: /faq#return }
         preShipmentPhoto:
           type: object
+          required: [enabled, required, channels, title, description]
           properties:
-            enabled: { type: boolean, example: true }
-            required: { type: boolean, example: true }
+            enabled: { type: boolean, description: همیشه `true` (عکس قبل از ارسال قدم هر سفارش است), example: true }
+            required: { type: boolean, description: همیشه `true`, example: true }
             channels:
               type: array
+              description: همان پیام‌رسان‌های صفحه‌ی تسویه (`CheckoutContext.messengers`)
               items: { $ref: '#/components/schemas/MessengerOption' }
             title: { type: string, example: قبل از ارسال، عکس همین کیف رو می‌بینی }
             description: { type: string }
         inventory:
           type: object
+          required: [lowStockThreshold]
           properties:
             lowStockThreshold: { type: integer, example: 5 }
         auth:
           type: object
+          required: [otpLength, resendCooldownSeconds]
           properties:
             otpLength: { type: integer, example: 5 }
             resendCooldownSeconds: { type: integer, example: 120 }
         support:
           type: object
+          required: [phone, phoneDisplay, email, emailResponseHint, responseTimeHint, hours, isOpenNow]
           properties:
-            phone: { type: string, example: '02191001234' }
-            phoneDisplay: { type: string, example: ۰۲۱-۹۱۰۰۱۲۳۴ }
-            email: { type: string, format: email, example: support@kiva.ir }
+            phone: { type: string, nullable: true, example: '02191001234' }
+            phoneDisplay:
+              type: string
+              nullable: true
+              description: 'ساخته‌ی سرور از `phone` با ارقام فارسی: ثابت `۰۲۱-۹۱۰۰۱۲۳۴`، موبایل `۰۹۱۲-۳۴۵-۶۷۸۹`؛ بی‌شماره `null`'
+              example: ۰۲۱-۹۱۰۰۱۲۳۴
+            email: { type: string, format: email, nullable: true, example: support@kiva.ir }
             emailResponseHint: { type: string, example: پاسخ تا ۲۴ ساعت }
             responseTimeHint: { type: string, example: معمولاً کمتر از یک ساعت جواب می‌دیم }
             hours:
               type: array
               items: { $ref: '#/components/schemas/SupportHours' }
-            isOpenNow: { type: boolean, description: «الان پاسخگوییم» / «خارج از ساعت کاری» (محاسبه با ساعت تهران) }
+            isOpenNow:
+              type: boolean
+              description: |
+                «الان پاسخگوییم» / «خارج از ساعت کاری»، با ساعت تهران: الان در یکی از ردیف‌های `hours` است که روز امروز را دارد،
+                `from ≤ الان < to` و `messengerOnly` ش `false` است. ردیف بی‌ساعت یا «فقط پیام‌رسان» هیچ‌وقت `true` نمی‌دهد.
+                به خاطر کش تا ۵ دقیقه ممکن است کهنه باشد.
         social:
           type: array
           items: { $ref: '#/components/schemas/SocialLink' }
         paymentGateways:
           type: array
+          description: همان درگاه‌های صفحه‌ی تسویه، با همان `available` و `isDefault`
           items: { $ref: '#/components/schemas/PaymentGateway' }
         productPerks:
           type: array
@@ -7117,6 +7646,7 @@ components:
           type: array
           items:
             type: object
+            required: [type, label, imageUrl, linkUrl]
             properties:
               type: { type: string, enum: [ENAMAD, SAMANDEHI] }
               label: { type: string, example: نماد اعتماد الکترونیکی }
@@ -7126,18 +7656,20 @@ components:
           type: array
           items:
             type: object
+            required: [group, links]
             properties:
               group: { type: string, example: راهنمای خرید }
               links:
                 type: array
                 items:
                   type: object
+                  required: [label, url]
                   properties:
                     label: { type: string, example: کدهای رهگیری روزانه }
                     url: { type: string, example: /track#daily }
         features:
           type: object
-          description: feature flagها
+          description: 'feature flagها، همان `features` ِ تنظیمات (`wishlistShare`، `reviewMedia`، `giftWrap`)'
           additionalProperties: { type: boolean }
           example: { wishlistShare: false, reviewMedia: false, giftWrap: false }
 
@@ -7197,17 +7729,17 @@ components:
     SatisfactionSummary:
       type: object
       properties:
-        averageRating: { type: number, example: 4.9 }
-        scale: { type: integer, example: 5 }
-        totalCount: { type: integer, description: «بر اساس ۲٬۴۸۰ نظر و پیام ثبت‌شده», example: 2480 }
+        averageRating: { type: number, minimum: 0, maximum: 5, description: حداکثر یک رقم اعشار, example: 4.9 }
+        scale: { type: integer, description: 'همیشه ۵؛ در `PUT /admin/settings` فقط خواندنی', example: 5 }
+        totalCount: { type: integer, minimum: 0, description: «بر اساس ۲٬۴۸۰ نظر و پیام ثبت‌شده», example: 2480 }
         metrics:
           type: array
           items:
             type: object
             properties:
               key: { type: string, enum: [PHOTO_MATCH, QUALITY, SHIPPING_SPEED, PACKAGING, SUPPORT] }
-              label: { type: string, example: تطابق با عکس }
-              percent: { type: integer, example: 98 }
+              label: { type: string, description: 'از روی `key` ساخته می‌شود؛ در `PUT /admin/settings` فقط خواندنی', example: تطابق با عکس }
+              percent: { type: integer, minimum: 0, maximum: 100, example: 98 }
         sources:
           type: array
           items: { $ref: '#/components/schemas/SocialChannel' }
@@ -7281,42 +7813,76 @@ components:
               isSignature: { type: boolean, example: true }
     SiteStats:
       type: object
+      description: 'عددهای بازاریابی، دستی از `PUT /admin/settings` (`siteStats`)؛ حساب نمی‌شوند'
+      required: [happyCustomers, preShipmentPhotos, photoMatchSatisfactionPercent, productModels, satisfaction]
       properties:
-        happyCustomers: { type: integer, example: 12000 }
-        preShipmentPhotos: { type: integer, example: 48000 }
-        photoMatchSatisfactionPercent: { type: integer, example: 98 }
-        productModels: { type: integer, example: 60 }
-        satisfaction: { $ref: '#/components/schemas/SatisfactionSummary' }
+        happyCustomers: { type: integer, minimum: 0, example: 12000 }
+        preShipmentPhotos: { type: integer, minimum: 0, example: 48000 }
+        photoMatchSatisfactionPercent: { type: integer, minimum: 0, maximum: 100, example: 98 }
+        productModels: { type: integer, minimum: 0, example: 60 }
+        satisfaction: { allOf: [{ $ref: '#/components/schemas/SatisfactionSummary' }], nullable: true }
 
     # ============ FAQ / CONTACT / PAGES ============
     FaqItem:
       type: object
+      required: [id, question, answer, questionHighlighted, answerHighlighted, sortOrder]
       properties:
         id: { type: integer, example: 7 }
         question: { type: string, example: رزرو ۴ روزه چطور کار می‌کنه؟ }
         answer: { $ref: '#/components/schemas/HtmlString' }
-        questionHighlighted: { type: string, nullable: true, description: با `<mark>` وقتی q داریم }
-        answerHighlighted: { type: string, nullable: true }
-        sortOrder: { type: integer }
+        questionHighlighted:
+          type: string
+          nullable: true
+          description: 'فقط با `q`: متن سؤال، **escape‌شده**، با `<mark>` دور هر تطابق (پس با `innerHTML` امن است)؛ بی `q` `null`'
+        answerHighlighted:
+          type: string
+          nullable: true
+          description: 'فقط با `q`: همان `answer` با `<mark>` دور هر تطابق، فقط داخل متن (نه داخل تگ یا آدرس)؛ بی `q` `null`'
+        sortOrder: { type: integer, description: جای سؤال در گروه (۰، ۱، …) }
     FaqGroup:
       type: object
+      required: [id, name, icon, isSignature, sortOrder, questions]
       properties:
         id: { type: string, description: 'anchor لینک مستقیم — photo / order / reserve / shipping / return / payment / account', example: reserve }
         name: { type: string, example: رزرو ۴ روزه }
-        icon: { $ref: '#/components/schemas/IconName' }
+        icon: { type: string, nullable: true, allOf: [{ $ref: '#/components/schemas/IconName' }] }
         isSignature: { type: boolean, description: تگ «امضای کیوا», example: false }
-        sortOrder: { type: integer }
+        sortOrder: { type: integer, description: جای گروه (۰، ۱، …) }
         questions:
           type: array
           items: { $ref: '#/components/schemas/FaqItem' }
+    FaqItemInput:
+      type: object
+      description: 'یک سؤال در بدنه‌ی `PUT /admin/faq/groups`. با `id` همان سؤال (حتی اگر به گروه دیگری رفته باشد)، بی `id` سؤال تازه'
+      required: [question, answer]
+      properties:
+        id: { type: integer, nullable: true, description: '`id` ِ ناشناخته ← `FAQ_ITEM_NOT_FOUND`؛ تکراری ← `LIST_ITEM_DUPLICATE`' }
+        question: { type: string, minLength: 1, maxLength: 300, description: '`QUESTION_REQUIRED` / `TEXT_TOO_LONG`' }
+        answer: { type: string, description: 'HTML؛ بعد از پاک‌سازی (`HtmlString`) ۱ تا ۵۰۰۰ نویسه (`ANSWER_REQUIRED` / `TEXT_TOO_LONG`)' }
+    FaqGroupInput:
+      type: object
+      description: یک گروه در بدنه‌ی `PUT /admin/faq/groups`؛ ترتیب گروه‌ها و سؤال‌ها = ترتیب آرایه‌ها (`sortOrder` اگر بیاید نادیده)
+      required: [id, name, questions]
+      properties:
+        id: { type: string, pattern: '^[a-z][a-z0-9-]{1,30}$', description: 'anchor، یکتا (`FAQ_ANCHOR_INVALID` / `FAQ_ANCHOR_DUPLICATE`)' }
+        name: { type: string, minLength: 1, maxLength: 60, description: '`FAQ_GROUP_NAME_REQUIRED` / `TEXT_TOO_LONG`' }
+        icon: { type: string, nullable: true, description: 'اسم آیکن (`ICON_INVALID`)' }
+        isSignature: { type: boolean, default: false }
+        questions:
+          type: array
+          maxItems: 50
+          description: 'حداکثر ۵۰ (`FAQ_TOO_MANY` با `meta.maxItems`)'
+          items: { $ref: '#/components/schemas/FaqItemInput' }
     FaqResponse:
       type: object
+      required: [groups, totalMatches, emptyMessage]
       properties:
         groups:
           type: array
+          description: 'با `q` فقط گروه‌هایی که سؤال جور دارند، و در هر گروه فقط سؤال‌های جور'
           items: { $ref: '#/components/schemas/FaqGroup' }
-        totalMatches: { type: integer, example: 3 }
-        emptyMessage: { type: string, nullable: true, example: سوالی با این کلمه پیدا نکردیم؛ از پشتیبانی بپرس }
+        totalMatches: { type: integer, description: 'با `q` تعداد سؤال‌های جور؛ بی `q` تعداد همه‌ی سؤال‌ها', example: 3 }
+        emptyMessage: { type: string, nullable: true, description: 'فقط وقتی `groups` خالی است', example: سوالی با این کلمه پیدا نکردیم؛ از پشتیبانی بپرس }
     ContactTopic:
       type: string
       enum: [ORDER_FOLLOWUP, PRODUCT_QUESTION, RETURN, COLLABORATION, OTHER]
@@ -7361,12 +7927,40 @@ components:
         unsubscribedAt: { type: string, format: date-time, nullable: true }
     StaticPage:
       type: object
+      required: [slug, title, content, updatedAt, seo]
       properties:
         slug: { type: string, example: terms }
         title: { type: string, example: قوانین و حریم خصوصی }
         content: { $ref: '#/components/schemas/HtmlString' }
         updatedAt: { type: string, format: date-time }
-        seo: { $ref: '#/components/schemas/SeoMeta' }
+        seo:
+          type: object
+          required: [title, description, canonicalUrl, ogImageUrl, noIndex]
+          description: '`SeoMeta` ِ صفحه: `title` بی‌مقدار ← «عنوان صفحه | کیوا»؛ `canonicalUrl` همیشه `{سایت}/pages/{slug}`؛ `ogImageUrl` فعلاً `null`'
+          properties:
+            title: { type: string }
+            description: { type: string, nullable: true }
+            canonicalUrl: { type: string, format: uri }
+            ogImageUrl: { type: string, format: uri, nullable: true }
+            noIndex: { type: boolean }
+    StaticPageUpsertRequest:
+      type: object
+      description: |
+        بدنه‌ی `PUT /admin/pages/{slug}`. `slug` یا نیاید یا همان مسیر باشد (`400 SLUG_IMMUTABLE`). `title` ۱ تا ۱۲۰
+        (`PAGE_TITLE_REQUIRED` / `TEXT_TOO_LONG`)؛ `content` HTML که بعد از پاک‌سازی (`HtmlString`) ۱ تا ۵۰٬۰۰۰ نویسه است
+        (`PAGE_CONTENT_REQUIRED` / `TEXT_TOO_LONG`). `seo`: `title` ≤ ۷۰، `description` ≤ ۱۷۰، `noIndex`؛ بقیه‌ی `SeoMeta` نادیده.
+      required: [title, content]
+      properties:
+        slug: { type: string, nullable: true }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        content: { type: string }
+        seo:
+          type: object
+          nullable: true
+          properties:
+            title: { type: string, nullable: true, maxLength: 70 }
+            description: { type: string, nullable: true, maxLength: 170 }
+            noIndex: { type: boolean, default: false }
     AdminStaticPageSummary:
       type: object
       description: یک ردیف لیست صفحه‌های ثابت در پنل
@@ -7473,8 +8067,11 @@ components:
     ProductMediaInput:
       type: object
       required: [mediaId, view]
+      description: |
+        یک مدیای گالری رنگ: فقط مدیای آپلودشده با `purpose = PRODUCT` (ناموجود ← `400 MEDIA_NOT_FOUND`، `purpose` ِ دیگر ← `400 MEDIA_PURPOSE_MISMATCH`).
+        ترتیب نهایی گالری: `isPrimary` اول (حداکثر یکی؛ دومی ← `400 MEDIA_PRIMARY_DUPLICATE`)، بعد `sortOrder`، بعد ترتیب همین لیست.
       properties:
-        mediaId: { type: string, example: 'med_5Hq2' }
+        mediaId: { type: string, pattern: '^med_[0-9A-Za-z]{22}$', example: 'med_5Hq2xT9aLmQ0vB3nR7sK1w' }
         view: { $ref: '#/components/schemas/MediaView' }
         sortOrder: { type: integer, example: 0 }
         isPrimary: { type: boolean, default: false }
@@ -7483,52 +8080,145 @@ components:
       type: object
       required: [colorKey]
       properties:
-        colorKey: { $ref: '#/components/schemas/ColorKey' }
-        sku: { type: string, nullable: true, description: خالی = تولید خودکار (KV-1001-LIL), example: KV-1001-LIL }
-        barcode: { type: string, nullable: true }
-        priceOverride: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, description: اگر این رنگ قیمت متفاوت دارد }
-        compareAtPriceOverride: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true }
-        stockQuantity: { type: integer, minimum: 0, description: موجودی اولیه (برای تغییرات بعدی از adjustments استفاده کنید), example: 12 }
-        isDefault: { type: boolean, default: false }
+        colorKey: { allOf: [{ $ref: '#/components/schemas/ColorKey' }], description: 'در `PUT` عوض نمی‌شود (`400 COLOR_KEY_IMMUTABLE`)' }
+        sku: { type: string, nullable: true, maxLength: 40, pattern: '^[A-Za-z][A-Za-z0-9]*(-[A-Za-z0-9]+)*$', description: 'خالی = تولید خودکار (KV-1001-LILAC)؛ با حروف بزرگ ذخیره می‌شود. در `PUT` عوض نمی‌شود (`400 SKU_IMMUTABLE`)', example: KV-1001-LILAC }
+        barcode: { type: string, nullable: true, pattern: '^[0-9A-Za-z-]{4,32}$' }
+        priceOverride: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, description: 'اگر این رنگ قیمت متفاوت دارد؛ `null` = قیمت خود محصول' }
+        compareAtPriceOverride: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, description: 'فقط همراه `priceOverride` (`400 PRICE_OVERRIDE_REQUIRED`) و بیشتر از آن' }
+        stockQuantity: { type: integer, minimum: 0, maximum: 10000, description: 'موجودی اولیه، فقط در ساخت (در `PUT` نادیده گرفته می‌شود؛ برای تغییرات بعدی از adjustments استفاده کنید)', example: 12 }
+        isDefault: { type: boolean, default: false, description: '`false` پیش‌فرض بودن را برنمی‌دارد' }
         isActive: { type: boolean, default: true }
         sortOrder: { type: integer, example: 0 }
         media:
           type: array
+          maxItems: 20
+          description: 'کل گالری این رنگ (حداکثر ۲۰ تا؛ بیشتر ← `400 MEDIA_TOO_MANY`؛ یک مدیا دو بار ← `400 MEDIA_DUPLICATE`)'
           items: { $ref: '#/components/schemas/ProductMediaInput' }
     ProductUpsertRequest:
       type: object
       required: [name, slug, categoryId, bagType, price, materialId]
+      description: |
+        همه‌ی خطاهای شکل با هم در یک `400` با مسیر هر فیلد برمی‌گردند. `canonicalUrl`، `ogImageUrl` و `jsonLd` ِ `seo` نادیده گرفته می‌شوند:
+        سرور خودش آن‌ها را می‌سازد. `description` قبل از ذخیره sanitize می‌شود (فقط تگ‌های `HtmlString`؛ `<script>`، `on*` و لینک `javascript:` حذف).
       properties:
-        name: { type: string, maxLength: 120, example: کیف دوشی ماهک }
-        slug: { type: string, pattern: '^(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*$', description: 'حروف کوچک لاتین، رقم و خط تیره؛ حداقل یک حرف (تا با id عددی اشتباه نشود)', example: mahak-shoulder-bag }
-        sku: { type: string, nullable: true, description: خالی = تولید خودکار (KV-xxxx), example: KV-1001 }
+        name: { type: string, minLength: 1, maxLength: 120, example: کیف دوشی ماهک }
+        slug: { type: string, maxLength: 100, pattern: '^(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*$', description: 'حروف کوچک لاتین، رقم و خط تیره؛ حداقل یک حرف (تا با id عددی اشتباه نشود). در `PUT` عوض نمی‌شود (`400 SLUG_IMMUTABLE`)', example: mahak-shoulder-bag }
+        sku: { type: string, nullable: true, maxLength: 40, pattern: '^[A-Za-z][A-Za-z0-9]*(-[A-Za-z0-9]+)*$', description: 'خالی = تولید خودکار (KV-xxxx)؛ با حروف بزرگ ذخیره می‌شود. در `PUT` عوض نمی‌شود (`400 SKU_IMMUTABLE`)', example: KV-1001 }
         categoryId: { type: integer, example: 1 }
         bagType: { $ref: '#/components/schemas/BagType' }
         materialId: { type: integer, example: 3 }
         materialDescription: { type: string, maxLength: 120, example: چرم مصنوعی مات درجه یک }
         price: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 1890000 }
-        compareAtPrice: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true }
+        compareAtPrice: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, description: 'بیشتر از `price` (`400 COMPARE_AT_PRICE_NOT_ABOVE_PRICE`)' }
         shortDescription: { type: string, maxLength: 300, nullable: true }
-        description: { $ref: '#/components/schemas/HtmlString' }
+        description: { allOf: [{ $ref: '#/components/schemas/HtmlString' }], description: 'حداکثر ۱۰٬۰۰۰ نویسه **بعد از** sanitize' }
         highlights:
           type: array
           maxItems: 8
           items: { type: string, maxLength: 160 }
-        specs: { $ref: '#/components/schemas/ProductSpecs' }
+        specs: { $ref: '#/components/schemas/ProductSpecsInput' }
         tags:
           type: array
-          items: { type: string }
+          maxItems: 20
+          description: 'حداکثر ۲۰ برچسب (`TAGS_TOO_MANY`)، هر کدام ۱ تا ۳۰ نویسه (`TAG_INVALID`)'
+          items: { type: string, minLength: 1, maxLength: 30 }
         newUntil: { type: string, format: date-time, nullable: true, description: تا این تاریخ تگ «جدید» می‌خورد (به‌جای فیلد دستی isNew) }
-        maxPerOrder: { type: integer, minimum: 1, default: 5 }
+        maxPerOrder: { type: integer, minimum: 1, maximum: 20, default: 5 }
         returnable: { type: boolean, default: true }
         reservable: { type: boolean, default: true }
         sortPriority: { type: integer, default: 0, description: برای چیدمان دستی (pin) در لیست }
-        status: { $ref: '#/components/schemas/ProductStatus' }
-        seo: { $ref: '#/components/schemas/SeoMeta' }
+        status: { allOf: [{ $ref: '#/components/schemas/ProductStatus' }], description: 'فقط در ساخت (پیش‌فرض `DRAFT`)؛ در `PUT` نادیده گرفته می‌شود' }
+        seo:
+          type: object
+          description: 'فقط این سه فیلد خوانده می‌شوند'
+          properties:
+            title: { type: string, maxLength: 70, nullable: true }
+            description: { type: string, maxLength: 170, nullable: true }
+            noIndex: { type: boolean, default: false }
         variants:
           type: array
-          description: فقط در ساخت؛ برای ویرایش از endpointهای ورینت استفاده کنید
+          description: فقط در ساخت؛ برای ویرایش از endpointهای ورینت استفاده کنید (در `PUT` نادیده گرفته می‌شود)
           items: { $ref: '#/components/schemas/VariantUpsertRequest' }
+    ProductSpecsInput:
+      type: object
+      description: |
+        مشخصات در فرم محصول؛ همان `ProductSpecs` با سقف‌ها. `label` ِ `closure` و `occasions` را سرور می‌سازد و از ورودی خوانده نمی‌شود.
+        هر مشکل یک خطای فیلد با مسیر کامل است (`specs.straps.1.lengthCm`).
+      properties:
+        dimensions: { allOf: [{ $ref: '#/components/schemas/ProductDimensions' }], nullable: true, description: 'هر ضلع بیشتر از ۰ و حداکثر ۲۰۰' }
+        weightGrams: { type: integer, nullable: true, minimum: 1, maximum: 20000 }
+        closure:
+          type: object
+          nullable: true
+          properties:
+            type: { $ref: '#/components/schemas/ClosureType' }
+        straps:
+          type: array
+          nullable: true
+          maxItems: 4
+          items:
+            type: object
+            properties:
+              type: { $ref: '#/components/schemas/StrapType' }
+              label: { type: string, maxLength: 200 }
+              lengthCm: { type: number, nullable: true, minimum: 0, exclusiveMinimum: true, maximum: 200 }
+              minLengthCm: { type: number, nullable: true, minimum: 0, exclusiveMinimum: true, maximum: 200 }
+              maxLengthCm: { type: number, nullable: true, minimum: 0, exclusiveMinimum: true, maximum: 200, description: 'حداقل `minLengthCm`' }
+              adjustable: { type: boolean, default: false }
+              detachable: { type: boolean, default: false }
+              material: { type: string, nullable: true, maxLength: 60 }
+        pockets:
+          type: object
+          nullable: true
+          description: 'هر شمارنده ۰ تا ۲۰'
+          properties:
+            internal: { type: integer, minimum: 0, maximum: 20 }
+            internalZip: { type: integer, minimum: 0, maximum: 20 }
+            external: { type: integer, minimum: 0, maximum: 20 }
+            phone: { type: integer, minimum: 0, maximum: 20 }
+            cardSlots: { type: integer, minimum: 0, maximum: 20 }
+            billSlots: { type: integer, minimum: 0, maximum: 20 }
+            coinPocket: { type: boolean, default: false }
+            detachablePouch: { type: boolean, default: false }
+            laptopSleeve: { type: boolean, default: false }
+            summary: { type: string, maxLength: 200 }
+        laptopMaxInch: { type: number, nullable: true, minimum: 0, exclusiveMinimum: true, maximum: 20 }
+        capacityLiters: { type: number, nullable: true, minimum: 0, exclusiveMinimum: true, maximum: 100 }
+        waterproof: { type: boolean, default: false }
+        occasions:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { $ref: '#/components/schemas/Occasion' }
+        fits:
+          type: array
+          items: { $ref: '#/components/schemas/FitItem' }
+        lining:
+          type: object
+          nullable: true
+          properties:
+            material: { type: string, maxLength: 60 }
+            color: { type: string, maxLength: 40 }
+        hardware:
+          type: object
+          nullable: true
+          properties:
+            material: { type: string, maxLength: 60 }
+            finish: { type: string, maxLength: 40 }
+        stitching: { type: string, nullable: true, maxLength: 100 }
+        handmade: { type: boolean, default: false }
+        madeIn: { type: string, nullable: true, maxLength: 40 }
+        careInstructions:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 200 }
+        warranty:
+          type: object
+          nullable: true
+          properties:
+            months: { type: integer, minimum: 1, maximum: 60 }
+            description: { type: string, maxLength: 200 }
     AdminVariant:
       allOf:
         - $ref: '#/components/schemas/ProductVariant'
@@ -7542,6 +8232,10 @@ components:
             soldCount: { type: integer, example: 64 }
             stockAlertSubscribers: { type: integer, example: 7 }
     AdminProduct:
+      description: |
+        همه‌ی فیلدهای `ProductDetail` (همان چیزی که مشتری می‌بیند) به‌اضافه‌ی فیلدهای پنل. `variants` فقط رنگ‌های **فعال** است و
+        موجودی‌اش همان قانون فروشگاه را دارد؛ `adminVariants` **همه‌ی** رنگ‌ها (فعال و غیرفعال) با موجودی دقیق.
+        فیلدهای فقط‌مشتری: `isWishlisted` و `stockAlert` و `campaign` همیشه `null`، `perks` خالی، `selectedColorKey` رنگ پیش‌فرض.
       allOf:
         - $ref: '#/components/schemas/ProductDetail'
         - type: object
@@ -7552,24 +8246,25 @@ components:
               items: { $ref: '#/components/schemas/AdminVariant' }
             newUntil: { type: string, format: date-time, nullable: true }
             sortPriority: { type: integer }
-            viewsCount: { type: integer, example: 5230 }
-            conversionRate: { type: number, example: 3.5 }
+            publishAt: { type: string, format: date-time, nullable: true, description: 'زمان انتشار برنامه‌ریزی‌شده‌ی محصول پیش‌نویس؛ بدون برنامه `null`' }
+            viewsCount: { type: integer, nullable: true, description: 'تا آمار بازدید ساخته نشده `null`', example: 5230 }
+            conversionRate: { type: number, nullable: true, description: 'تا آمار بازدید ساخته نشده `null`', example: 3.5 }
             createdAt: { type: string, format: date-time }
-            createdBy: { type: string, example: admin@kiva.ir }
-            etag: { type: string }
+            createdBy: { type: string, description: 'اسم نمایشی سازنده: نام کامل، وگرنه موبایل ماسک‌شده؛ برای کار سیستم «سیستم»', example: لیلا احمدی }
+            etag: { type: string, description: 'همان هدر `ETag`: `W/"{نسخه}"`', example: 'W/"12"' }
     AdminProductListItem:
       type: object
       properties:
         id: { type: integer }
         sku: { type: string }
         name: { type: string }
-        imageUrl: { type: string, format: uri }
+        imageUrl: { type: string, format: uri, nullable: true, description: 'نسخه‌ی کوچک اولین مدیای رنگ پیش‌فرض؛ بدون مدیا `null`' }
         category: { $ref: '#/components/schemas/CategoryRef' }
         status: { $ref: '#/components/schemas/ProductStatus' }
         price: { $ref: '#/components/schemas/PriceInfo' }
-        totalStock: { type: integer, example: 12 }
-        variantsCount: { type: integer, example: 4 }
-        lowStockVariants: { type: integer, example: 1 }
+        totalStock: { type: integer, description: 'جمع موجودی قابل فروش رنگ‌های فعال', example: 12 }
+        variantsCount: { type: integer, description: 'همه‌ی رنگ‌ها (فعال و غیرفعال)', example: 4 }
+        lowStockVariants: { type: integer, description: 'رنگ‌های فعال با موجودی بین صفر و آستانه', example: 1 }
         soldCount: { type: integer, example: 184 }
         rating: { $ref: '#/components/schemas/RatingBrief' }
         updatedAt: { type: string, format: date-time }
@@ -7585,8 +8280,8 @@ components:
       required: [variantId, delta, reason]
       properties:
         variantId: { type: integer, example: 101 }
-        delta: { type: integer, description: مثبت = ورود، منفی = خروج, example: 10 }
-        reason: { type: string, enum: [RESTOCK, STOCKTAKE, DAMAGED, RETURNED, MANUAL_CORRECTION] }
+        delta: { type: integer, minimum: -10000, maximum: 10000, description: 'مثبت = ورود، منفی = خروج؛ صفر نه. `STOCKTAKE` هم تفاوت است، نه عدد شمارش', example: 10 }
+        reason: { type: string, enum: [RESTOCK, STOCKTAKE, DAMAGED, RETURNED, MANUAL_CORRECTION], description: '`RESTOCK` و `RETURNED` فقط مثبت، `DAMAGED` فقط منفی، `STOCKTAKE` و `MANUAL_CORRECTION` هر دو' }
         note: { type: string, maxLength: 300 }
     InventoryAdjustment:
       type: object
@@ -7595,44 +8290,52 @@ components:
         variantId: { type: integer }
         sku: { type: string }
         delta: { type: integer }
-        reason: { type: string }
+        reason: { type: string, enum: [RESTOCK, STOCKTAKE, DAMAGED, RETURNED, MANUAL_CORRECTION] }
         note: { type: string, nullable: true }
-        stockAfter: { type: integer }
+        stockAfter: { type: integer, description: 'موجودی فیزیکی (`stockOnHand`) بعد از همین تغییر' }
         createdAt: { type: string, format: date-time }
-        createdBy: { type: string }
+        createdBy: { type: string, description: 'اسم نمایشی: نام کامل، وگرنه موبایل ماسک‌شده؛ برای کار سیستم «سیستم»', example: لیلا احمدی }
     CategoryUpsertRequest:
       type: object
-      required: [name, slug]
+      required: [name, slug, iconBagType, iconColorKey]
       properties:
-        name: { type: string, example: کیف دوشی }
-        slug: { type: string, pattern: '^(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*$', description: 'حداقل یک حرف (تا با id عددی اشتباه نشود)', example: shoulder }
-        description: { type: string, nullable: true }
+        name: { type: string, minLength: 1, maxLength: 100, example: کیف دوشی }
+        slug: { type: string, maxLength: 100, pattern: '^(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*$', description: 'حداقل یک حرف (تا با id عددی اشتباه نشود)؛ یکتا (`409 DUPLICATE_SLUG`)', example: shoulder }
+        description: { type: string, nullable: true, maxLength: 500 }
         iconBagType: { $ref: '#/components/schemas/BagType' }
-        iconColorKey: { $ref: '#/components/schemas/ColorKey' }
-        imageMediaId: { type: string, nullable: true }
-        sortOrder: { type: integer }
+        iconColorKey: { allOf: [{ $ref: '#/components/schemas/ColorKey' }], description: 'رنگی از پالت (`400 COLOR_NOT_FOUND`)' }
+        imageMediaId: { type: string, nullable: true, description: 'فقط مدیای آپلودشده با `purpose = CATEGORY` (فقط عکس)' }
+        sortOrder: { type: integer, default: 0 }
         showInMenu: { type: boolean, default: true }
-        seo: { $ref: '#/components/schemas/SeoMeta' }
+        seo:
+          type: object
+          description: 'فقط این سه فیلد خوانده می‌شوند'
+          properties:
+            title: { type: string, maxLength: 70, nullable: true }
+            description: { type: string, maxLength: 170, nullable: true }
+            noIndex: { type: boolean, default: false }
     ColorUpsertRequest:
       type: object
       required: [key, name, hex]
       properties:
-        key: { $ref: '#/components/schemas/ColorKey' }
-        name: { type: string, example: یاسی }
+        key: { allOf: [{ $ref: '#/components/schemas/ColorKey' }], description: 'یکتا (`409 DUPLICATE_CODE`)؛ در `PUT` باید همان کلید مسیر باشد (`400 COLOR_KEY_IMMUTABLE`)' }
+        name: { type: string, minLength: 1, maxLength: 50, example: یاسی }
         hex: { type: string, pattern: '^#[0-9A-Fa-f]{6}$', example: '#C8B6E2' }
-        isLight: { type: boolean }
-        sortOrder: { type: integer }
+        isLight: { type: boolean, default: false }
+        sortOrder: { type: integer, description: 'پیش‌فرض در ساخت: بعد از آخرین رنگ' }
     MaterialUpsertRequest:
       type: object
       required: [name, slug, family]
       properties:
-        name: { type: string, example: چرم طبیعی گاوی }
-        slug: { type: string, example: genuine-cow-leather }
+        name: { type: string, minLength: 1, maxLength: 120, example: چرم طبیعی گاوی }
+        slug: { type: string, maxLength: 100, pattern: '^(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*$', description: 'یکتا (`409 DUPLICATE_SLUG`)', example: genuine-cow-leather }
         family: { $ref: '#/components/schemas/MaterialFamily' }
-        description: { type: string, nullable: true }
+        description: { type: string, nullable: true, maxLength: 1000 }
         careInstructions:
           type: array
-          items: { type: string }
+          maxItems: 10
+          description: 'حداکثر ۱۰ تا، هر کدام ۱ تا ۲۰۰ نویسه (`CARE_INSTRUCTIONS_INVALID`)'
+          items: { type: string, minLength: 1, maxLength: 200 }
     AdminCategory:
       description: دسته‌بندی در پنل؛ `Category` به‌اضافه‌ی شناسه‌ی مدیای عکس تا فرم ویرایش بداند عکس فعلی کدام است
       allOf:
@@ -7661,7 +8364,7 @@ components:
       properties:
         id: { type: integer }
         text: { type: string }
-        author: { type: string, example: operator1 }
+        author: { type: string, description: اسم نمایشی نویسنده (اسم کامل، وگرنه موبایل ماسک‌شده), example: مریم رضایی }
         createdAt: { type: string, format: date-time }
     AdminOrderListItem:
       type: object
@@ -7701,9 +8404,9 @@ components:
               type: object
               properties:
                 id: { type: integer }
-                fullName: { type: string }
+                fullName: { type: string, nullable: true, description: 'اسم حساب؛ `null` وقتی مشتری اسمش را نداده' }
                 phone: { $ref: '#/components/schemas/PhoneNumber' }
-                ordersCount: { type: integer, example: 3 }
+                ordersCount: { type: integer, description: 'سفارش‌های پرداخت‌شده‌ی مشتری (لغوشده هم)', example: 3 }
             shipmentGroup:
               type: object
               nullable: true
@@ -7712,9 +8415,15 @@ components:
                 code: { type: string, example: SG-3021 }
                 orderCodes:
                   type: array
+                  description: سفارش‌های لغونشده‌ی گروه به ترتیب پرداخت
                   items: { $ref: '#/components/schemas/OrderCode' }
-                releaseAt: { type: string, format: date-time }
+                releaseAt: { type: string, format: date-time, description: پایان مهلت رزرو گروه }
+            draftItems:
+              type: array
+              description: 'پیش‌نویس عکس‌های قبل از ارسال (`PUT …/pre-shipment-media`) که هنوز فرستاده نشده؛ مشتری آن را نمی‌بیند'
+              items: { $ref: '#/components/schemas/OrderMediaItem' }
             payments:
+              description: همه‌ی تلاش‌های پرداخت سفارش، قدیمی‌ترین اول
               type: array
               items: { $ref: '#/components/schemas/OrderPaymentInfo' }
             refunds:
@@ -7762,7 +8471,7 @@ components:
       properties:
         amount: { $ref: '#/components/schemas/Money' }
         reason: { type: string, maxLength: 300 }
-        method: { type: string, enum: [ORIGINAL_PAYMENT, BANK_TRANSFER, STORE_CREDIT], default: ORIGINAL_PAYMENT }
+        method: { type: string, enum: [ORIGINAL_PAYMENT, BANK_TRANSFER], default: ORIGINAL_PAYMENT }
         returnId: { type: integer, nullable: true }
     AdminReturnDecisionRequest:
       type: object
@@ -7780,12 +8489,12 @@ components:
         variantId:
           type: integer
           nullable: true
-          description: 'فقط برای `APPLY` و `changeType` = `COLOR`/`MODEL`: ورینت جایگزین؛ اگر نیاید همان `desiredVariantId` ِ مشتری'
+          description: 'فقط برای `APPLY` و `changeType` = `COLOR`/`MODEL`: ورینت جایگزین؛ اگر نیاید همان `desiredVariantId` ِ مشتری. همان قانون `desiredVariantId` را دارد (`400 DESIRED_VARIANT_INVALID`)؛ با `REJECT`، `CANCEL_ITEM` یا `OTHER` ← `400 VARIANT_NOT_ALLOWED`'
         note:
           type: string
           maxLength: 500
           nullable: true
-          description: 'برای مشتری (پیامک و جزئیات سفارش)؛ برای `REJECT` و `OTHER` لازم'
+          description: 'برای مشتری: در `feedback.resolution.note` و تایم‌لاین سفارش دیده می‌شود (پیامک متن آزاد ندارد)؛ برای `REJECT` و `OTHER` لازم'
           example: رنگ مشکی تموم شده بود؛ همون رنگ قبلی برات ارسال می‌شه.
         notifyCustomer: { type: boolean, default: true }
     AdminRefundUpdateRequest:
@@ -7797,7 +8506,7 @@ components:
           type: string
           maxLength: 64
           nullable: true
-          description: 'شماره‌ی پیگیری بانک یا درگاه؛ برای `COMPLETED` با `ORIGINAL_PAYMENT` یا `BANK_TRANSFER` لازم'
+          description: 'شماره‌ی پیگیری انتقال بانکی (`[0-9A-Za-z-]`)؛ برای `COMPLETED` همیشه لازم (`400 REFERENCE_ID_REQUIRED`)'
           example: '140507181234567'
         note: { type: string, maxLength: 300, nullable: true, description: 'می‌شود `Refund.statusNote`؛ مشتری هم می‌بیند' }
     AdminReturnRequest:
@@ -7868,37 +8577,59 @@ components:
     # ============ ADMIN · MARKETING ============
     DiscountCodeUpsertRequest:
       type: object
+      description: |
+        ساخت و ویرایش کد تخفیف. همه‌ی خطاهای شکل با هم (`400`، روی همان فیلد). ویرایش کدی که استفاده شده مجاز است: سفارش‌های قبلی مبلغ
+        ذخیره‌شده‌ی خودشان را دارند و سبدها با همگام‌سازی بعدی دوباره بررسی می‌شوند (کدی که دیگر نمی‌خورد با `DISCOUNT_REMOVED` برداشته می‌شود).
       required: [code, type, value, label]
       properties:
-        code: { type: string, pattern: '^[A-Z0-9_-]{3,32}$', example: PAEEZ15 }
-        type: { type: string, enum: [PERCENT, FIXED] }
-        value: { type: integer, description: درصد (۱ تا ۱۰۰) یا مبلغ تومان, example: 15 }
-        label: { type: string, example: '۱۵٪ تخفیف پاییزه (خرید بالای ۲ میلیون)' }
-        minSubtotal: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, example: 2000000 }
-        maxDiscount: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, description: سقف تخفیف برای نوع درصدی }
+        code:
+          type: string
+          pattern: '^[A-Z0-9_-]{3,32}$'
+          description: |
+            اول trim، حروف بزرگ و ارقام لاتین می‌شود، بعد با الگو سنجیده می‌شود (` paeez۱۵ ` ← `PAEEZ15`؛ `DISCOUNT_CODE_TEXT_INVALID`).
+            تکراری (به‌جز خود همین کد در ویرایش) ← `409 DUPLICATE_CODE`. کدهای دوحرفی قدیمی معتبر می‌مانند، ولی کد تازه حداقل ۳ حرف است.
+          example: PAEEZ15
+        type: { type: string, enum: [PERCENT, FIXED], description: '`DISCOUNT_TYPE_INVALID`' }
+        value: { type: integer, description: '`PERCENT`: درصد ۱ تا ۱۰۰؛ `FIXED`: ۱٬۰۰۰ تا ۱۰۰٬۰۰۰٬۰۰۰ تومان (`DISCOUNT_VALUE_INVALID`)', example: 15 }
+        label: { type: string, minLength: 1, maxLength: 200, description: 'متنی که سبد نشان می‌دهد (`AppliedDiscount.label`)', example: '۱۵٪ تخفیف پاییزه (خرید بالای ۲ میلیون)' }
+        minSubtotal: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, description: '۰ تا ۱٬۰۰۰٬۰۰۰٬۰۰۰؛ `null` = بدون حداقل', example: 2000000 }
+        maxDiscount: { type: integer, allOf: [{ $ref: '#/components/schemas/Money' }], nullable: true, description: 'سقف تخفیف، **فقط** برای `PERCENT` (۱٬۰۰۰ تا ۱۰۰٬۰۰۰٬۰۰۰)؛ با `FIXED` ← `400 MAX_DISCOUNT_NOT_ALLOWED`' }
         startsAt: { type: string, format: date-time, nullable: true }
-        endsAt: { type: string, format: date-time, nullable: true }
-        usageLimit: { type: integer, nullable: true, description: کل دفعات مجاز }
-        perUserLimit: { type: integer, nullable: true, default: 1 }
+        endsAt: { type: string, format: date-time, nullable: true, description: 'بعد از `startsAt` (`DATE_RANGE_INVALID`)؛ کد تا (نه در) این لحظه کار می‌کند' }
+        usageLimit: { type: integer, minimum: 1, nullable: true, description: 'کل دفعات مجاز (سفارش‌های پرداخت‌نشده‌ی در جریان هم شمرده می‌شوند)؛ `null` = بی‌سقف' }
+        perUserLimit: { type: integer, minimum: 1, nullable: true, description: 'دفعات مجاز هر مشتری؛ `null` = بی‌سقف. پیش‌فرض ندارد: نیامده یعنی `null`' }
         firstOrderOnly: { type: boolean, default: false, description: مثل WELCOME }
-        requiresLogin: { type: boolean, default: false }
+        requiresLogin:
+          type: boolean
+          default: false
+          description: |
+            در پاسخ، مقدار **ذخیره‌شده** برمی‌گردد: `requiresLogin` یا `firstOrderOnly` یا `perUserLimit ≠ null`؛ چون مهمان را نمی‌شود شمرد،
+            هر کدام از این‌ها کد را «فقط با ورود» می‌کند (`DISCOUNT_LOGIN_REQUIRED`).
         excludeSaleItems: { type: boolean, default: false, description: اعمال نشدن روی کالاهای تخفیف‌خورده }
         categoryIds:
           type: array
+          maxItems: 50
+          uniqueItems: true
+          description: 'دسته‌هایی که کد شاملشان است؛ هر کدام باید وجود داشته باشد (`400 CATEGORY_NOT_FOUND` روی `categoryIds.i`). با `productIds` «اجتماع» است: ردیفی مشمول است که محصولش در `productIds` یا دسته‌اش در `categoryIds` باشد؛ هر دو خالی = همه‌ی ردیف‌ها'
           items: { type: integer }
         productIds:
           type: array
+          maxItems: 200
+          uniqueItems: true
+          description: 'محصولاتی که کد شاملشان است؛ هر کدام باید وجود داشته باشد (`400 PRODUCT_NOT_FOUND` روی `productIds.i`)'
           items: { type: integer }
         isActive: { type: boolean, default: true }
     DiscountCode:
       allOf:
         - $ref: '#/components/schemas/DiscountCodeUpsertRequest'
         - type: object
+          required: [id, usedCount, totalDiscountGiven, createdAt, updatedAt]
           properties:
             id: { type: integer }
-            usedCount: { type: integer, example: 132 }
-            totalDiscountGiven: { $ref: '#/components/schemas/Money' }
+            usedCount: { type: integer, description: 'سفارش‌های پرداخت‌شده و برنگشته (لغوشده نه) که این کد را دارند', example: 132 }
+            totalDiscountGiven: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'جمع تخفیف همان سفارش‌ها' }
             createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
     CampaignUpsertRequest:
       type: object
       required: [slug, title, startsAt, endsAt]
@@ -8013,40 +8744,120 @@ components:
         seo: { $ref: '#/components/schemas/SeoMeta' }
     AdminSettings:
       type: object
-      description: مقادیری که در `/config` منتشر می‌شوند
+      description: |
+        تنظیمات فروشگاه در پنل. بخشی از این‌ها در `/config` منتشر می‌شوند (روش‌های ارسال، ارسال رایگان، رزرو، مهلت مرجوعی، آستانه‌ی موجودی کم،
+        پشتیبانی، شبکه‌های اجتماعی و درگاه‌ها)، `siteStats` در `/site/stats`، و بقیه فقط رفتار سرور را عوض می‌کنند.
+
+        **`PUT` کل سند است:** همه‌ی فیلدهای سطح اول لازم‌اند (فیلد نیامده ← `400 FIELD_REQUIRED` روی همان فیلد؛ `null` فقط برای فیلدهای
+        `nullable`) و لیست‌ها **کامل جایگزین** می‌شوند. فیلدهای فقط‌خواندنی (`shippingMethods[].description`، `paymentGateways[].name`،
+        `paymentGateways[].available`، `siteStats.satisfaction.scale`، `siteStats.satisfaction.metrics[].label`) نادیده گرفته می‌شوند.
+        همه‌ی خطاهای شکل با هم و با مسیر فیلد برمی‌گردند (`shippingMethods.1.maxDays`، `social.0.url`). پاسخ همیشه کل سند تازه است.
+        ذخیره‌ی بی‌تغییر `200` است و ردیفی در لاگ تغییرات نمی‌گذارد؛ هر ذخیره‌ی دیگر یک ردیف `SETTINGS_UPDATED` با فیلدهای عوض‌شده.
+
+        **تغییرها فقط از این لحظه به بعد اثر دارند:** `paymentPendingMinutes` برای سفارش‌های تازه؛ `reservationHoldDays` برای گروه‌های رزرو تازه؛
+        `returnWindowDays` برای سفارش‌هایی که از این به بعد تحویل می‌شوند؛ `preShipmentFeedbackHours` برای عکس‌هایی که از این به بعد فرستاده می‌شوند؛
+        هزینه‌ها و آستانه‌ی ارسال رایگان از همگام‌سازی بعدی سبد (سفارش ثبت‌شده مبلغ خودش را دارد). دو استثنا: **اسم روش ارسال** روی سفارش‌های قبلی هم
+        عوض می‌شود (از تنظیمات خوانده می‌شود)، و `lowStockThreshold` همان لحظه همه‌جا.
+
+        **همزمانی:** دو ذخیره‌ی همزمان ← دومی `409 CHANGED_BY_SOMEONE_ELSE` و هیچ‌چیزش ذخیره نمی‌شود؛ پنل سند را دوباره می‌خواند.
+      required:
+        - shippingMethods
+        - defaultShippingMethod
+        - freeShippingThreshold
+        - freeShippingMethods
+        - reservationEnabled
+        - reservationHoldDays
+        - returnWindowDays
+        - lowStockThreshold
+        - preShipmentFeedbackHours
+        - paymentPendingMinutes
+        - nonShippingWeekdays
+        - supportPhone
+        - supportEmail
+        - supportHours
+        - social
+        - paymentGateways
+        - siteStats
+        - features
       properties:
         shippingMethods:
           type: array
+          description: |
+            دقیقاً همان روش‌هایی که فروشگاه دارد (`TIPAX` و `POST`)، هر کدام یک بار (وگرنه `400 SHIPPING_METHOD_LIST_INVALID`)؛ ترتیب لیست = ترتیب نمایش.
+            `COURIER` تا تصمیمش گرفته نشده `400 SHIPPING_METHOD_NOT_SUPPORTED` است. حداقل یکی فعال (`400 NO_ACTIVE_SHIPPING_METHOD`).
+            هر روش: `name` ۱ تا ۵۰ حرف؛ `baseCost` ۰ تا ۱۰٬۰۰۰٬۰۰۰؛ `minDays` ۰ تا ۳۰ و `maxDays` از `minDays` تا ۳۰ (`NUMBER_OUT_OF_RANGE` با `meta.min` و `meta.max`)؛
+            `icon` ۱ تا ۳۰ حرف کوچک انگلیسی، رقم یا خط تیره (`ICON_INVALID`)؛ `trackingUrlTemplate` با `https://`، شامل `{code}` و حداکثر ۳۰۰ حرف، یا `null`
+            (`TRACKING_URL_TEMPLATE_INVALID`)؛ `description` فقط خواندنی.
           items: { $ref: '#/components/schemas/ShippingMethod' }
-        freeShippingThreshold: { allOf: [{ $ref: '#/components/schemas/Money' }], example: 3000000 }
+        defaultShippingMethod:
+          allOf: [{ $ref: '#/components/schemas/ShippingMethodCode' }]
+          description: 'روش سبد تازه؛ باید یکی از روش‌های **فعال** لیست باشد (`400 DEFAULT_SHIPPING_METHOD_INVALID`)'
+        freeShippingThreshold: { allOf: [{ $ref: '#/components/schemas/Money' }], description: '۰ تا ۱۰۰٬۰۰۰٬۰۰۰؛ با `subtotal` (بعد از تخفیف محصولات، قبل از کد) مقایسه می‌شود', example: 3000000 }
         freeShippingMethods:
           type: array
+          uniqueItems: true
+          description: 'روش‌هایی که از آستانه به بعد رایگان‌اند؛ هر کدام یکی از روش‌های لیست `shippingMethods` (`COURIER` ← `SHIPPING_METHOD_NOT_SUPPORTED`، تکرار ← `LIST_ITEM_DUPLICATE`). خالی = ارسال رایگان نداریم'
           items: { $ref: '#/components/schemas/ShippingMethodCode' }
         reservationEnabled: { type: boolean, example: true }
-        reservationHoldDays: { type: integer, example: 4 }
-        returnWindowDays: { type: integer, example: 7 }
-        lowStockThreshold: { type: integer, example: 5 }
-        preShipmentFeedbackHours: { type: integer, description: '[پیشنهادی] مهلت پاسخ مشتری به عکس قبل از تأیید خودکار', example: 24 }
-        paymentPendingMinutes: { type: integer, example: 15 }
+        reservationHoldDays: { type: integer, minimum: 1, maximum: 14, example: 4 }
+        returnWindowDays: { type: integer, minimum: 0, maximum: 60, example: 7 }
+        lowStockThreshold: { type: integer, minimum: 1, maximum: 20, description: 'کمتر از این ← «موجودی کم» و `availableQuantity`', example: 5 }
+        preShipmentFeedbackHours: { type: integer, minimum: 1, maximum: 168, description: مهلت پاسخ مشتری به عکس قبل از تأیید خودکار, example: 24 }
+        paymentPendingMinutes: { type: integer, minimum: 5, maximum: 60, example: 15 }
         nonShippingWeekdays:
           type: array
-          items: { type: string }
+          uniqueItems: true
+          description: 'روزهایی که ارسال نداریم و در روز کاری حساب نمی‌شوند؛ کمتر از ۷ روز (`400 NON_SHIPPING_WEEKDAYS_INVALID`)، روز ناشناخته ← `WEEKDAY_INVALID`'
+          items: { type: string, enum: [SATURDAY, SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY] }
           example: [FRIDAY]
-        supportPhone: { type: string }
-        supportEmail: { type: string, format: email }
+        supportPhone: { type: string, nullable: true, description: 'موبایل یا تلفن ثابت ایران با پیش‌شماره (ارقام فارسی لاتین می‌شوند، فاصله و خط تیره حذف)؛ `SUPPORT_PHONE_INVALID`؛ متن خالی مثل `null` یعنی پاک', example: '02191001234' }
+        supportEmail: { type: string, format: email, maxLength: 100, nullable: true, description: '`EMAIL_INVALID`، بیشتر از ۱۰۰ ← `EMAIL_TOO_LONG`؛ متن خالی مثل `null` یعنی پاک', example: support@kiva.ir }
         supportHours:
           type: array
+          maxItems: 7
+          description: |
+            هر ردیف (`SUPPORT_HOURS_INVALID` روی همان ردیف): `label` ۱ تا ۵۰ حرف؛ `weekdays` حداقل یک روز، بدون تکرار؛ `from` و `to` به شکل `HH:mm`
+            و `from < to`، یا هر دو `null` برای «تعطیل». بیشتر از ۷ ردیف ← `TOO_MANY_ITEMS`.
           items: { $ref: '#/components/schemas/SupportHours' }
         social:
           type: array
+          maxItems: 10
+          description: 'هر ردیف (`SOCIAL_LINK_INVALID` روی همان ردیف): `channel`؛ `name` ۱ تا ۴۰ حرف؛ `url` با `https://` و حداکثر ۳۰۰ حرف؛ `handle` حداکثر ۵۰ حرف یا `null`. بیشتر از ۱۰ ← `TOO_MANY_ITEMS`'
           items: { $ref: '#/components/schemas/SocialLink' }
         paymentGateways:
           type: array
-          items: { $ref: '#/components/schemas/PaymentGateway' }
-        siteStats: { $ref: '#/components/schemas/SiteStats' }
+          description: |
+            دقیقاً سه درگاه، هر کدام یک بار (`400 PAYMENT_GATEWAY_LIST_INVALID`)؛ ترتیب لیست = ترتیب نمایش در تسویه.
+            حداقل یکی فعال (`400 NO_ACTIVE_GATEWAY`) و دقیقاً یکی پیش‌فرض که فعال هم باشد (`400 DEFAULT_GATEWAY_INVALID`).
+          items: { $ref: '#/components/schemas/AdminPaymentGatewaySetting' }
+        siteStats:
+          allOf: [{ $ref: '#/components/schemas/SiteStats' }]
+          description: |
+            عددهای بازاریابی، **دستی**؛ همین‌ها در `GET /site/stats` منتشر می‌شوند (حساب نمی‌شوند). همه‌ی فیلدهای `SiteStats` لازم‌اند و عددها
+            ۰ تا ۱۰٬۰۰۰٬۰۰۰، درصدها ۰ تا ۱۰۰ (`NUMBER_OUT_OF_RANGE`). `satisfaction` بی‌مقدار `null` است؛ با مقدار: `averageRating` ۰ تا ۵ با حداکثر
+            یک رقم اعشار (`RATING_INVALID`)، `totalCount` ≥ ۰، `metrics` هر `key` حداکثر یک بار و `sources` بدون تکرار (`LIST_ITEM_DUPLICATE`)؛
+            کلید ناشناخته‌ی `metrics` ← `SATISFACTION_METRIC_INVALID`، شبکه‌ی ناشناخته‌ی `sources` ← `SOCIAL_CHANNEL_INVALID`.
         features:
           type: object
-          additionalProperties: { type: boolean }
+          description: |
+            پرچم‌های قابلیت. فقط همین سه کلید (کلید ناشناخته ← `400 FEATURE_UNKNOWN`)، و هر سه لازم: `wishlistShare` (لینک اشتراک علاقه‌مندی‌ها)،
+            `reviewMedia` (عکس در نظرها)، `giftWrap` (فعلاً پشتیبانی نمی‌شود: `true` ← `400 FEATURE_NOT_AVAILABLE`).
+          required: [wishlistShare, reviewMedia, giftWrap]
+          additionalProperties: false
+          properties:
+            wishlistShare: { type: boolean, example: false }
+            reviewMedia: { type: boolean, example: false }
+            giftWrap: { type: boolean, example: false }
+    AdminPaymentGatewaySetting:
+      type: object
+      description: یک درگاه در تنظیمات پنل
+      required: [code, name, isActive, isDefault, available]
+      properties:
+        code: { $ref: '#/components/schemas/PaymentGatewayCode' }
+        name: { type: string, description: فقط خواندنی, example: زرین‌پال }
+        isActive: { type: boolean, description: فروشگاه این درگاه را روشن کرده, example: true }
+        isDefault: { type: boolean, description: درگاهی که تسویه اول انتخاب می‌کند, example: true }
+        available: { type: boolean, description: 'فقط خواندنی: فعال **و** سرور برایش آداپتر دارد؛ فقط همین‌ها به مشتری پیشنهاد می‌شوند', example: true }
 
     # ============ ADMIN · SUPPORT & REPORTS ============
     AdminReviewListResponse:
@@ -8120,49 +8931,58 @@ components:
               items: { $ref: '#/components/schemas/Address' }
             recentOrders:
               type: array
-              description: 'آخرین ۵ سفارش، تازه‌ترین اول؛ برای همه: `GET /admin/orders?q=<موبایل>`'
+              description: 'آخرین ۵ سفارش **در هر وضعیتی** (پرداخت‌نشده و منقضی هم، تا پشتیبانی ببیند)، تازه‌ترین اول؛ برای همه: `GET /admin/orders?q=<موبایل>`'
               items: { $ref: '#/components/schemas/AdminOrderListItem' }
     AdminReportOverview:
       type: object
+      description: 'داشبورد مدیریتی یک بازه. «سفارش دوره» در `GET /admin/reports/overview`.'
+      required: [from, to, revenue, ordersCount, averageOrderValue, newCustomers, reservationShare, mediaApprovalRate, changeRequestRate, returnRate, discountTotal, shippingMix, messengerMix, topProducts, dailySeries]
       properties:
         from: { type: string, format: date }
         to: { type: string, format: date }
-        revenue: { $ref: '#/components/schemas/Money' }
-        ordersCount: { type: integer }
-        averageOrderValue: { $ref: '#/components/schemas/Money' }
-        newCustomers: { type: integer }
-        reservationShare: { type: number, description: درصد سفارش‌های رزروی, example: 18.5 }
-        mediaApprovalRate: { type: number, description: درصد تأیید عکس قبل از ارسال, example: 97.2 }
-        changeRequestRate: { type: number, example: 2.1 }
-        returnRate: { type: number, example: 0.8 }
-        discountTotal: { $ref: '#/components/schemas/Money' }
+        revenue: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'جمع (پرداخت‌شده − برگشت‌داده‌شده) ِ سفارش‌های دوره؛ پرداخت‌شده = مبلغ ثبت + مانده‌ی پرداخت‌شده' }
+        ordersCount: { type: integer, description: تعداد سفارش‌های دوره }
+        averageOrderValue: { allOf: [{ $ref: '#/components/schemas/Money' }], description: '`revenue ÷ ordersCount` به نزدیک‌ترین تومان (نیمه به بالا)؛ بدون سفارش ۰' }
+        newCustomers: { type: integer, description: کاربرانی که **اولین** سفارش پرداخت‌شده‌شان در این بازه است }
+        reservationShare: { type: number, description: درصد سفارش‌های دوره که عضو گروه رزروند, example: 18.5 }
+        mediaApprovalRate: { type: number, description: 'از سفارش‌هایی که **اولین** عکس قبل از ارسالشان در بازه فرستاده شد، درصد آن‌هایی که هیچ‌وقت درخواست تغییر نداشتند؛ بدون چنین سفارشی ۰', example: 97.2 }
+        changeRequestRate: { type: number, description: 'از همان سفارش‌ها، درصد آن‌هایی که حداقل یک درخواست تغییر داشتند (با `mediaApprovalRate` جمعش ۱۰۰ است، یا هر دو ۰)', example: 2.1 }
+        returnRate: { type: number, description: 'از سفارش‌هایی که در بازه تحویل شدند، درصد آن‌هایی که درخواست مرجوعی دارند (تا ساخته شدن مرجوعی همیشه ۰)', example: 0.8 }
+        discountTotal: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'جمع تخفیف کد ِ سفارش‌های دوره' }
         shippingMix:
           type: object
+          description: 'تعداد سفارش‌های دوره برای **هر** روش ارسال (`ShippingMethodCode`)، صفر هم'
           additionalProperties: { type: integer }
-          example: { TIPAX: 120, POST: 310 }
+          example: { TIPAX: 120, POST: 310, COURIER: 0 }
         messengerMix:
           type: object
+          description: 'تعداد سفارش‌های دوره برای **هر** پیام‌رسان (`PhotoMessengerChannel`)، صفر هم'
           additionalProperties: { type: integer }
           example: { TELEGRAM: 200, BALE: 130, RUBIKA: 100 }
         topProducts:
           type: array
+          maxItems: 5
+          description: '۵ محصول با بیشترین تعداد فروخته‌شده در سفارش‌های دوره (ردیف‌های **فعلی** سفارش، یعنی بعد از درخواست تغییر)؛ مساوی ← شناسه‌ی کوچک‌تر اول'
           items:
             type: object
+            required: [product, unitsSold, revenue]
             properties:
               product: { $ref: '#/components/schemas/ProductRef' }
               unitsSold: { type: integer }
-              revenue: { $ref: '#/components/schemas/Money' }
+              revenue: { allOf: [{ $ref: '#/components/schemas/Money' }], description: جمع مبلغ ردیف‌های همین محصول }
         dailySeries:
           type: array
+          description: 'هر روز تهران ِ بازه، به ترتیب، **صفر هم**: فروش و تعداد سفارش‌های دوره که `paidOn` شان همان روز است'
           items:
             type: object
+            required: [date, revenue, orders]
             properties:
               date: { type: string, format: date }
               revenue: { $ref: '#/components/schemas/Money' }
               orders: { type: integer }
     AuditEntityType:
       type: string
-      description: نوع چیزی که در پنل تغییر کرد
+      description: 'نوع چیزی که در پنل تغییر کرد. `MEDIA` استفاده نمی‌شود: آپلود مدیا در لاگ تغییرات ثبت نمی‌شود.'
       enum: [PRODUCT, VARIANT, INVENTORY, MEDIA, CATEGORY, COLOR, MATERIAL, ORDER, RETURN, REFUND, DISCOUNT_CODE, CAMPAIGN, BANNER, ANNOUNCEMENT, TESTIMONIAL, FAQ, PAGE, SETTINGS, REVIEW, CONTACT_MESSAGE, USER]
     AuditLogEntry:
       type: object

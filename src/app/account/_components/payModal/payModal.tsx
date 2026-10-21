@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
 import classNames from "classnames";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
@@ -35,7 +34,7 @@ type View = "form" | "redirect" | "paid" | "expired";
 
 /**
  * Pay an unpaid order from «سفارش‌های من» (`POST /me/orders/{code}/payments`) — design `order-pay.html`.
- * The same call pays `balanceDue` of a paid order (a change to a pricier colour / model).
+ * The same call pays `balanceDue` of a paid order (a change to a pricier colour / model; `purpose = BALANCE`, its own 10 attempts).
  * The bank sends the shopper back to `/checkout/result?paymentId=…`, like checkout.
  */
 export default function PayModal({ order, open, onClose }: PayModalProps) {
@@ -134,27 +133,8 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 							اگه منتقل نشدی، این‌جا رو بزن
 						</button>
 					</div>
-				) : view === "paid" && balance && detail.isFetching ? (
-					// the re-read tells «already paid» from «can't be paid from here yet»
-					<Loading />
-				) : view === "paid" && balance && (detail.data?.totals.balanceDue ?? 0) > 0 ? (
-					// until the backend's balance phase a paid order answers `ORDER_ALREADY_PAID` even with a balance left (contract 1.7.0)
-					<div className="m-done">
-						<div className="ck purple">
-							<Icon name="info" />
-						</div>
-						<h3>پرداخت مابه‌التفاوت فعلاً از این‌جا ممکن نیست</h3>
-						<p>مابه‌التفاوت سفارش {order.code} هنوز پرداخت نشده؛ برای پرداختش با پشتیبانی کیوا تماس بگیر.</p>
-						<div className="acts">
-							<Link className="btn btn-primary btn-block" href="/contact">
-								تماس با پشتیبانی
-							</Link>
-							<button type="button" className="btn btn-outline btn-block" onClick={onClose}>
-								بستن
-							</button>
-						</div>
-					</div>
 				) : view === "paid" ? (
+					// `ORDER_ALREADY_PAID` = paid and nothing left to pay (contract 1.12.0) — another tab paid it, or a cheaper change cleared the balance
 					<div className="m-done">
 						<div className="ck">
 							<Icon name="check" />
@@ -208,7 +188,7 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 									{detail.data.items.map((item) => (
 										<div key={item.id} className="mini">
 											<span className="th">
-												<MediaImage src={item.image?.url} alt={item.image?.alt ?? item.name} placeholderColor={item.color.hex} />
+												<MediaImage src={item.image} alt={item.name} placeholderColor={item.color.hex} />
 												{item.quantity > 1 && <em>{toPersianDigits(item.quantity)}</em>}
 											</span>
 											<span>

@@ -6,7 +6,7 @@
 
 | مرجع | کجا |
 |---|---|
-| قرارداد API | [`kiva-openapi.yml`](kiva-openapi.yml) — نسخه‌ی **1.7.0** |
+| قرارداد API | [`kiva-openapi.yml`](kiva-openapi.yml) — نسخه‌ی **1.12.0** |
 | فهرست کامل ویژگی‌ها و API پنل ادمین | [`docs/FEATURES.md`](docs/FEATURES.md) |
 | طرح‌ها | `D:\pariya\kiva` (HTML/CSS؛ دیزاین‌سیستم در `assets/kiva.css`) + کارهای سفارش در `D:\pariya\kiva-order-actions` |
 | گزارش کارها و تصمیم‌ها | `D:\pariya\docs\PROGRESS.md` |
@@ -50,10 +50,10 @@ NEXT_PUBLIC_API_URL="http://localhost:8080/api/v1/"
 | کاربر جدید | ۱۵ سفارش، از هر وضعیت یکی (در انتظار پرداخت، ناموفق، منقضی، رزرو، عکس منتظر پاسخ/تأییدشده/درخواست تغییر، درخواست تغییرِ انجام‌شده با مابه‌التفاوت (`KV-216702`) و ردشده (`KV-216311`)، ارسال‌شده، تحویل‌شده، مرجوعی، لغوشده)، یک آدرس، ۳ علاقه‌مندی، ۲ نظر، ۳ اشتراک «موجود شد» |
 | کد تخفیف | `KIVA10`، `WELCOME`، `PAEEZ15` |
 | پرداخت | `/mock-gateway/:id`: بانک آزمایشی با «پرداخت موفق» و «انصراف»، که به `/checkout/result` برمی‌گردد. لینک‌های آزمایشی پایینش: «تأیید با ۸ ثانیه تأخیر» (`PENDING` ← صفحه‌ی نتیجه خودش دوباره می‌پرسد)، «۴۵ ثانیه» (بیشتر از ۳۰ ثانیه‌ی صبر صفحه)، «برگشت بدون شناسه» (نتیجه پیدا نشد) |
-| سقف‌ها (1.7.0) | از هر کیف (همه‌ی رنگ‌ها با هم) حداکثر ۵ عدد · هر کاربر حداکثر ۳ سفارش پرداخت‌نشده‌ی در مهلت (چهارمی `429`) · هر سفارش ۱۰ تلاش پرداخت |
+| سقف‌ها (1.12.0) | از هر کیف (همه‌ی رنگ‌ها با هم) حداکثر ۵ عدد · هر کاربر حداکثر ۳ سفارش پرداخت‌نشده‌ی در مهلت (چهارمی `429`) · هر سفارش ۱۰ تلاش پرداخت (و جدا ۱۰ تلاش پرداخت مابه‌التفاوت) · پیگیری عمومی ۱۰ بار در ۱۰ دقیقه برای هر IP |
 | خطاهای نمونه | پرداخت از حساب با «بانک سامان»: `PAYMENT_GATEWAY_UNAVAILABLE` · «کلاچ مهتاب» قابل رزرو نیست · پیگیری کدی که با `0000` تمام شود: «پیدا نشد» · نام «تداخل» در پروفایل: `CHANGED_BY_SOMEONE_ELSE` |
 | انقضای توکن | `POST /api/v1/__mock/expire-access-tokens` همه‌ی access tokenها را فوراً منقضی می‌کند (برای تست تمدید، مثلاً با دو تب) |
-| موجودی و درگاه (خارج از قرارداد) | `POST /api/v1/__mock/products/{id}` با `{ stock?, active?, photo? }` (تمام شدن / بیرون رفتن از فروشگاه ← ردیف غیرقابل خرید سبد؛ `photo: false` ← عکس `null`) · `POST /api/v1/__mock/gateways/{ZARINPAL\|SAMAN\|MELLAT}` با `{ state: "UP" \| "OFF" \| "NO_ANSWER" }` (`OFF`: درگاه در دسترس نیست، چیزی ساخته نمی‌شود؛ `NO_ANSWER`: سفارش/تراکنش ساخته می‌شود و `422` با `meta.orderCode` + `meta.paymentId`) · `POST /api/v1/__mock/balance-payments` با `{ enabled: false }` (فاز فعلی بک‌اند: پرداخت مابه‌التفاوت `ORDER_ALREADY_PAID`) |
+| موجودی و درگاه (خارج از قرارداد) | `POST /api/v1/__mock/products/{id}` با `{ stock?, active?, photo? }` (تمام شدن / بیرون رفتن از فروشگاه ← ردیف غیرقابل خرید سبد؛ `photo: false` ← عکس `null`) · `POST /api/v1/__mock/gateways/{ZARINPAL\|SAMAN\|MELLAT}` با `{ state: "UP" \| "OFF" \| "NO_ANSWER" }` (`OFF`: درگاه در دسترس نیست، چیزی ساخته نمی‌شود؛ `NO_ANSWER`: سفارش/تراکنش ساخته می‌شود و `422` با `meta.orderCode` + `meta.paymentId`) |
 | کارهای پنل (خارج از قرارداد) | `POST /api/v1/__mock/orders/{code}/change-request/resolution` با `{ decision: "APPLY" \| "REJECT", variantId?, note? }` (رسیدگی به درخواست تغییر) · `POST /api/v1/__mock/orders/{code}/photos` (عکس تازه بعد از رسیدگی) · `POST /api/v1/__mock/returns/{RT-…}` با `{ status, pickup?, rejectionReason?, closeReason?, refund? }` (بردن مرجوعی به هر مرحله) |
 
 ## صفحات

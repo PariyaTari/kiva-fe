@@ -48,7 +48,6 @@ export const ibanDigits = (value: string) => convertPersianToEnglishString(value
 export const REFUND_METHODS: { key: RefundMethod; icon: string; title: string }[] = [
 	{ key: "ORIGINAL_PAYMENT", icon: "card", title: "به همون کارت" },
 	{ key: "BANK_TRANSFER", icon: "bank", title: "واریز به شماره شبا" },
-	{ key: "STORE_CREDIT", icon: "wallet", title: "اعتبار خرید در کیوا" },
 ];
 
 /** How many of a line can still be returned (requests that weren't rejected already hold some). */

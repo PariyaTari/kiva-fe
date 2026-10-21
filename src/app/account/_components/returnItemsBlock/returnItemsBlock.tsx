@@ -36,7 +36,7 @@ export default function ReturnItemsBlock({ blockRef, lines, selected, quantities
 							<label className="check">
 								<input type="checkbox" checked={on} disabled={!returnable} onChange={(e) => onToggle(item.id, e.target.checked)} />
 								<span className="th">
-									<MediaImage src={item.image?.url} alt={item.name} placeholderColor={item.color.hex} />
+									<MediaImage src={item.image} alt={item.name} placeholderColor={item.color.hex} />
 								</span>
 								<span>
 									<b>{item.name}</b>

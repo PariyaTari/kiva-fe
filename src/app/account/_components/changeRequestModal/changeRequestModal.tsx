@@ -18,7 +18,8 @@ import { toPersianDigits } from "@/utils/digits";
 import { formatPrice } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
-import { ERROR_BEHAVIOUR, isTooLateError } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isDesiredVariantError, isOrderMovedOnError } from "../../_utils/apiError";
+import { lineRefund, refundableTotal } from "../../_utils/orderActions";
 import ModalHead from "../modalHead/modalHead";
 
 type ChangeRequestModalProps = {
@@ -33,6 +34,10 @@ const TYPES: { key: MediaChangeType; icon: string; title: string; hint: string }
 	{ key: "CANCEL_ITEM", icon: "trash", title: "حذفش کن", hint: "بقیه‌ی سفارش ارسال بشه" },
 	{ key: "OTHER", icon: "chat", title: "چیز دیگه", hint: "توضیح بده چی می‌خوای" },
 ];
+/** `CANCEL_ITEM` of the only line — once the photos are sent this is how the shopper cancels (contract 1.12.0). */
+const CANCEL_ORDER = { key: "CANCEL_ITEM" as const, icon: "ban", title: "لغو سفارش", hint: "کل سفارش لغو بشه" };
+/** The refund is manual — said under every amount that comes back. */
+const CALL_NOTE = "برای واریزش، همکارهامون باهات تماس می‌گیرن و شماره شبات رو می‌پرسن.";
 
 const NOTE_MAX = 500;
 /** Same key and size as the product page's «محصولات مرتبط», so the two share the request. */
@@ -40,8 +45,8 @@ const RELATED_LIMIT = 8;
 const MODELS = 4;
 
 /**
- * Change request after the pre-shipment photos — colour, model, drop one bag, or anything else
- * (`POST /me/orders/{code}/media-feedback` with `REQUEST_CHANGE`) — design `order-photo-review.html`.
+ * Change request after the pre-shipment photos — colour, model, drop one bag (the only one = cancel the order), or anything else
+ * (`POST /me/orders/{code}/media-feedback` with `REQUEST_CHANGE`) — design `order-photo-review.html`. Also after «همونه!», until shipping.
  */
 export default function ChangeRequestModal({ order, open, onClose }: ChangeRequestModalProps) {
 	const queryClient = useQueryClient();
@@ -53,7 +58,7 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 	const [note, setNote] = useState("");
 	const [noteError, setNoteError] = useState(false);
 	const [formError, setFormError] = useState<{ text: string; n: number } | null>(null);
-	const [result, setResult] = useState<{ view: "done"; step3: string } | { view: "late" } | null>(null);
+	const [result, setResult] = useState<{ view: "done"; step2: string; step3: string } | { view: "late" } | null>(null);
 
 	const detail = useQuery({
 		queryKey: ["me", "orders", "detail", order.code],
@@ -83,6 +88,10 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 	});
 	const models = (related.data ?? []).filter((p) => p.id !== item?.productId && p.stock.status !== "OUT_OF_STOCK").slice(0, MODELS);
 	const model = models.find((p) => p.id === modelId);
+	/** Still unpaid from an earlier change — money coming back pays it off first, only the rest is refunded (contract 1.12.0). */
+	const owed = detail.data?.totals.balanceDue ?? 0;
+	/** What dropping the line gives back: its share (minus the code discount) after `owed`, or — the only line — everything paid that wasn't refunded (a cancelled order owes nothing). */
+	const dropRefund = detail.data && item ? (multi ? Math.max(0, lineRefund(item, detail.data.totals) - owed) : refundableTotal(detail.data)) : 0;
 
 	/** Price difference of the swap (`unit price × qty − what was paid for the line`). */
 	const priceDiff = (() => {
@@ -94,6 +103,11 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 		if (kind === "MODEL" && model && modelVariant) return model.price.price * item.quantity - item.lineTotal;
 		return 0;
 	})();
+	/** «… تومان برات برمی‌گرده» after `owed` took its part — or, when `owed` takes it all, that the balance goes down instead. */
+	const backText = (amount: number) =>
+		amount > 0
+			? `${formatPrice(amount)} تومان برات برمی‌گرده${owed > 0 ? " (بعد از کم شدن مابه‌التفاوتی که هنوز پرداخت نکردی)" : ""}؛ ${CALL_NOTE}`
+			: "مبلغش از مابه‌التفاوتی که هنوز پرداخت نکردی کم می‌شه.";
 
 	const send = useMutation({
 		mutationFn: () =>
@@ -109,22 +123,54 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["me", "orders"] });
 			queryClient.invalidateQueries({ queryKey: ["me", "dashboard"] });
+			const step2 =
+				kind === "CANCEL_ITEM" && !multi
+					? "بعد از تأیید، لغو شدن سفارش رو با پیامک خبرت می‌کنیم."
+					: kind === "CANCEL_ITEM"
+						? "قبل از ارسال، از بقیه‌ی سفارش دوباره عکس می‌گیریم تا تأییدش کنی."
+						: kind === "OTHER"
+							? "قبل از ارسال، دوباره از کیفت عکس و ویدیو می‌گیریم تا تأییدش کنی."
+							: "قبل از ارسال، از کیف جدید عکس و ویدیو می‌گیریم تا دوباره تأییدش کنی.";
 			const step3 =
-				kind === "CANCEL_ITEM" && item
-					? `بعد از تأیید اپراتور، ${formatPrice(item.lineTotal)} تومان به کارتت برمی‌گرده.`
-					: priceDiff > 0
-						? `بعد از تأیید اپراتور، مابه‌التفاوت ${formatPrice(priceDiff)} تومانی رو همین‌جا توی «سفارش‌های من» پرداخت می‌کنی؛ بعدش ارسال می‌شه.`
-						: priceDiff < 0
-							? `بعد از تأیید اپراتور، مابه‌التفاوت ${formatPrice(-priceDiff)} تومانی به کارتت برمی‌گرده.`
-							: "اگه قیمت فرق داشت، مابه‌التفاوت یا توی «سفارش‌های من» پرداخت می‌شه یا به کارتت برمی‌گرده.";
-			setResult({ view: "done", step3 });
+				kind === "CANCEL_ITEM" && !multi
+					? `بعد از تأیید اپراتور سفارش لغو می‌شه و ${formatPrice(dropRefund)} تومان برات برمی‌گرده؛ ${CALL_NOTE}`
+					: kind === "CANCEL_ITEM"
+						? `بعد از تأیید اپراتور، ${backText(dropRefund)}`
+						: priceDiff > 0
+							? `بعد از تأیید اپراتور، مابه‌التفاوت ${formatPrice(priceDiff)} تومانی رو همین‌جا توی «سفارش‌های من» پرداخت می‌کنی؛ بعدش ارسال می‌شه.`
+							: priceDiff < 0
+								? `بعد از تأیید اپراتور، ${backText(Math.max(0, -priceDiff - owed))}`
+								: "اگه قیمت فرق داشت، مابه‌التفاوت یا توی «سفارش‌های من» پرداخت می‌شه یا برات برمی‌گرده.";
+			setResult({ view: "done", step2, step3 });
 		},
 		onError: (e) => {
-			// shipped meanwhile
-			if (isTooLateError(e)) {
+			// the state changed meanwhile (shipped, a request already open, answered in another tab)
+			if (isOrderMovedOnError(e)) {
 				queryClient.invalidateQueries({ queryKey: ["me", "orders"] });
 				return setResult({ view: "late" });
 			}
+			// the colour / model went off sale or doesn't fit — the pick is cleared and the lists re-read so it can be made again
+			if (isDesiredVariantError(e)) {
+				if (kind === "COLOR") {
+					setColorVariant(null);
+					product.refetch();
+				}
+				if (kind === "MODEL") {
+					setModelVariant(null);
+					related.refetch();
+				}
+				return fail(e.errorDetails?.find((d) => d.code === "DESIRED_VARIANT_INVALID")?.message ?? e.description);
+			}
+			// the line is gone (another change was applied meanwhile) — the order is re-read and the pick starts over
+			const itemDetail = e.errorDetails?.find((d) => d.field === "orderItemId");
+			if (itemDetail) {
+				queryClient.invalidateQueries({ queryKey: ["me", "orders"] });
+				setItemPick(null);
+				return fail(itemDetail.message);
+			}
+			if (e.errorDetails?.some((d) => d.field === "note")) return setNoteError(true);
+			const field = e.errorDetails?.[0];
+			if (field) return fail(field.message);
 			toast(e.description, { type: "error" });
 		},
 	});
@@ -144,7 +190,7 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 	};
 
 	const changed = () => setFormError(null);
-	const types = TYPES.filter((t) => t.key !== "CANCEL_ITEM" || multi);
+	const types = TYPES.map((t) => (t.key === "CANCEL_ITEM" && !multi ? CANCEL_ORDER : t));
 	const channel = order.preShipmentMedia?.channel;
 	const channelName = order.preShipmentMedia?.channelName ?? "";
 	const detailError = toErrorView(ERROR_BEHAVIOUR, detail.error, "دریافت جزئیات سفارش با خطا مواجه شد.");
@@ -170,7 +216,7 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 							</div>
 							<div>
 								<span className="nn">۲</span>
-								<span>قبل از ارسال، از کیف جدید عکس و ویدیو می‌گیریم تا دوباره تأییدش کنی.</span>
+								<span>{result.step2}</span>
 							</div>
 							<div>
 								<span className="nn">۳</span>
@@ -186,11 +232,12 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 				) : result?.view === "late" ? (
 					<div className="m-done">
 						<div className="ck danger">
-							<Icon name="truck" />
+							<Icon name="info" />
 						</div>
-						<h3>دیگه نمی‌شه تغییرش داد</h3>
+						<h3>الان نمی‌شه درخواست تغییر داد</h3>
 						<p>
-							سفارش {order.code} همین الان تحویل {order.shippingMethod.name} شد. بعد از تحویل، اگه کیف رو نخواستی، تا ۷ روز می‌تونی درخواست مرجوعی بدی.
+							وضعیت سفارش {order.code} همین الان عوض شد؛ یا ارسال شده یا یه درخواست تغییر دیگه براش باز هست. وضعیت تازه‌ش رو توی «سفارش‌های من» می‌بینی؛ بعد از
+							تحویل هم تا ۷ روز می‌تونی مرجوعش کنی.
 						</p>
 						<div className="acts">
 							<button type="button" className="btn btn-primary btn-block" onClick={onClose}>
@@ -235,7 +282,7 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 													/>
 													<span className="radio" />
 													<span className="th">
-														<MediaImage src={i.image?.url} alt={i.name} placeholderColor={i.color.hex} />
+														<MediaImage src={i.image} alt={i.name} placeholderColor={i.color.hex} />
 													</span>
 													<span>
 														<span className="t" style={{ display: "block" }}>
@@ -316,7 +363,7 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 													return pick ? (
 														<>
 															<Compare item={item} next={pick} />
-															<PriceDiff diff={priceDiff} />
+															<PriceDiff diff={priceDiff} owed={owed} />
 														</>
 													) : null;
 												})()}
@@ -378,7 +425,7 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 															return pick ? (
 																<>
 																	<Compare item={item} next={pick} nextName={model.name} />
-																	<PriceDiff diff={priceDiff} />
+																	<PriceDiff diff={priceDiff} owed={owed} />
 																</>
 															) : null;
 														})()}
@@ -390,10 +437,14 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 								) : kind === "CANCEL_ITEM" && item ? (
 									<div className="m-sec">
 										<div className="rf" style={{ marginTop: 0 }}>
-											<Icon name="card" />
+											<Icon name="phone" />
 											<span>
-												<b>{formatPrice(item.lineTotal)} تومان برمی‌گرده</b>
-												<small>{item.name} از سفارش حذف می‌شه و مبلغش به کارتت برمی‌گرده؛ بقیه‌ی سفارش طبق برنامه ارسال می‌شه.</small>
+												<b>{dropRefund > 0 ? `${formatPrice(dropRefund)} تومان برمی‌گرده` : "از مابه‌التفاوتت کم می‌شه"}</b>
+												<small>
+													{multi
+														? `بعد از تأیید اپراتور، ${item.name} از سفارش حذف می‌شه و بقیه‌ی سفارش طبق برنامه ارسال می‌شه. ${backText(dropRefund)}`
+														: `بعد از تأیید اپراتور، سفارش لغو می‌شه. ${CALL_NOTE}`}
+												</small>
 											</span>
 										</div>
 									</div>
@@ -425,7 +476,11 @@ export default function ChangeRequestModal({ order, open, onClose }: ChangeReque
 						</div>
 						<div className="note" style={{ marginTop: 14 }}>
 							{channel && <MessengerIcon channel={channel} width={18} height={18} />}
-							<span>اپراتور توی {channelName} باهات هماهنگ می‌کنه و قبل از ارسال، از کیف جدید هم عکس می‌گیره تا دوباره ببینیش.</span>
+							<span>
+								{kind === "CANCEL_ITEM" && !multi
+									? `اپراتور توی ${channelName} باهات هماهنگ می‌کنه؛ بعد از تأییدش سفارش لغو می‌شه.`
+									: `اپراتور توی ${channelName} باهات هماهنگ می‌کنه و قبل از ارسال، از کیف جدید هم عکس می‌گیره تا دوباره ببینیش.`}
+							</span>
 						</div>
 						<div key={formError?.n ?? 0} className={classNames("note danger m-err", { on: !!formError, shake: !!formError })}>
 							<Icon name="alert" />
@@ -487,7 +542,7 @@ function Compare({ item, next, nextName }: { item: OrderItem; next: ProductColor
 		<div className="cmp">
 			<div className="side-c">
 				<div className="art">
-					<MediaImage src={item.image?.url} alt={item.name} placeholderColor={item.color.hex} />
+					<MediaImage src={item.image} alt={item.name} placeholderColor={item.color.hex} />
 				</div>
 				<span>
 					<small>الان</small>
@@ -517,8 +572,8 @@ function Compare({ item, next, nextName }: { item: OrderItem; next: ProductColor
 	);
 }
 
-/** `.diff` — same price, the shopper pays the difference, or gets it back. */
-function PriceDiff({ diff }: { diff: number }) {
+/** `.diff` — same price, the shopper pays the difference, or gets it back (after `owed`, a balance still unpaid from an earlier change). */
+function PriceDiff({ diff, owed }: { diff: number; owed: number }) {
 	if (diff === 0)
 		return (
 			<div className="diff">
@@ -539,7 +594,10 @@ function PriceDiff({ diff }: { diff: number }) {
 		<div className="diff d-down">
 			<Icon name="card" />
 			<span>
-				<b>{formatPrice(-diff)} تومان</b> کمتر؛ بعد از تأیید اپراتور، مابه‌التفاوت به کارتت برمی‌گرده.
+				<b>{formatPrice(-diff)} تومان</b> کمتر؛ بعد از تأیید اپراتور،{" "}
+				{owed > 0
+					? "اول از مابه‌التفاوتی که هنوز پرداخت نکردی کم می‌شه و اگه چیزی موند، برات برمی‌گرده."
+					: "مابه‌التفاوت برات برمی‌گرده و برای واریزش باهات تماس می‌گیریم."}
 			</span>
 		</div>
 	);

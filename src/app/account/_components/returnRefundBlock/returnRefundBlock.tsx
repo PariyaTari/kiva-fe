@@ -17,7 +17,7 @@ type ReturnRefundBlockProps = {
 	cardMask?: string | null;
 };
 
-/** Block ۴ «مبلغ به کجا برگرده؟» — the same card, an IBAN (with its field), or store credit. */
+/** Block ۴ «مبلغ به کجا برگرده؟» — the same card or an IBAN (with its field); store credit left the contract in 1.12.0. */
 export default function ReturnRefundBlock({ blockRef, method, onMethod, iban, onIban, ibanError, cardMask }: ReturnRefundBlockProps) {
 	const hint: Record<RefundMethod, ReactNode> = {
 		ORIGINAL_PAYMENT: (
@@ -37,7 +37,6 @@ export default function ReturnRefundBlock({ blockRef, method, onMethod, iban, on
 			</>
 		),
 		BANK_TRANSFER: "اگه کارتت عوض شده یا می‌خوای به حساب دیگه‌ای واریز بشه",
-		STORE_CREDIT: "بعد از رسیدن کیف، توی حسابت می‌شینه و برای خرید بعدی استفاده می‌شه",
 	};
 
 	return (

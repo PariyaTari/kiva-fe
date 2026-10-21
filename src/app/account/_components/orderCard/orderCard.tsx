@@ -143,7 +143,12 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 							<ReorderButton order={order} className="btn-dark btn-sm" />
 						</OrderStateBar>
 					) : status === "CANCELLED" ? (
-						<OrderStateBar tone="danger" icon="ban" title="این سفارش لغو شد" text="اگه پرداخت کرده بودی، مبلغ حداکثر تا ۷۲ ساعت به کارتت برمی‌گرده.">
+						<OrderStateBar
+							tone="danger"
+							icon="ban"
+							title="این سفارش لغو شد"
+							text="اگه پرداخت کرده بودی، همکارهامون برای برگردوندن پولت باهات تماس می‌گیرن؛ وضعیتش توی جزئیات سفارش هست."
+						>
 							<ReorderButton order={order} className="btn-white btn-sm" />
 						</OrderStateBar>
 					) : reservation ? (

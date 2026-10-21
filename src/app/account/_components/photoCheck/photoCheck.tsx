@@ -13,7 +13,7 @@ import { toErrorView } from "@/utils/apiError";
 import { toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
-import { ERROR_BEHAVIOUR, isTooLateError } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isOrderMovedOnError } from "../../_utils/apiError";
 import { clockTime, dayLong, dayShort, itemsLabel } from "../../_utils/orderActions";
 import ChangeRequestLines from "../changeRequestLines/changeRequestLines";
 import MediaLightbox from "../mediaLightbox/mediaLightbox";
@@ -43,8 +43,9 @@ type PhotoCheckProps = {
 
 /**
  * `.pc` «عکس‌های کیفت رسید! همونیه که می‌خواستی؟» — the KIVA signature on the card: one-click approve
- * (also from the lightbox), or a change request; after the answer, the green / cream variant; after the
- * operator handled a change request, its result (done → green, refused → cream) until the new photos arrive.
+ * (also from the lightbox), or a change request; after the answer, the green / cream variant (an approved bag can still be
+ * changed until it ships — contract 1.12.0); after the operator handled a change request, its result (done → green,
+ * refused → cream) until the new photos arrive.
  */
 export default function PhotoCheck({ order, state, onRequestChange }: PhotoCheckProps) {
 	const queryClient = useQueryClient();
@@ -69,8 +70,8 @@ export default function PhotoCheck({ order, state, onRequestChange }: PhotoCheck
 			toast("ممنون! کیفت برای ارسال آماده می‌شه", { icon: "check" });
 		},
 		onError: (e) => {
-			// shipped meanwhile — the card catches up
-			if (isTooLateError(e)) queryClient.invalidateQueries({ queryKey: ["me", "orders"] });
+			// the photos don't wait for an answer any more (answered in another tab, new photos, shipped) — the card catches up
+			if (isOrderMovedOnError(e)) queryClient.invalidateQueries({ queryKey: ["me", "orders"] });
 			toast(e.description, { type: "error" });
 		},
 	});
@@ -112,6 +113,20 @@ export default function PhotoCheck({ order, state, onRequestChange }: PhotoCheck
 					</span>
 				</div>
 				{errorBar}
+				{/* still possible after «همونه!» until the bag ships */}
+				{canChange && (
+					<div className="pc-f" style={{ marginTop: 14 }}>
+						<span className="dl">
+							<Icon name="info" />
+							<span>نظرت عوض شد؟ تا وقتی ارسال نشده، هنوز می‌تونی رنگ یا مدلش رو عوض کنی یا لغوش کنی.</span>
+						</span>
+						<span className="go">
+							<button type="button" className="btn btn-white btn-sm" onClick={onRequestChange}>
+								<Icon name="swap" /> درخواست تغییر
+							</button>
+						</span>
+					</div>
+				)}
 			</div>
 		);
 
@@ -158,7 +173,7 @@ export default function PhotoCheck({ order, state, onRequestChange }: PhotoCheck
 						<small>
 							{channel && <MessengerIcon channel={channel} />}{" "}
 							{dropped
-								? `سهمش به کارتت برمی‌گرده؛ از بقیه‌ی سفارش عکس می‌گیریم و توی ${channelName} قبل از ارسال می‌بینی.`
+								? `سهمش برات برمی‌گرده و برای واریزش باهات تماس می‌گیریم؛ از بقیه‌ی سفارش عکس می‌گیریم و توی ${channelName} قبل از ارسال می‌بینی.`
 								: applied
 									? `از کیف جدید عکس و ویدیو می‌گیریم و توی ${channelName} برات می‌فرستیم؛ بعد از تأییدت ارسال می‌شه.`
 									: `همون کیف قبلی برات ارسال می‌شه؛ قبلش دوباره عکسش رو توی ${channelName} می‌بینی.`}

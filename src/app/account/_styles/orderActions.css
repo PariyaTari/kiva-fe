@@ -66,6 +66,8 @@
 	/* بعد از پاسخ */
 	.pc.ok{border-color:var(--success);background:linear-gradient(135deg,#fff 0%,var(--success-bg) 100%);box-shadow:none}
 	.pc.ok .ribbon,.pc.ok .pc-h .pi{background:var(--success)}
+	/* the approved box's «درخواست تغییر» row (contract 1.12.0 — a change is still possible after «همونه!») */
+	.pc.ok .pc-f{border-top-color:#b9dccb}
 	.pc.chg{border-color:var(--cream-border);background:linear-gradient(135deg,#fff 0%,var(--cream) 100%);box-shadow:none}
 	.pc.chg .ribbon{background:#8a6a3f}
 	.pc.chg .pc-h .pi{background:#fff;color:#8a6a3f;border:1.5px solid var(--cream-border)}

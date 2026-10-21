@@ -39,7 +39,7 @@ export default function ReturnSummary({ orderCode, deliveredAt, deadline, picked
 					picked.map(({ item, quantity }) => (
 						<div key={item.id} className="mini">
 							<span className="th">
-								<MediaImage src={item.image?.url} alt={item.name} placeholderColor={item.color.hex} />
+								<MediaImage src={item.image} alt={item.name} placeholderColor={item.color.hex} />
 								{quantity > 1 && <em>{toPersianDigits(quantity)}</em>}
 							</span>
 							<span>

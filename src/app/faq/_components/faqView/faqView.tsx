@@ -15,6 +15,7 @@ import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
 import StillBox from "../stillBox/stillBox";
 
 const DEBOUNCE_MS = 180;
+const Q_MAX = 100;
 /** A group counts as «current» in the side list once its top passes this line (design scrollspy). */
 const SPY_LINE = 160;
 
@@ -101,6 +102,8 @@ export default function FaqView() {
 							className="input"
 							id="fq"
 							type="search"
+							// the API refuses a longer `q` (`400 TEXT_TOO_LONG`)
+							maxLength={Q_MAX}
 							placeholder="مثلاً: رزرو، کد رهگیری، بازگشت…"
 							aria-label="جستجو در سوالات"
 							value={term}

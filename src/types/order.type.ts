@@ -89,7 +89,9 @@ export interface PreShipmentMediaSummary {
 }
 
 export interface OrderActions {
+	/** The order's state hasn't changed yet: `RESERVED` / `PROCESSING` and no photo ever sent (contract 1.12.0); later — a change request or support. */
 	canCancel?: boolean;
+	/** `PHOTO_SENT` with the photos `SENT` or `APPROVED` (so after «همونه!» too), one open request at a time; never after shipping. */
 	canRequestChange?: boolean;
 	canApproveMedia?: boolean;
 	canReturn?: boolean;
@@ -127,8 +129,8 @@ export interface OrderItem {
 	name: string;
 	slug?: string;
 	color: Color;
-	/** `null` until the colour has a photo. */
-	image?: MediaAsset | null;
+	/** Photo URL of the colour at purchase time (the 480 size, a snapshot); `null` for a colour without a photo. */
+	image?: string | null;
 	quantity: number;
 	unitPrice: Money;
 	unitCompareAtPrice?: Money | null;
@@ -137,6 +139,10 @@ export interface OrderItem {
 	returnableUntil?: string | null;
 }
 
+/**
+ * After a change request `itemsCompareAtTotal` / `productDiscount` / `subtotal` follow the current lines, `codeDiscount` loses the
+ * share of a dropped line, and `shippingCost` stays as placed.
+ */
 export interface OrderTotals {
 	itemsCompareAtTotal: Money;
 	productDiscount: Money;
@@ -146,10 +152,11 @@ export interface OrderTotals {
 	shippingCost: Money;
 	shippingFreeReason?: string | null;
 	giftWrapCost?: Money;
-	/** «پرداخت شده». */
+	/** «پرداخت شده» — everything paid so far (the order + balances paid); for an unpaid order, what is to be paid. */
 	payable: Money;
+	/** Sum of the `COMPLETED` refunds. */
 	refunded?: Money;
-	/** See `OrderSummary.balanceDue`. */
+	/** See `OrderSummary.balanceDue`; a cancelled order has none. */
 	balanceDue?: Money;
 	currency?: "IRT";
 }
@@ -203,11 +210,15 @@ export interface PreShipmentMedia {
 	channel: PhotoMessengerChannel;
 	channelName: string;
 	phone: string;
+	/** The shopper's id in that messenger, if given at checkout — the operator sends there. */
+	username?: string | null;
 	note?: string | null;
 	sentAt?: string | null;
 	waitingMessage?: string | null;
+	/** Only the latest batch **sent** (the operator's draft never); empty before the first one. */
 	items: OrderMediaItem[];
 	feedback?: MediaFeedback | null;
+	/** Photos sent + 24 h; without an answer by then they count as approved and the order may ship. */
 	feedbackDeadline?: string | null;
 }
 
@@ -231,11 +242,18 @@ export interface PaymentInit {
 	gateway: PaymentGatewayCode;
 	amount: Money;
 	redirect: PaymentRedirect;
-	/** End of the order's payment window (placed + 15 min) — the same for every attempt of the order, never extended. */
+	/**
+	 * End of the order's payment window (placed + 15 min) — the same for every attempt of the order, never extended.
+	 * For a balance payment: the end of this attempt's window at the bank (start + 20 min); the balance itself has no deadline.
+	 */
 	expiresAt?: string;
 }
 
 export interface OrderPaymentInfo {
+	/** `ORDER` the order itself; `BALANCE` a balance left by a change request. */
+	purpose: "ORDER" | "BALANCE";
+	/** Amount of this attempt. */
+	amount: Money;
 	gateway: PaymentGatewayCode;
 	gatewayName: string;
 	status: PaymentStatus;
@@ -255,12 +273,19 @@ export interface OrderDetail extends OrderSummary {
 	gift?: { wrap: boolean; message: string } | null;
 	returns?: ReturnRequest[];
 	invoiceUrl?: string | null;
+	/** Every refund of the order (cancellation, change requests, returns), oldest first. */
+	refunds?: Refund[];
 }
 
 // ── order actions (account) ──
 
-export type RefundMethod = "ORIGINAL_PAYMENT" | "BANK_TRANSFER" | "STORE_CREDIT";
+/** `ORIGINAL_PAYMENT` back to the same card (a manual card-to-card), `BANK_TRANSFER` to an IBAN taken on the phone. */
+export type RefundMethod = "ORIGINAL_PAYMENT" | "BANK_TRANSFER";
 
+/**
+ * Refunds are manual (contract 1.12.0): the server only records them — a colleague calls the shopper for the IBAN
+ * (it is never stored) and transfers the money.
+ */
 export interface Refund {
 	id: number;
 	amount: Money;
@@ -270,9 +295,10 @@ export interface Refund {
 	/** The return request this refund is for. */
 	returnId?: number | null;
 	createdAt?: string;
+	/** Created + 72 h — when the colleagues call, roughly. */
 	expectedBy?: string | null;
 	completedAt?: string | null;
-	/** Bank / gateway tracking number. */
+	/** Tracking number of the bank transfer. */
 	referenceId?: string | null;
 	/** Note on the latest status change, written for the shopper (e.g. why it failed). */
 	statusNote?: string | null;
@@ -288,15 +314,20 @@ export interface CancelOrderPayload {
 
 export interface CancelOrderResponse {
 	order: OrderSummary;
-	/** `null` when the order was never paid. */
+	/** The `PENDING` refund of everything paid (manual — KIVA calls for the IBAN); `null` when nothing was paid. */
 	refund?: Refund | null;
 	message?: string;
 }
 
-/** `POST /me/orders/{code}/media-feedback` — «همونه!» or a change request. */
+/**
+ * `POST /me/orders/{code}/media-feedback` — «همونه!» or a change request. `COLOR` / `MODEL` need `orderItemId` + `desiredVariantId`
+ * (`COLOR` another colour of the same bag, `MODEL` a colour of another bag), `CANCEL_ITEM` `orderItemId` (the only line = the whole
+ * order is cancelled once the operator applies it), `OTHER` a `note`.
+ */
 export interface MediaFeedbackPayload {
 	decision: "APPROVE" | "REQUEST_CHANGE";
 	changeType?: MediaChangeType | null;
+	/** `OrderItem.id`. */
 	orderItemId?: number | null;
 	/** Colour / model to send instead. */
 	desiredVariantId?: number | null;
