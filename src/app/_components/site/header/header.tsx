@@ -37,9 +37,11 @@ export default function Header({ config }: { config: SiteConfig }) {
 		return () => window.removeEventListener("scroll", onScroll);
 	}, []);
 
+	// the mega menu, the mobile menu and the shop's chips show its error block (same key, same `meta`)
 	const categories = useQuery({
 		queryKey: ["site", "categories"],
 		queryFn: () => withMappedError(() => SiteEndpoints.listCategories()),
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	// waits for the persisted session so the guest cart token / bearer goes along
@@ -47,6 +49,8 @@ export default function Header({ config }: { config: SiteConfig }) {
 		queryKey: ["cart"],
 		queryFn: () => withMappedError(() => CartEndpoints.getCart()),
 		enabled: hydrated,
+		// the drawer and the cart page show its error block; a failed re-read after a cart change toasts
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	// on every page — so the stock / price / discount changes this read found (they come once) are told wherever the shopper is
@@ -56,6 +60,8 @@ export default function Header({ config }: { config: SiteConfig }) {
 		queryKey: ["wishlist", "ids"],
 		queryFn: () => withMappedError(() => WishlistEndpoints.getIds()),
 		enabled: hydrated && signedIn,
+		// the hearts and the badge have no other place for a failure (same key and `meta` as `WishlistToggle`)
+		meta: { showNotification: true },
 	});
 
 	const count = cart.data?.totals.itemsCount ?? 0;

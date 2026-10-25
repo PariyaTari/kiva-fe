@@ -1,5 +1,5 @@
 import { ResultError } from "@/types/result";
-import { CLIENT_BUG, ErrorBehaviourMap, FINAL, REREAD, TRANSPORT } from "@/utils/apiError";
+import { CLIENT_BUG, ErrorBehaviourMap, FINAL, isRouteNotFound, REREAD, TRANSPORT } from "@/utils/apiError";
 
 /** Product page (detail, related, inquiry, reviews). */
 export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
@@ -17,6 +17,10 @@ export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
 	VALIDATION_ERROR: CLIENT_BUG,
 	RATE_LIMITED: TRANSPORT,
 };
+
+/** The product isn't in the shop (`PRODUCT_NOT_FOUND`, or the generic `NOT_FOUND` of the backend) — the site's 404 page, not an error block. */
+export const isProductNotFoundError = (e: ResultError | null | undefined) =>
+	e?.code === "PRODUCT_NOT_FOUND" || (e?.code === "NOT_FOUND" && !isRouteNotFound(e));
 
 /** Answers of the stock-alert button — shown as an info toast, not as an error. */
 export const STOCK_ALERT_ANSWERS = ["STOCK_ALERT_EXISTS", "PRODUCT_IN_STOCK"];

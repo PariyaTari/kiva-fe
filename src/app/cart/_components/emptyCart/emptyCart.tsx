@@ -23,6 +23,7 @@ export default function EmptyCart() {
 			withMappedError(() =>
 				ProductsEndpoints.listProducts({ ...EMPTY_FILTERS, inStock: true, sort: "bestselling", page: 1, size: BESTSELLERS, includeFacets: false }),
 			),
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	const bestsellersError = toErrorView(ERROR_BEHAVIOUR, bestsellers.error, "دریافت پرفروش‌ها با خطا مواجه شد.");

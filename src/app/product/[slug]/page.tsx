@@ -10,11 +10,14 @@ import { withMappedError } from "@/utils/withMappedError";
 import { ProductEndpoints } from "../_api/productEndpoints";
 import ProductView from "../_components/productView/productView";
 import { ProductDetail } from "../_types/product.type";
+import { isProductNotFoundError } from "../_utils/apiError";
+import { purchaseFromQuery } from "../_utils/reviewPurchase";
 import { productJsonLd } from "../_utils/productJsonLd";
 
 type ProductPageProps = {
 	params: Promise<{ slug: string }>;
-	searchParams: Promise<{ color?: string | string[] }>;
+	/** `color` opens that colour; `order` + `item` come with «نظر بده» of «نظرات من». */
+	searchParams: Promise<{ color?: string | string[]; order?: string | string[]; item?: string | string[] }>;
 };
 
 /**
@@ -25,7 +28,7 @@ async function loadProduct(slug: string) {
 	const client = getServerQueryClient();
 	const queryKey = ["product", "detail", slug];
 	await client.prefetchQuery({ queryKey, queryFn: () => withMappedError(() => ProductEndpoints.getProduct(slug)) });
-	if (client.getQueryState(queryKey)?.error?.statusCode === 404) notFound();
+	if (isProductNotFoundError(client.getQueryState(queryKey)?.error)) notFound();
 	return { client, product: client.getQueryData<ProductDetail>(queryKey) };
 }
 
@@ -46,7 +49,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 /** Product page — design `product.html` (`/product/mahak-shoulder-bag?color=lilac`; id and `KV-…` code work too). */
 export default async function ProductPage({ params, searchParams }: ProductPageProps) {
 	const slug = safeDecode((await params).slug);
-	const { color } = await searchParams;
+	const { color, order, item } = await searchParams;
 	const { client, product } = await loadProduct(slug);
 	const url = product ? (product.seo?.canonicalUrl ?? absoluteUrl(`/product/${product.slug}`)) : null;
 
@@ -54,7 +57,7 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
 		<div className="pg-product">
 			{product && url && <JsonLd data={[product.seo?.jsonLd ?? productJsonLd(product, url), breadcrumbJsonLd(product.breadcrumbs, url)]} />}
 			<PrefetchBoundary client={client}>
-				<ProductView key={slug} slug={slug} initialColor={typeof color === "string" ? color : undefined} />
+				<ProductView key={slug} slug={slug} initialColor={typeof color === "string" ? color : undefined} reviewPurchase={purchaseFromQuery(order, item)} />
 			</PrefetchBoundary>
 		</div>
 	);

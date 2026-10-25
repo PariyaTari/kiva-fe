@@ -6,7 +6,8 @@ import classNames from "classnames";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
 import Loading from "@/app/_components/common/loading/loading";
-import Reveal from "@/app/_components/common/reveal/reveal";
+// BACKEND-PENDING(wishlist-share): only the share box used it
+// import Reveal from "@/app/_components/common/reveal/reveal";
 import { Icon } from "@/app/_components/icon/icons";
 import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import ProductCard from "@/app/_components/shop/productCard/productCard";
@@ -14,11 +15,12 @@ import { announceCartIssues } from "@/app/cart/_utils/cartIssues";
 import { useAuthStore } from "@/store/auth.store";
 import { toast } from "@/store/notification.store";
 import { toErrorView } from "@/utils/apiError";
-import { copyText } from "@/utils/clipboard";
+// BACKEND-PENDING(wishlist-share)
+// import { copyText } from "@/utils/clipboard";
 import { toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import { WishlistEndpoints } from "../../_api/wishlistEndpoints";
-import { ERROR_BEHAVIOUR, isShareDisabledError } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR /* BACKEND-PENDING(wishlist-share): , isShareDisabledError */ } from "../../_utils/apiError";
 
 /** Length of the design's `.wcard.out` shrink before the card is really removed. */
 const LEAVE_MS = 420;
@@ -29,8 +31,9 @@ export default function WishlistView() {
 	const hydrated = useAuthStore((s) => s.hydrated);
 	const signedIn = useAuthStore((s) => !!s.accessToken);
 	const [leaving, setLeaving] = useState<number[]>([]);
-	/** Sharing is switched off on the server (`WISHLIST_SHARE_DISABLED`) — the box goes away. */
-	const [shareOff, setShareOff] = useState(false);
+	// BACKEND-PENDING(wishlist-share): sharing the list (`POST/DELETE /me/wishlist/share`) is still [پیشنهادی] in the contract (1.22.0) — off until the backend builds it; uncomment to bring it back
+	// /** Sharing is switched off on the server (`WISHLIST_SHARE_DISABLED`) — the box goes away. */
+	// const [shareOff, setShareOff] = useState(false);
 
 	// shared with the account's wishlist panel; hearts and removals invalidate ["wishlist"]
 	const wishlist = useQuery({
@@ -66,14 +69,29 @@ export default function WishlistView() {
 		},
 	});
 
-	const share = useMutation({
-		mutationFn: () => withMappedError(() => WishlistEndpoints.share()),
-		onSuccess: (res) => copyText(res.url, "لینک لیست کپی شد"),
-		onError: (e) => {
-			if (isShareDisabledError(e)) setShareOff(true);
-			toast(e.description, { type: isShareDisabledError(e) ? "info" : "error", icon: isShareDisabledError(e) ? "info" : undefined });
-		},
-	});
+	// BACKEND-PENDING(wishlist-share)
+	// // «لغو لینک» (not in the design): the old link answers 404 at once; «کپی لینک لیست» makes a new one
+	// const revoke = useMutation({
+	// 	mutationFn: () => withMappedError(() => WishlistEndpoints.revokeShare()),
+	// 	meta: { showNotification: true },
+	// 	onSuccess: () => {
+	// 		queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+	// 		toast("لینک قبلی لیستت دیگه باز نمی‌شه؛ هر وقت خواستی لینک تازه بساز", { icon: "share" });
+	// 	},
+	// });
+
+	// const share = useMutation({
+	// 	mutationFn: () => withMappedError(() => WishlistEndpoints.share()),
+	// 	onSuccess: (res) => {
+	// 		copyText(res.url, "لینک لیست کپی شد");
+	// 		// the box now knows the link is live (its «لغو لینک»)
+	// 		queryClient.invalidateQueries({ queryKey: ["wishlist", "list"] });
+	// 	},
+	// 	onError: (e) => {
+	// 		if (isShareDisabledError(e)) setShareOff(true);
+	// 		toast(e.description, { type: isShareDisabledError(e) ? "info" : "error", icon: isShareDisabledError(e) ? "info" : undefined });
+	// 	},
+	// });
 
 	const drop = (productId: number) => {
 		setLeaving((ids) => [...ids, productId]);
@@ -159,6 +177,7 @@ export default function WishlistView() {
 					</div>
 				))}
 			</div>
+			{/* BACKEND-PENDING(wishlist-share):
 			{!shareOff && (
 				<Reveal className="box-cream share-box">
 					<span className="ic">
@@ -166,13 +185,21 @@ export default function WishlistView() {
 					</span>
 					<div>
 						<b>لیستت رو با دوستات به اشتراک بذار</b>
-						<p>شاید یکی خواست برات هدیه بخره</p>
+						<p>{wishlist.data?.share ? "لینک لیستت فعاله؛ هر کسی لینک رو داشته باشه، لیستت رو می‌بینه." : "شاید یکی خواست برات هدیه بخره"}</p>
 					</div>
-					<button type="button" className={classNames("btn btn-dark btn-sm", { loading: share.isPending })} id="share" onClick={() => share.mutate()}>
-						کپی لینک لیست
-					</button>
+					<div className="share-acts">
+						{wishlist.data?.share && (
+							<button type="button" className={classNames("btn btn-outline btn-sm", { loading: revoke.isPending })} onClick={() => revoke.mutate()}>
+								لغو لینک
+							</button>
+						)}
+						<button type="button" className={classNames("btn btn-dark btn-sm", { loading: share.isPending })} id="share" onClick={() => share.mutate()}>
+							کپی لینک لیست
+						</button>
+					</div>
 				</Reveal>
 			)}
+			*/}
 		</>
 	);
 }

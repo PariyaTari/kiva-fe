@@ -40,6 +40,11 @@ export const WishlistEndpoints = {
 		return res.data;
 	},
 
+	/** Always `204` — the old link answers `404` at once; the next `share` makes a new token. */
+	revokeShare: async () => {
+		await httpClient.call<void>({ method: "DELETE", url: "me/wishlist/share" });
+	},
+
 	/** Public — the page behind a shared link (`/wishlist/shared/{token}`). */
 	getShared: async (token: string) => {
 		const res = await httpClient.call<SharedWishlist>({ method: "GET", url: `wishlists/shared/${encodeURIComponent(token)}` });

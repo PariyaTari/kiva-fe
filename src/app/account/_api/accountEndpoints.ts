@@ -13,6 +13,7 @@ import {
 	PreShipmentMedia,
 	ReturnRequest,
 } from "@/types/order.type";
+import { ReviewablePurchase, Review, UpdateReviewPayload } from "@/types/review.type";
 import { StockAlert } from "@/types/stockAlert.type";
 import { PhoneChangeResponse, User } from "@/types/user.type";
 import {
@@ -149,6 +150,23 @@ export const AccountEndpoints = {
 	// ── reviews ──
 	getReviews: async (page: number, size: number) => {
 		const res = await httpClient.call<MyReviewListResponse>({ method: "GET", url: "me/reviews", params: { page, size } });
+		return res.data;
+	},
+
+	/** A pending or rejected review of the user (a rejected one goes back to review). */
+	updateReview: async (reviewId: number, payload: UpdateReviewPayload) => {
+		const res = await httpClient.call<Review>({ method: "PATCH", url: `me/reviews/${reviewId}`, data: payload });
+		return res.data;
+	},
+
+	/** Any state — the review and its votes are gone; an approved one leaves the product's rating. */
+	deleteReview: async (reviewId: number) => {
+		await httpClient.call<void>({ method: "DELETE", url: `me/reviews/${reviewId}` });
+	},
+
+	/** Delivered bags without a review of the user — one row per product, latest delivery first (max 50). */
+	getReviewablePurchases: async () => {
+		const res = await httpClient.call<ReviewablePurchase[]>({ method: "GET", url: "me/reviews/pending-products" });
 		return res.data;
 	},
 

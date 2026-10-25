@@ -22,7 +22,8 @@ import { AccountEndpoints } from "../../_api/accountEndpoints";
 import { ERROR_BEHAVIOUR, isGatewayUnavailableError, isOrderAlreadyPaidError, isPaymentExpiredError } from "../../_utils/apiError";
 import { itemsLabel, UNPAID } from "../../_utils/orderActions";
 import ModalHead from "../modalHead/modalHead";
-import ReorderButton from "../reorderButton/reorderButton";
+// BACKEND-PENDING(reorder): «خرید دوباره» (`POST /me/orders/{code}/reorder`) is still [پیشنهادی] in the contract (1.22.0) — off until the backend builds it; uncomment to bring it back
+// import ReorderButton from "../reorderButton/reorderButton";
 
 type PayModalProps = {
 	order: OrderSummary;
@@ -157,7 +158,7 @@ export default function PayModal({ order, open, onClose }: PayModalProps) {
 						<h3>مهلت پرداخت تموم شد</h3>
 						<p>کیف‌های این سفارش به فروشگاه برگشتن و دیگه نمی‌شه پرداختش کرد. اگه هنوز می‌خوایشون، دوباره به سبدت اضافه‌شون کن.</p>
 						<div className="acts">
-							<ReorderButton order={order} className="btn-primary btn-block" onDone={onClose} />
+							{/* BACKEND-PENDING(reorder): <ReorderButton order={order} className="btn-primary btn-block" onDone={onClose} /> */}
 							<button type="button" className="btn btn-outline btn-block" onClick={onClose}>
 								بستن
 							</button>

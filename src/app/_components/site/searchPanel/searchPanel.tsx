@@ -54,6 +54,7 @@ export default function SearchPanel() {
 		queryKey: ["search", "hints"],
 		queryFn: () => withMappedError(() => SiteEndpoints.getSearchHints()),
 		enabled: isOpen,
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	const suggest = useQuery({

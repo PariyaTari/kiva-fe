@@ -10,7 +10,7 @@ import ProductCard from "@/app/_components/shop/productCard/productCard";
 import { toErrorView } from "@/utils/apiError";
 import { withMappedError } from "@/utils/withMappedError";
 import { WishlistEndpoints } from "../../_api/wishlistEndpoints";
-import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isSharedListGoneError } from "../../_utils/apiError";
 
 /**
  * Someone's shared list (the link of «کپی لینک لیست»). The design has no page for it, so it reuses the
@@ -23,8 +23,9 @@ export default function SharedWishlistView({ token }: { token: string }) {
 		meta: { showNotificationOnRefetch: true },
 	});
 
-	// a revoked / unknown link comes back as a 404 with the server's own message — shown in the error block
-	const sharedError = toErrorView(ERROR_BEHAVIOUR, shared.error, "دریافت لیست با خطا مواجه شد.");
+	// a malformed, revoked or unknown link (or sharing switched off) is one `404 NOT_FOUND` — a state of its own, not an error
+	const sharedGone = isSharedListGoneError(shared.error);
+	const sharedError = sharedGone ? null : toErrorView(ERROR_BEHAVIOUR, shared.error, "دریافت لیست با خطا مواجه شد.");
 	const owner = shared.data?.ownerDisplayName;
 
 	return (
@@ -48,6 +49,17 @@ export default function SharedWishlistView({ token }: { token: string }) {
 			<div className="container" id="root">
 				{shared.isLoading ? (
 					<Loading />
+				) : sharedGone ? (
+					<div className="gate">
+						<div className="art">
+							<BagArt type="bucket" color="lilac" variant={2} />
+						</div>
+						<h2>این لیست پیدا نشد</h2>
+						<p>{shared.error?.description || "لینک لیست عوض شده یا دیگه به اشتراک گذاشته نمی‌شه."}</p>
+						<Link className="btn btn-primary btn-lg" href="/products">
+							<Icon name="bag" /> رفتن به فروشگاه
+						</Link>
+					</div>
 				) : !!sharedError ? (
 					<div style={{ paddingTop: 36 }}>
 						<ErrorComponent

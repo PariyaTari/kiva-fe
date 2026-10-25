@@ -10,6 +10,7 @@ import { withMappedError } from "@/utils/withMappedError";
 import { BlogEndpoints } from "../_api/blogEndpoints";
 import PostView from "../_components/postView/postView";
 import { BlogPostDetail } from "../_types/blog.type";
+import { isPostNotFoundError } from "../_utils/apiError";
 import { postJsonLd } from "../_utils/postJsonLd";
 
 type BlogPostPageProps = { params: Promise<{ slug: string }> };
@@ -27,7 +28,7 @@ async function loadPost(slug: string) {
 	const client = getServerQueryClient();
 	const queryKey = ["blog", "post", slug];
 	await client.prefetchQuery({ queryKey, queryFn: () => withMappedError(() => BlogEndpoints.getPost(slug)) });
-	if (client.getQueryState(queryKey)?.error?.statusCode === 404) notFound();
+	if (isPostNotFoundError(client.getQueryState(queryKey)?.error)) notFound();
 	return { client, post: client.getQueryData<BlogPostDetail>(queryKey) };
 }
 

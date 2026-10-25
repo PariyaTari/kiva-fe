@@ -1,5 +1,5 @@
 import { ResultError } from "@/types/result";
-import { CLIENT_BUG, ErrorBehaviourMap, FINAL, REREAD, TRANSPORT } from "@/utils/apiError";
+import { CLIENT_BUG, ErrorBehaviourMap, FINAL, isRouteNotFound, REREAD, TRANSPORT } from "@/utils/apiError";
 
 /** Wishlist (page, hearts, account panel). */
 export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
@@ -19,5 +19,7 @@ export const ERROR_BEHAVIOUR: ErrorBehaviourMap = {
 	RATE_LIMITED: TRANSPORT, // shared list: 30 requests a minute per connection
 };
 
+/** A shared link that is malformed, revoked, unknown or switched off — one `404 NOT_FOUND`: the page says so, no ticket button. */
+export const isSharedListGoneError = (e: ResultError | null | undefined) => e?.code === "NOT_FOUND" && !isRouteNotFound(e);
 /** «کپی لینک لیست»: sharing is switched off (`wishlistShare` flag) — the box is hidden, not an error. */
 export const isShareDisabledError = (e: ResultError | null | undefined) => e?.code === "WISHLIST_SHARE_DISABLED";

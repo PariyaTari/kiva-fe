@@ -9,6 +9,7 @@ import { withMappedError } from "@/utils/withMappedError";
 import { PagesEndpoints } from "../_api/pagesEndpoints";
 import StaticPageView from "../_components/staticPageView/staticPageView";
 import { StaticPage } from "../_types/staticPage.type";
+import { isPageNotFoundError } from "../_utils/apiError";
 
 type StaticPageProps = { params: Promise<{ slug: string }> };
 
@@ -25,7 +26,7 @@ async function loadPage(slug: string) {
 	const client = getServerQueryClient();
 	const queryKey = ["pages", "detail", slug];
 	await client.prefetchQuery({ queryKey, queryFn: () => withMappedError(() => PagesEndpoints.getPage(slug)) });
-	if (client.getQueryState(queryKey)?.error?.statusCode === 404) notFound();
+	if (isPageNotFoundError(client.getQueryState(queryKey)?.error)) notFound();
 	return { client, page: client.getQueryData<StaticPage>(queryKey) };
 }
 

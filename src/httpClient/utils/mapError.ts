@@ -67,7 +67,9 @@ export function mapError(error: unknown): ResultError {
 			code: InternalErrorCode.NOT_FOUND,
 			statusCode: status,
 			errorDetails: null,
-			meta: null,
+			// the backend answers a missing post / page / shared list with the same `NOT_FOUND` code, but with a message —
+			// this marks the bodyless one (a wrong route, a `CLIENT_BUG`) so «not found» predicates never take it (`isRouteNotFound`)
+			meta: { routeNotFound: true },
 		};
 	}
 

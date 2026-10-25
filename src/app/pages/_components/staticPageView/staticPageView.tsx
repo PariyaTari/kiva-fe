@@ -11,7 +11,7 @@ import { toErrorView } from "@/utils/apiError";
 import { formatDate } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { PagesEndpoints } from "../../_api/pagesEndpoints";
-import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isPageNotFoundError } from "../../_utils/apiError";
 
 /** A CMS page (terms, privacy, …): hero with the title and last update, the article card and a support line. */
 export default function StaticPageView({ slug }: { slug: string }) {
@@ -23,7 +23,7 @@ export default function StaticPageView({ slug }: { slug: string }) {
 	});
 
 	// a missing page shows the site's 404 (like a missing post) — the server answers 404 first; this covers client navigation
-	if (page.error?.statusCode === 404) notFound();
+	if (isPageNotFoundError(page.error)) notFound();
 
 	const pageError = toErrorView(ERROR_BEHAVIOUR, page.error, "دریافت صفحه با خطا مواجه شد.");
 	const data = page.data;

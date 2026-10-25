@@ -37,6 +37,8 @@ export default function WishlistToggle({ productId, colorKey, className, ariaLab
 		queryKey: ["wishlist", "ids"],
 		queryFn: () => withMappedError(() => WishlistEndpoints.getIds()),
 		enabled: hydrated && signedIn,
+		// same key and `meta` as the header's badge
+		meta: { showNotification: true },
 	});
 
 	const toggle = useMutation({

@@ -1,19 +1,20 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import StarInput from "@/app/_components/shop/starInput/starInput";
 import Input from "@/app/_components/ui/input/input";
 import Textarea from "@/app/_components/ui/textarea/textarea";
 import { useForm, ValidationSchema } from "@/hooks/useForm";
 import { mobileRegex } from "@/regex/mobileRegex";
 import { toast } from "@/store/notification.store";
+import { ReviewPurchaseRef } from "@/types/review.type";
 import { User } from "@/types/user.type";
 import { convertPersianToEnglishString, toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import { ProductEndpoints } from "../../_api/productEndpoints";
 import { isReviewExistsError } from "../../_utils/apiError";
 
-const STAR = "M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5z";
 const EMAIL = /^\S+@\S+\.\S+$/;
 /** `CreateReviewRequest`: name up to 40, text 10 to 1000 after trim. */
 const NAME_MAX = 40;
@@ -32,10 +33,12 @@ const SCHEMA: ValidationSchema<ReviewValues> = {
 type ReviewFormProps = {
 	productId: number;
 	user: User;
+	/** From «نظر بده»: the purchase the review is linked to (the «خریدار» tag); without it the server links the latest delivery. */
+	purchase?: ReviewPurchaseRef | null;
 };
 
 /** `.rv-form` — the review goes live after admin approval (it shows up as «در انتظار تأیید» for its author). */
-export default function ReviewForm({ productId, user }: ReviewFormProps) {
+export default function ReviewForm({ productId, user, purchase }: ReviewFormProps) {
 	const queryClient = useQueryClient();
 	const initialValues = useMemo<ReviewValues>(
 		() => ({ rating: "5", name: user.fullName ?? user.firstName ?? "", contact: toPersianDigits(user.phone), text: "" }),
@@ -50,10 +53,14 @@ export default function ReviewForm({ productId, user }: ReviewFormProps) {
 					authorName: values.name.trim() || undefined,
 					contact: convertPersianToEnglishString(values.contact).trim(),
 					text: values.text.trim(),
+					orderCode: purchase?.orderCode ?? null,
+					orderItemId: purchase?.orderItemId ?? null,
 				}),
 			),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["product", productId, "reviews"] });
+			// «نظرات من» and its «منتظر نظر تو» list
+			queryClient.invalidateQueries({ queryKey: ["me", "reviews"] });
 			toast("نظرت ثبت شد و بعد از تأیید نمایش داده می‌شه", { icon: "chat" });
 		},
 		onError: (e) => {
@@ -73,19 +80,7 @@ export default function ReviewForm({ productId, user }: ReviewFormProps) {
 			<p className="muted" style={{ fontSize: 12.5, marginBottom: 12 }}>
 				نظرت بعد از تأیید ادمین نمایش داده می‌شه.
 			</p>
-			<div className="rate-in" role="radiogroup" aria-label="امتیاز">
-				{[5, 4, 3, 2, 1].map((s) => (
-					// input + label stay siblings — the hover / checked colouring uses `~`
-					<Fragment key={s}>
-						<input type="radio" name="rating" id={`r${s}`} value={s} checked={form.values.rating === String(s)} onChange={form.handleChange} />
-						<label htmlFor={`r${s}`} title={`${toPersianDigits(s)} ستاره`}>
-							<svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-								<path d={STAR} />
-							</svg>
-						</label>
-					</Fragment>
-				))}
-			</div>
+			<StarInput value={form.values.rating} onChange={form.handleChange} />
 			<Input wrapperStyle={{ marginTop: 12 }} id="rvName" label="نام" placeholder="مثلاً سارا" maxLength={NAME_MAX} {...form.getFieldProps("name")} />
 			<Input wrapperStyle={{ marginTop: 12 }} id="rvContact" label="شماره موبایل یا ایمیل" direction="ltr" {...form.getFieldProps("contact")} />
 			<Textarea
@@ -96,6 +91,15 @@ export default function ReviewForm({ productId, user }: ReviewFormProps) {
 				maxLength={TEXT_MAX}
 				{...form.getFieldProps("text")}
 			/>
+			{purchase && (
+				<p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>
+					این نظر به خریدت توی سفارش{" "}
+					<span className="ltr" style={{ display: "inline-block" }}>
+						{purchase.orderCode}
+					</span>{" "}
+					وصل می‌شه و تگ «خریدار» می‌گیره.
+				</p>
+			)}
 			<button type="submit" className="btn btn-primary btn-block" style={{ marginTop: 14 }} disabled={create.isPending}>
 				ثبت نظر
 			</button>

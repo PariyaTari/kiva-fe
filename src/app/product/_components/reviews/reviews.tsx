@@ -11,22 +11,26 @@ import BagArt from "@/app/_components/shop/bagArt/bagArt";
 import Stars from "@/app/_components/shop/stars/stars";
 import { useAuthStore } from "@/store/auth.store";
 import { ResultError } from "@/types/result";
+import { ReviewPurchaseRef } from "@/types/review.type";
 import { toErrorView } from "@/utils/apiError";
 import { toPersianDigits } from "@/utils/digits";
 import { formatDate } from "@/utils/format";
 import { ReviewListResponse } from "../../_types/product.type";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
 import ReviewForm from "../reviewForm/reviewForm";
-import ReviewHelpful from "../reviewHelpful/reviewHelpful";
+// BACKEND-PENDING(review-helpful): «به دردت خورد؟» (`PUT /reviews/{id}/helpful`) is still [پیشنهادی] in the contract (1.22.0) — off until the backend builds it; uncomment to bring it back
+// import ReviewHelpful from "../reviewHelpful/reviewHelpful";
 
 type ReviewsProps = {
 	productId: number;
 	slug: string;
 	reviews: UseQueryResult<ReviewListResponse, ResultError>;
+	/** The purchase a new review is linked to («نظر بده» of «نظرات من»). */
+	purchase?: ReviewPurchaseRef | null;
 };
 
 /** «نظرات» tab — rating summary + form (or the login nudge) beside the list. */
-export default function Reviews({ productId, slug, reviews }: ReviewsProps) {
+export default function Reviews({ productId, slug, reviews, purchase }: ReviewsProps) {
 	const user = useAuthStore((s) => (s.accessToken ? s.user : null));
 
 	if (reviews.isLoading) return <Loading />;
@@ -69,7 +73,7 @@ export default function Reviews({ productId, slug, reviews }: ReviewsProps) {
 				</div>
 				<div className="divider" />
 				{user ? (
-					<ReviewForm key={user.id} productId={productId} user={user} />
+					<ReviewForm key={user.id} productId={productId} user={user} purchase={purchase} />
 				) : (
 					<div className="rv-lock">
 						<div className="art">
@@ -113,7 +117,9 @@ export default function Reviews({ productId, slug, reviews }: ReviewsProps) {
 								{r.reply.text}
 							</div>
 						)}
+						{/* BACKEND-PENDING(review-helpful):
 						{r.status === "APPROVED" && !r.isMine && <ReviewHelpful review={r} productId={productId} />}
+						*/}
 					</div>
 				))}
 			</div>

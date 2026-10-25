@@ -18,6 +18,7 @@ export default function RelatedProducts({ productId }: { productId: number }) {
 	const related = useQuery({
 		queryKey: ["product", productId, "related"],
 		queryFn: () => withMappedError(() => ProductEndpoints.getRelated(productId, LIMIT)),
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	const relatedError = toErrorView(ERROR_BEHAVIOUR, related.error, "دریافت محصولات مشابه با خطا مواجه شد.");

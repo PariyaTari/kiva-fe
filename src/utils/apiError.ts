@@ -27,6 +27,12 @@ export type ApiErrorView = {
 const PERMISSION_TEXT = "به این بخش دسترسی نداری.";
 
 /**
+ * The FE's own `NOT_FOUND` — a `404` without a body, i.e. a wrong route. The backend uses the same code (with a message) for a
+ * missing post, page or shared list, so a module's «not found» predicate checks this to keep the route bug a `CLIENT_BUG`.
+ */
+export const isRouteNotFound = (e: ResultError | null | undefined) => e?.code === "NOT_FOUND" && !!e.meta?.routeNotFound;
+
+/**
  * Turns a query's `error` into what the error block shows, or `null` when there is no error.
  * The text is the server's Persian `message` when there is one, otherwise `fallbackText`.
  */

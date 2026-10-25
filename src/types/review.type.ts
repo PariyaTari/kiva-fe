@@ -1,5 +1,6 @@
 /** Mirrors the review contract (kiva-openapi.yml · Reviews) — product page and «نظرات من» share it. */
 import { Color, MediaAsset, ProductRef } from "./catalog.type";
+import { OrderCode } from "./order.type";
 
 export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -12,7 +13,7 @@ export interface ReviewReply {
 export interface Review {
 	id: number;
 	productId: number;
-	/** Only in «نظرات من»; `null` elsewhere. */
+	/** In «نظرات من» (and the panel), with whatever state the product has now; `null` elsewhere. */
 	product?: ProductRef | null;
 	/** The name the author gave, else «کاربر کیوا» (never the account's name). */
 	authorName: string;
@@ -63,3 +64,28 @@ export interface CreateReviewPayload {
 	/** Links the review to the purchase → the «خریدار» tag. */
 	orderItemId?: number | null;
 }
+
+/**
+ * `PATCH /me/reviews/{id}` — only a `PENDING` or `REJECTED` review (`422 REVIEW_NOT_EDITABLE` otherwise); a rejected one goes back
+ * to `PENDING`. A field left out stays as it is (`contact` is never sent: the review doesn't return it, so it can't be shown).
+ */
+export interface UpdateReviewPayload {
+	rating?: number;
+	/** `""` → «کاربر کیوا». */
+	authorName?: string;
+	text?: string;
+}
+
+/** `GET /me/reviews/pending-products` — a delivered line whose product has no live review of the user (one per product). */
+export interface ReviewablePurchase {
+	orderCode: OrderCode;
+	/** Row number inside that order. */
+	orderItemId: number;
+	product: ProductRef;
+	/** The colour bought (the line's snapshot). */
+	color: Color;
+	deliveredAt: string;
+}
+
+/** Which purchase a new review is about — «نظر بده» of «نظرات من» links to the product page with it (`?order=&item=`). */
+export type ReviewPurchaseRef = Pick<ReviewablePurchase, "orderCode" | "orderItemId">;

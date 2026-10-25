@@ -3,6 +3,7 @@
 import Link from "next/link";
 import classNames from "classnames";
 import { useQuery } from "@tanstack/react-query";
+import ErrorComponent from "@/app/_components/common/errorComponent2/errorComponent2";
 import Logo from "@/app/_components/common/logo/logo";
 import { Icon } from "@/app/_components/icon/icons";
 import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
@@ -11,7 +12,9 @@ import { MAIN_NAV, MOBILE_EXTRA_NAV } from "@/app/_components/site/nav";
 import { SiteEndpoints } from "@/app/_components/site/_api/siteEndpoints";
 import { useUiStore } from "@/store/ui.store";
 import { SocialLink } from "@/types/siteConfig.type";
+import { toErrorView } from "@/utils/apiError";
 import { withMappedError } from "@/utils/withMappedError";
+import { ERROR_BEHAVIOUR } from "../_utils/apiError";
 
 /** `#kvMenu` — the right drawer below 900px: search, category circles, every link, messengers. */
 export default function MobileMenu({ social }: { social: SocialLink[] }) {
@@ -22,7 +25,10 @@ export default function MobileMenu({ social }: { social: SocialLink[] }) {
 	const categories = useQuery({
 		queryKey: ["site", "categories"],
 		queryFn: () => withMappedError(() => SiteEndpoints.listCategories()),
+		meta: { showNotificationOnRefetch: true },
 	});
+
+	const categoriesError = toErrorView(ERROR_BEHAVIOUR, categories.error, "دریافت دسته‌بندی‌ها با خطا مواجه شد.");
 
 	return (
 		<aside className={classNames("drawer right", { on: panel === "menu" })} id="kvMenu" aria-label="منو" aria-hidden={panel !== "menu"}>
@@ -42,14 +48,28 @@ export default function MobileMenu({ social }: { social: SocialLink[] }) {
 					<Icon name="search" /> جستجوی کیف، رنگ، دسته‌بندی…
 				</button>
 				<div className="m-cats">
-					{categories.data?.map((c) => (
-						<Link key={c.slug} href={`/products?category=${c.slug}`} onClick={closeAll}>
-							<span className="ic">
-								<CategoryIcon category={c} />
-							</span>
-							{c.name}
-						</Link>
-					))}
+					{categoriesError ? (
+						<div style={{ gridColumn: "1/-1" }}>
+							<ErrorComponent
+								retryable={categoriesError.retryable}
+								ticketAble={categoriesError.ticketAble}
+								errorText={categoriesError.errorText}
+								executeFunction={() => categories.refetch()}
+								variant="text"
+								height={56}
+								loading={categories.isFetching}
+							/>
+						</div>
+					) : (
+						categories.data?.map((c) => (
+							<Link key={c.slug} href={`/products?category=${c.slug}`} onClick={closeAll}>
+								<span className="ic">
+									<CategoryIcon category={c} />
+								</span>
+								{c.name}
+							</Link>
+						))
+					)}
 				</div>
 				<nav className="m-nav">
 					{[...MAIN_NAV, ...MOBILE_EXTRA_NAV].map((item) => (

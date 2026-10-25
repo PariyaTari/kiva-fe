@@ -44,6 +44,7 @@ export default function ProductsView() {
 	const categories = useQuery({
 		queryKey: ["site", "categories"],
 		queryFn: () => withMappedError(() => SiteEndpoints.listCategories()),
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	const title = products.data?.title ?? "فروشگاه کیوا";
@@ -95,6 +96,7 @@ export default function ProductsView() {
 	const crumb = products.data?.breadcrumbs.at(-1)?.label ?? "فروشگاه";
 
 	const productsError = toErrorView(ERROR_BEHAVIOUR, products.error, "دریافت لیست محصولات با خطا مواجه شد.");
+	const categoriesError = toErrorView(ERROR_BEHAVIOUR, categories.error, "دریافت دسته‌بندی‌ها با خطا مواجه شد.");
 
 	return (
 		<>
@@ -119,7 +121,18 @@ export default function ProductsView() {
 							همه کیف‌ها
 						</button>
 						{/* the header may have filled this query before this boundary hydrates */}
-						{hydrated &&
+						{hydrated && categoriesError ? (
+							<ErrorComponent
+								retryable={categoriesError.retryable}
+								ticketAble={categoriesError.ticketAble}
+								errorText={categoriesError.errorText}
+								executeFunction={() => categories.refetch()}
+								variant="text"
+								height={40}
+								loading={categories.isFetching}
+							/>
+						) : (
+							hydrated &&
 							categories.data?.map((c) => (
 								<button key={c.slug} type="button" className={classNames("qcat", { on: one === c.slug })} onClick={() => navigate({ ...filters, category: [c.slug] })}>
 									<span className="ic">
@@ -127,7 +140,8 @@ export default function ProductsView() {
 									</span>
 									{c.name}
 								</button>
-							))}
+							))
+						)}
 					</div>
 				</div>
 			</section>

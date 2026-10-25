@@ -18,7 +18,7 @@ import { toPersianDigits } from "@/utils/digits";
 import { formatDate } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { BlogEndpoints } from "../../_api/blogEndpoints";
-import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isPostNotFoundError } from "../../_utils/apiError";
 import PostBlocks from "../postBlocks/postBlocks";
 import RelatedPosts from "../relatedPosts/relatedPosts";
 
@@ -69,16 +69,22 @@ export default function PostView({ slug }: { slug: string }) {
 	const feedback = useMutation({
 		mutationFn: (helpful: boolean) => withMappedError(() => BlogEndpoints.sendFeedback(data?.id ?? 0, helpful)),
 		meta: { showNotification: true },
+		// thanks only once it is saved — a failed vote (e.g. `429`) leaves the earlier answer pressed
+		onSuccess: (_res, helpful) => {
+			setVote(helpful);
+			toast(helpful ? "ممنون از بازخوردت" : "ممنون! سعی می‌کنیم بهترش کنیم", { icon: "smile" });
+		},
 	});
+	// while sending, the new answer is shown
+	const shownVote = feedback.isPending ? feedback.variables : vote;
 
 	const answer = (helpful: boolean) => {
-		setVote(helpful);
+		if (feedback.isPending || shownVote === helpful) return;
 		feedback.mutate(helpful);
-		toast(helpful ? "ممنون از بازخوردت" : "ممنون! سعی می‌کنیم بهترش کنیم", { icon: "smile" });
 	};
 
 	// a missing post shows the site's 404 (like a missing product)
-	if (post.error?.statusCode === 404) notFound();
+	if (isPostNotFoundError(post.error)) notFound();
 
 	const postError = toErrorView(ERROR_BEHAVIOUR, post.error, "دریافت مقاله با خطا مواجه شد.");
 
@@ -155,10 +161,10 @@ export default function PostView({ slug }: { slug: string }) {
 						</div>
 						<div className="helpful">
 							<span>این مطلب مفید بود؟</span>
-							<button type="button" className={classNames("btn btn-outline btn-sm", { on: vote === true })} onClick={() => answer(true)}>
+							<button type="button" className={classNames("btn btn-outline btn-sm", { on: shownVote === true })} onClick={() => answer(true)}>
 								<Icon name="smile" /> آره
 							</button>
-							<button type="button" className={classNames("btn btn-outline btn-sm", { on: vote === false })} onClick={() => answer(false)}>
+							<button type="button" className={classNames("btn btn-outline btn-sm", { on: shownVote === false })} onClick={() => answer(false)}>
 								نه چندان
 							</button>
 						</div>

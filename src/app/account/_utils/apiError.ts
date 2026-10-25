@@ -44,6 +44,8 @@ export const isDesiredVariantError = (e: ResultError | null | undefined) =>
 export const isStockAlertAnswer = (e: ResultError | null | undefined) => e?.code === "STOCK_ALERT_EXISTS" || e?.code === "PRODUCT_IN_STOCK";
 /** `PATCH /me`: the profile was saved elsewhere meanwhile and nothing was stored — re-read it and start the form over. */
 export const isChangedBySomeoneElseError = (e: ResultError | null | undefined) => e?.code === "CHANGED_BY_SOMEONE_ELSE";
+/** Edit / delete of a review that was deleted (`REVIEW_NOT_FOUND`) or approved (`REVIEW_NOT_EDITABLE`) meanwhile — re-read the list. */
+export const isReviewMovedOnError = (e: ResultError | null | undefined) => e?.code === "REVIEW_NOT_FOUND" || e?.code === "REVIEW_NOT_EDITABLE";
 /** «رسید خرید» of an order that was never paid — no retry. */
 export const isInvoiceNotAvailableError = (e: ResultError | null | undefined) => e?.code === "INVOICE_NOT_AVAILABLE";
 /** The return page's closed state. */

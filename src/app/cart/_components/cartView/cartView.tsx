@@ -35,6 +35,7 @@ export default function CartView() {
 		queryKey: ["cart"],
 		queryFn: () => withMappedError(() => CartEndpoints.getCart()),
 		enabled: hydrated,
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	const data = cart.data;

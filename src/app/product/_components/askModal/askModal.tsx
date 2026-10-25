@@ -27,6 +27,7 @@ export default function AskModal({ open, onClose, productId, color }: AskModalPr
 		queryKey: ["product", productId, "inquiry", color],
 		queryFn: () => withMappedError(() => ProductEndpoints.getInquiry(productId, color)),
 		enabled: open,
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	const inquiryError = toErrorView(ERROR_BEHAVIOUR, inquiry.error, "دریافت لینک پیام‌رسان‌ها با خطا مواجه شد.");

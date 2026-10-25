@@ -103,6 +103,49 @@ const reviewsOf = (p, ctx) => D.REVIEW_SAMPLES.slice(0, 3 + (p.id % 3)).map((r, 
 	reply: r.reply ? { text: r.reply, authorName: "کیوا", createdAt: iso(Date.now() - (r.daysAgo - 1) * DAY) } : null,
 	helpfulCount: 3 + i + votesOf(id).filter(Boolean).length, myHelpfulVote: (ctx?.user && helpfulVotes.get(id)?.get(ctx.user.phone)) ?? null, media: [], isMine: false,
 }));
+/** The user's live (pending / approved) review of a product — one per product (contract 1.21.0). */
+const liveReview = (u, productId) => u.reviews.find((r) => r.productId === productId && r.status !== "REJECTED");
+const REVIEW_LABEL = { PENDING: "در انتظار تأیید", APPROVED: "منتشر شده", REJECTED: "رد شده" };
+/** One of the user's own reviews as `Review` (with `product`, as in «نظرات من»). */
+function myReviewView(r) {
+	const p = getP(r.productId);
+	const name = r.authorName || "کاربر کیوا";
+	return {
+		id: r.id, productId: p.id, product: { id: p.id, slug: p.slug, sku: `KV-${1000 + p.id}`, name: p.n, imageUrl: img(p, r.colorKey || p.colors[0]), colorKey: null },
+		authorName: name, authorInitial: name[0], rating: r.rating, title: null, text: r.text, createdAt: iso(r.createdAt),
+		status: r.status, statusLabel: REVIEW_LABEL[r.status], rejectionReason: r.status === "REJECTED" ? r.rejectionReason ?? null : null,
+		isVerifiedBuyer: !!r.orderCode, purchasedColor: r.colorKey ? color(r.colorKey) : null,
+		reply: r.status === "APPROVED" && r.reply ? { text: r.reply, authorName: "کیوا", createdAt: iso(r.createdAt + DAY) } : null,
+		helpfulCount: 0, myHelpfulVote: null, media: [], isMine: true,
+	};
+}
+/** «منتظر نظر تو»: one row per product of a delivered line without a live review — latest delivery first, at most 50. */
+function reviewablePurchases(u) {
+	const rows = [];
+	[...u.orders].filter((o) => o.status === 3 && !o.cancelledAt).sort((a, b) => deliveredAt(b) - deliveredAt(a)).forEach((o) =>
+		o.items.forEach((i, j) => {
+			const p = getP(i.id);
+			if (p.inactive || liveReview(u, p.id) || rows.some((r) => r.product.id === p.id)) return;
+			rows.push({
+				orderCode: o.code, orderItemId: j + 1, product: { id: p.id, slug: p.slug, sku: `KV-${1000 + p.id}`, name: p.n, imageUrl: img(p, i.color), colorKey: i.color },
+				color: color(i.color), deliveredAt: iso(deliveredAt(o)),
+			});
+		}));
+	return rows.slice(0, 50);
+}
+/** The shared rules of a new / edited review's fields (only the ones sent are checked on an edit). */
+function reviewFieldErrors(b, partial) {
+	const errors = [];
+	if (!partial || b.text !== undefined) {
+		const text = String(b.text || "").trim();
+		if (text.length < 10) errors.push({ field: "text", code: "TEXT_TOO_SHORT", message: "حداقل ۱۰ حرف بنویس" });
+		if (text.length > 1000) errors.push({ field: "text", code: "TEXT_TOO_LONG", message: "حداکثر ۱۰۰۰ حرف" });
+	}
+	if (b.rating == null) { if (!partial) errors.push({ field: "rating", code: "FIELD_REQUIRED", message: "امتیازت رو انتخاب کن" }); }
+	else if (!(Number.isInteger(Number(b.rating)) && b.rating >= 1 && b.rating <= 5)) errors.push({ field: "rating", code: "RATING_INVALID", message: "امتیاز بین ۱ تا ۵ است" });
+	if (String(b.authorName || "").trim().length > 40) errors.push({ field: "authorName", code: "TEXT_TOO_LONG", message: "اسم حداکثر ۴۰ حرف" });
+	return errors;
+}
 const ratingSummary = (p) => {
 	const rs = reviewsOf(p);
 	const avg = rs.reduce((s, r) => s + r.rating, 0) / rs.length;
@@ -278,7 +321,6 @@ const payments = new Map(); // paymentId → { orderCode, phone, gateway, amount
 const idempotency = new Map(); // `${route}:${key}` → { body, order?, res?, error? } — the same key with another body is `409`
 const gatewayState = new Map(); // test aid: gateway code → "OFF" (refused before anything is made) | "NO_ANSWER" (made, then the bank didn't answer)
 const stockAlerts = [];
-const pendingReviews = []; // user-submitted reviews (status PENDING)
 const uploads = new Map(); // mediaId → { phone, asset }
 let USER_SEQ = 1024, ADDR_SEQ = 40, REVIEW_SEQ = 9000, ALERT_SEQ = 70, RETURN_SEQ = 1012, REFUND_SEQ = 30;
 const HOLD_MS = 15 * 60e3; // unpaid orders keep their stock this long
@@ -356,9 +398,11 @@ function seedUser(u) {
 		{ id: ++ALERT_SEQ, phone: u.phone, productId: 14, variantId: null, status: "ACTIVE", createdAt: now - 2 * DAY, notifiedAt: null },
 		{ id: ++ALERT_SEQ, phone: u.phone, productId: 9, variantId: variantId(getP(9), "caramel"), status: "NOTIFIED", createdAt: now - 12 * DAY, notifiedAt: now - DAY },
 	);
+	// linked to delivered lines (the «خریدار» tag); a rejected one to edit and send again (contract 1.21.0)
 	u.reviews = [
-		{ id: ++REVIEW_SEQ, productId: 1, rating: 5, text: "کیف دقیقاً همونی بود که توی عکس قبل از ارسال دیدم. چرمش هم خیلی نرمه.", createdAt: now - 16 * DAY, status: "APPROVED", reply: "ممنون از نظر قشنگت امیدواریم سال‌ها همراهت باشه." },
-		{ id: ++REVIEW_SEQ, productId: 4, rating: 4, text: "رنگ کاراملی‌ش فوق‌العاده‌ست، فقط بند بلندش کمی سفته.", createdAt: now - 3 * DAY, status: "APPROVED", reply: "بند چرمی بعد از چند بار استفاده نرم‌تر می‌شه. اگه خواستی، با پشتیبانی در تماس باش تا بند جایگزین برات بفرستیم." },
+		{ id: ++REVIEW_SEQ, productId: 1, rating: 5, text: "کیف دقیقاً همونی بود که توی عکس قبل از ارسال دیدم. چرمش هم خیلی نرمه.", createdAt: now - 16 * DAY, status: "APPROVED", reply: "ممنون از نظر قشنگت امیدواریم سال‌ها همراهت باشه.", authorName: "سارا", orderCode: "KV-209117", orderItemId: 1, colorKey: "black" },
+		{ id: ++REVIEW_SEQ, productId: 4, rating: 4, text: "رنگ کاراملی‌ش فوق‌العاده‌ست، فقط بند بلندش کمی سفته.", createdAt: now - 3 * DAY, status: "APPROVED", reply: "بند چرمی بعد از چند بار استفاده نرم‌تر می‌شه. اگه خواستی، با پشتیبانی در تماس باش تا بند جایگزین برات بفرستیم.", authorName: "سارا", orderCode: "KV-214410", orderItemId: 1, colorKey: "caramel" },
+		{ id: ++REVIEW_SEQ, productId: 12, rating: 2, text: "پیک دیر اومد و جعبه‌ش له شده بود.", createdAt: now - 5 * DAY, status: "REJECTED", reply: null, rejectionReason: "نظرت درباره‌ی ارسال بود نه خود کیف؛ لطفاً درباره‌ی کیف بنویس (برای ارسال با پشتیبانی در تماس باش).", authorName: null, orderCode: null, orderItemId: null, colorKey: null },
 	];
 }
 function getUserByPhone(phone, create) {
@@ -709,6 +753,13 @@ const canCancel = (o) => ["RESERVED", "PROCESSING"].includes(statusOf(o).status)
 const canRequestChange = (o) => statusOf(o).status === "PHOTO_SENT" && (!o.feedback || o.feedback.decision === "APPROVE");
 /** A payment of the order is being verified right now (test aid `/slow` of the fake bank). */
 const verifying = (o) => [...payments.values()].some((x) => x.orderCode === o.code && x.status === "PENDING" && x.verifyAt);
+/** The user an order object belongs to — by identity: every seeded user has the same sample order codes. */
+const ownerOf = (o) => [...users.values()].find((u) => u.orders.includes(o));
+/** Delivered, with a line whose bag is in the shop and has no live review of the owner. */
+function canReviewOrder(o) {
+	const owner = o.status === 3 && !o.cancelledAt ? ownerOf(o) : null;
+	return !!owner && o.items.some((i) => !getP(i.id).inactive && !liveReview(owner, i.id));
+}
 function orderSummary(o) {
 	const st = statusOf(o);
 	const s = D.SHIPPING[o.shippingMethod];
@@ -731,7 +782,7 @@ function orderSummary(o) {
 		actions: {
 			canCancel: canCancel(o), canRequestChange: canRequestChange(o), canApproveMedia: st.status === "PHOTO_SENT" && !o.feedback,
 			canReturn: canReturn(o), canPay: st.status === "PENDING_PAYMENT" || st.status === "PAYMENT_FAILED" || (o.balanceDue > 0 && !o.cancelledAt),
-			canAddToReservation: st.status === "RESERVED", canReview: o.status === 3 && !o.cancelledAt,
+			canAddToReservation: st.status === "RESERVED", canReview: canReviewOrder(o),
 		},
 	};
 }
@@ -744,7 +795,7 @@ function orderDetail(o) {
 			return {
 				id: j + 1, productId: p.id, variantId: variantId(p, i.color), sku: `KV-${1000 + p.id}`, name: p.n, slug: p.slug, color: color(i.color),
 				image: p.noPhoto ? null : img(p, i.color), quantity: i.qty, unitPrice: p.price, unitCompareAtPrice: p.old || null, lineTotal: p.price * i.qty,
-				reviewed: false, returnableUntil: o.status === 3 && !o.cancelledAt ? iso(returnDeadline(o)) : null,
+				reviewed: !!liveReview(ownerOf(o) ?? { reviews: [] }, p.id), returnableUntil: o.status === 3 && !o.cancelledAt ? iso(returnDeadline(o)) : null,
 			};
 		}),
 		address: o.address,
@@ -957,7 +1008,7 @@ const STATIC_PAGES = {
 	},
 };
 route("GET", "/pages/:slug", (ctx) => {
-	const page = STATIC_PAGES[ctx.params.slug] || fail(404, "PAGE_NOT_FOUND", "این صفحه پیدا نشد.");
+	const page = STATIC_PAGES[ctx.params.slug] || fail(404, "NOT_FOUND", "این صفحه پیدا نشد.");
 	return {
 		slug: ctx.params.slug, title: page.title, content: page.content, updatedAt: page.updatedAt,
 		seo: { title: `${page.title} | کیوا`, description: page.description, canonicalUrl: `https://kiva.ir/pages/${ctx.params.slug}` },
@@ -1261,36 +1312,46 @@ route("GET", "/products/:id/inquiry", (ctx) => {
 });
 route("GET", "/products/:id/reviews", (ctx) => {
 	const p = findProduct(ctx.params.id);
-	const mine = ctx.user ? pendingReviews.filter((r) => r.productId === p.id && r.phone === ctx.user.phone).map((r) => ({ ...r.view, isMine: true })) : [];
+	const mine = ctx.user && (Number(ctx.query.page) || 1) === 1
+		? ctx.user.reviews.filter((r) => r.productId === p.id && r.status === "PENDING").map((r) => ({ ...myReviewView(r), product: null }))
+		: [];
 	let list = reviewsOf(p, ctx);
 	if (ctx.query.rating) list = list.filter((r) => r.rating === Number(ctx.query.rating));
-	return { summary: ratingSummary(p), ...paginate([...mine, ...list], ctx.query, 20) };
+	const page = paginate(list, ctx.query, 20);
+	return { summary: ratingSummary(p), ...page, items: [...mine, ...page.items] };
 });
 route("POST", "/products/:id/reviews", (ctx) => {
 	const u = needUser(ctx);
 	const p = findProduct(ctx.params.id);
 	const b = ctx.body || {};
-	const errors = [];
-	const text = String(b.text || "").trim();
-	if (text.length < 10) errors.push({ field: "text", code: "TEXT_TOO_SHORT", message: "حداقل ۱۰ حرف بنویس" });
-	if (text.length > 1000) errors.push({ field: "text", code: "TEXT_TOO_LONG", message: "حداکثر ۱۰۰۰ حرف" });
-	if (b.rating == null) errors.push({ field: "rating", code: "FIELD_REQUIRED", message: "امتیازت رو انتخاب کن" });
-	else if (!(Number.isInteger(Number(b.rating)) && b.rating >= 1 && b.rating <= 5)) errors.push({ field: "rating", code: "RATING_INVALID", message: "امتیاز بین ۱ تا ۵ است" });
-	if (String(b.authorName || "").trim().length > 40) errors.push({ field: "authorName", code: "TEXT_TOO_LONG", message: "اسم حداکثر ۴۰ حرف" });
+	const errors = reviewFieldErrors(b, false);
 	if ((b.orderCode == null) !== (b.orderItemId == null)) errors.push({ field: b.orderCode == null ? "orderCode" : "orderItemId", code: "FIELD_REQUIRED", message: "کد سفارش و ردیف با هم لازم‌اند" });
 	const contact = toEn(b.contact || "").trim();
 	if (contact && !validPhone(contact) && !/^\S+@\S+\.\S+$/.test(contact)) errors.push({ field: "contact", code: "INVALID", message: "شماره موبایل یا ایمیل معتبر وارد کن" });
 	if (errors.length) validation(errors);
 	// a live review (pending or approved) of this product — after a rejection a new one is fine
-	if (pendingReviews.some((r) => r.productId === p.id && r.phone === u.phone) || u.reviews.some((r) => r.productId === p.id && r.status !== "REJECTED"))
-		fail(409, "REVIEW_ALREADY_EXISTS", "برای این کیف یه نظر ثبت کردی؛ از «نظرات من» می‌تونی ویرایشش کنی.");
+	if (liveReview(u, p.id)) fail(409, "REVIEW_ALREADY_EXISTS", "برای این کیف یه نظر ثبت کردی؛ از «نظرات من» می‌تونی ویرایشش کنی.");
 	if (u.reviews.filter((r) => r.createdAt > Date.now() - DAY).length >= 5) tooMany(ctx, "RATE_LIMITED", "امروز ۵ تا نظر نوشتی؛ فردا دوباره بنویس.", 3600);
-	const name = String(b.authorName || "").trim() || "کاربر کیوا";
-	const view = { id: ++REVIEW_SEQ, productId: p.id, authorName: name, authorInitial: name[0], rating: Number(b.rating) || 5, title: null, text: String(b.text).trim(), createdAt: iso(Date.now()), status: "PENDING", statusLabel: "در انتظار تأیید", isVerifiedBuyer: false, purchasedColor: null, reply: null, helpfulCount: 0, myHelpfulVote: null, media: [], isMine: true };
-	pendingReviews.push({ productId: p.id, phone: u.phone, view });
-	u.reviews.unshift({ id: view.id, productId: p.id, rating: view.rating, text: view.text, createdAt: Date.now(), status: "PENDING", reply: null });
+	// the purchase: the one sent (own order, its line, this product, delivered) or the latest delivered line of this product
+	let link = null;
+	if (b.orderCode != null) {
+		const o = u.orders.find((x) => x.code === String(b.orderCode).toUpperCase()) || fail(404, "ORDER_NOT_FOUND", "این سفارش پیدا نشد.");
+		const line = o.items[Number(b.orderItemId) - 1];
+		if (!line) validation([{ field: "orderItemId", code: "ORDER_ITEM_NOT_FOUND", message: "این ردیف توی سفارش نیست" }]);
+		if (line.id !== p.id) validation([{ field: "orderItemId", code: "ORDER_ITEM_PRODUCT_MISMATCH", message: "این ردیف مال کیف دیگه‌ایه" }]);
+		if (o.status !== 3 || o.cancelledAt) fail(422, "REVIEW_PURCHASE_NOT_DELIVERED", "این سفارش هنوز تحویل نشده؛ بعد از تحویل نظرت رو بنویس.");
+		link = { orderCode: o.code, orderItemId: Number(b.orderItemId), colorKey: line.color };
+	} else {
+		const row = reviewablePurchases(u).find((x) => x.product.id === p.id);
+		if (row) link = { orderCode: row.orderCode, orderItemId: row.orderItemId, colorKey: row.color.key };
+	}
+	const r = {
+		id: ++REVIEW_SEQ, productId: p.id, rating: Number(b.rating), text: String(b.text).trim(), createdAt: Date.now(), status: "PENDING", reply: null,
+		authorName: String(b.authorName || "").trim() || null, contact: toEn(b.contact || "").trim() || null, orderCode: null, orderItemId: null, colorKey: null, ...link,
+	};
+	u.reviews.unshift(r);
 	ctx.status = 201;
-	return view;
+	return { ...myReviewView(r), product: null };
 });
 
 // search
@@ -1711,7 +1772,7 @@ route("POST", "/me/phone-change/verify", (ctx) => {
 	users.delete(old);
 	u.phone = newPhone; u.phoneChange = null;
 	users.set(newPhone, u);
-	[stockAlerts, pendingReviews, [...payments.values()], [...uploads.values()]].forEach((list) => list.forEach((x) => { if (x.phone === old) x.phone = newPhone; }));
+	[stockAlerts, [...payments.values()], [...uploads.values()]].forEach((list) => list.forEach((x) => { if (x.phone === old) x.phone = newPhone; }));
 	console.log(`[sms → ${old}] شماره‌ی حساب کیوای تو به ${newPhone} تغییر کرد.`);
 	return { ...startSession(ctx, u), user: userView(u) };
 });
@@ -1722,7 +1783,7 @@ route("GET", "/me/dashboard", (ctx) => {
 		greeting: `سلام ${u.firstName || "دوست عزیز"}`, user: userView(u),
 		stats: { ordersTotal: u.orders.length, ordersActive: u.orders.filter((o) => bucketOf(o) === "current").length, mediaReceived: u.orders.reduce((s, o) => s + o.mediaViews.length, 0), wishlistCount: u.wishlist.length },
 		navCounts: { orders: u.orders.length, addresses: u.addresses.length, wishlist: u.wishlist.length, reviews: u.reviews.length },
-		activeReservation: g ? reservationInfo(g) : null, pendingReviewCount: 0,
+		activeReservation: g ? reservationInfo(g) : null, pendingReviewCount: reviewablePurchases(u).length,
 	};
 });
 route("GET", "/me/orders", (ctx) => {
@@ -1962,16 +2023,32 @@ route("GET", "/me/tracking", (ctx) => {
 });
 route("GET", "/me/reviews", (ctx) => {
 	const u = needUser(ctx);
-	const items = u.reviews.map((r) => {
-		const p = getP(r.productId);
-		return {
-			id: r.id, productId: p.id, product: { id: p.id, slug: p.slug, sku: `KV-${1000 + p.id}`, name: p.n, imageUrl: img(p, p.colors[0]) },
-			authorName: u.firstName || "کاربر کیوا", authorInitial: (u.firstName || "ک")[0], rating: r.rating, title: null, text: r.text, createdAt: iso(r.createdAt),
-			status: r.status, statusLabel: r.status === "APPROVED" ? "منتشر شده" : "در انتظار تأیید", isVerifiedBuyer: true,
-			reply: r.reply ? { text: r.reply, authorName: "کیوا", createdAt: iso(r.createdAt + DAY) } : null, helpfulCount: 0, isMine: true,
-		};
-	});
-	return { ...paginate(items, ctx.query, 20), counts: { total: items.length, pending: items.filter((r) => r.status === "PENDING").length, approved: items.filter((r) => r.status === "APPROVED").length } };
+	const items = [...u.reviews].sort((a, b) => b.createdAt - a.createdAt).map(myReviewView);
+	const count = (st) => items.filter((r) => r.status === st).length;
+	return { ...paginate(items, ctx.query, 20), counts: { total: items.length, pending: count("PENDING"), approved: count("APPROVED"), rejected: count("REJECTED") } };
+});
+route("GET", "/me/reviews/pending-products", (ctx) => reviewablePurchases(needUser(ctx)));
+const myReview = (ctx) => needUser(ctx).reviews.find((r) => r.id === Number(ctx.params.id)) || fail(404, "REVIEW_NOT_FOUND", "این نظر پیدا نشد.");
+route("PATCH", "/me/reviews/:id", (ctx) => {
+	const u = needUser(ctx);
+	const r = myReview(ctx);
+	const b = ctx.body || {};
+	if (r.status === "APPROVED") fail(422, "REVIEW_NOT_EDITABLE", "این نظر منتشر شده و دیگه ویرایش نمی‌شه؛ اگه می‌خوای، حذفش کن و دوباره بنویس.");
+	const errors = reviewFieldErrors(b, true);
+	if (errors.length) validation(errors);
+	// a rejected one goes back to review — unless another live review of this bag exists
+	if (r.status === "REJECTED" && liveReview(u, r.productId)) fail(409, "REVIEW_ALREADY_EXISTS", "برای این کیف یه نظر دیگه داری؛ همون رو ویرایش کن.");
+	if (b.rating != null) r.rating = Number(b.rating);
+	if (b.text !== undefined) r.text = String(b.text).trim();
+	if (b.authorName !== undefined) r.authorName = String(b.authorName).trim() || null;
+	if (r.status === "REJECTED") Object.assign(r, { status: "PENDING", rejectionReason: null });
+	return myReviewView(r);
+});
+route("DELETE", "/me/reviews/:id", (ctx) => {
+	const u = needUser(ctx);
+	const r = myReview(ctx);
+	u.reviews = u.reviews.filter((x) => x !== r);
+	ctx.status = 204;
 });
 
 // addresses
@@ -2065,6 +2142,11 @@ route("POST", "/me/wishlist/add-to-cart", (ctx) => {
 	});
 	return { cart: cartView(c, ctx), addedCount: added, skipped, message: `${fa(added)} کیف به سبد اضافه شد` };
 });
+route("DELETE", "/me/wishlist/share", (ctx) => {
+	// always `204` — the old token answers 404 at once, the next POST makes a new one
+	needUser(ctx).share = null;
+	ctx.status = 204;
+});
 route("POST", "/me/wishlist/share", (ctx) => {
 	const u = needUser(ctx);
 	if (!flags.wishlistShare) fail(422, "WISHLIST_SHARE_DISABLED", "اشتراک‌گذاری لیست علاقه‌مندی فعلاً خاموشه.");
@@ -2100,7 +2182,9 @@ route("GET", "/blog/posts/:key", (ctx) => {
 		blocks.push({ type: "HEADING", anchor: `s${i}`, text: h }, { type: "PARAGRAPH", text: txt });
 		if (i === 0) blocks.push({ type: "QUOTE", text: "کیف خوب، کیفیه که هم با استایلت هماهنگ باشه و هم با زندگی روزمره‌ت." });
 		if (i === 1) blocks.push({ type: "PRODUCT", product: summary(prodP, ctx) });
-		if (i === 2) blocks.push({ type: "TIP", title: "نکته کیوا", text: "قبل از خرید، از ما ویدیوی کیف رو در کنار وسایل روزمره بخواه تا اندازه‌ش رو دقیق‌تر ببینی." });
+		// 1.21.0: a tip may carry sanitised `html` (an empty title is «نکته کیوا»); an image block's `text` is its caption
+		if (i === 1) blocks.push({ type: "IMAGE", image: { id: `blogimg_${p.id}`, type: "IMAGE", url: img(prodP, prodP.colors[0], 1), alt: null }, text: `${prodP.n} از نمای کنار` });
+		if (i === 2) blocks.push({ type: "TIP", title: "", text: null, html: "قبل از خرید، از ما <strong>ویدیوی کیف</strong> رو در کنار وسایل روزمره بخواه تا اندازه‌ش رو دقیق‌تر ببینی." });
 	});
 	const url = `https://kiva.ir/blog/${p.slug}`;
 	return {

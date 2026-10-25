@@ -23,6 +23,9 @@
 	.share-box b{display:block}
 	.share-box p{font-size:13px;color:#6b5a48}
 	.share-box .btn{margin-inline-start:auto}
+	/* «لغو لینک» beside «کپی لینک لیست» — not in the design */
+	.share-acts{display:flex;gap:8px;margin-inline-start:auto;flex-wrap:wrap}
+	.share-acts .btn{margin-inline-start:0}
 	@media (max-width:760px){
 		.hero-row .art{display:none}
 		.wcard .rm{opacity:1;transform:none}

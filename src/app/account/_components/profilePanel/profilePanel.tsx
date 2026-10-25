@@ -20,7 +20,8 @@ import { gregorianToJalali, jalaliToGregorian } from "@/utils/jalali";
 import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
 import { ERROR_BEHAVIOUR, isChangedBySomeoneElseError } from "../../_utils/apiError";
-import PhoneChangeModal from "../phoneChangeModal/phoneChangeModal";
+// BACKEND-PENDING(phone-change): «تغییر شماره» (`POST /me/phone-change/request|verify`) is still [پیشنهادی] in the contract (1.22.0) — off until the backend builds it; uncomment to bring it back
+// import PhoneChangeModal from "../phoneChangeModal/phoneChangeModal";
 
 const MESSENGERS: { channel: PhotoMessengerChannel; name: string }[] = [
 	{ channel: "RUBIKA", name: "روبیکا" },
@@ -58,8 +59,9 @@ export default function ProfilePanel() {
 	});
 	// bumped to start the form over from a fresh profile (someone else saved meanwhile)
 	const [formVersion, setFormVersion] = useState(0);
-	// a fresh modal on every open
-	const [phoneChange, setPhoneChange] = useState({ open: false, key: 0 });
+	// BACKEND-PENDING(phone-change)
+	// // a fresh modal on every open
+	// const [phoneChange, setPhoneChange] = useState({ open: false, key: 0 });
 
 	const meError = toErrorView(ERROR_BEHAVIOUR, me.error, "دریافت اطلاعات شخصی با خطا مواجه شد.");
 
@@ -82,10 +84,11 @@ export default function ProfilePanel() {
 				<ProfileForm
 					key={`${me.data.id}:${formVersion}`}
 					user={me.data}
-					onChangePhone={() => setPhoneChange((m) => ({ open: true, key: m.key + 1 }))}
+					/* BACKEND-PENDING(phone-change): onChangePhone={() => setPhoneChange((m) => ({ open: true, key: m.key + 1 }))} */
 					onStale={() => me.refetch().then(() => setFormVersion((v) => v + 1))}
 				/>
 			) : null}
+			{/* BACKEND-PENDING(phone-change):
 			{!!me.data && (
 				<PhoneChangeModal
 					key={phoneChange.key}
@@ -94,18 +97,21 @@ export default function ProfilePanel() {
 					currentPhone={me.data.phone}
 				/>
 			)}
+			*/}
 		</div>
 	);
 }
 
 type ProfileFormProps = {
 	user: User;
-	onChangePhone: () => void;
+	// BACKEND-PENDING(phone-change)
+	// onChangePhone: () => void;
 	/** The profile changed elsewhere since it was read — re-read it and start the form over. */
 	onStale: () => void;
 };
 
-function ProfileForm({ user, onChangePhone, onStale }: ProfileFormProps) {
+// BACKEND-PENDING(phone-change): `onChangePhone` comes back with the «تغییر» button
+function ProfileForm({ user, onStale }: ProfileFormProps) {
 	const queryClient = useQueryClient();
 	const setUser = useAuthStore((s) => s.setUser);
 
@@ -161,9 +167,11 @@ function ProfileForm({ user, onChangePhone, onStale }: ProfileFormProps) {
 					<label>شماره موبایل</label>
 					<div className="input-group">
 						<input className="input ltr" value={toPersianDigits(user.phone)} disabled style={{ background: "var(--lilac-50)" }} aria-label="شماره موبایل" />
+						{/* BACKEND-PENDING(phone-change):
 						<button type="button" className="btn btn-soft" id="chPh" onClick={onChangePhone}>
 							تغییر
 						</button>
+						*/}
 					</div>
 					<span className="help">ورود با همین شماره و کد یک‌بارمصرف انجام می‌شه.</span>
 				</div>

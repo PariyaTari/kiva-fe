@@ -133,6 +133,21 @@
 	.reply b{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--purple);margin-bottom:4px}
 	.reply b svg{width:14px;height:14px}
 	.reply.wait{background:#fff;border:1.5px dashed var(--tag-border);color:var(--ink-50)}
+	/* «نظرات من» extras — not in the design: edit / delete row (the address card's `.acts`) and «منتظر نظر تو» */
+	.my-rv .acts{display:flex;gap:6px;margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+	.my-rv .acts button{background:none;border:0;cursor:pointer;font-weight:600;font-size:12.5px;color:var(--ink-50);display:flex;align-items:center;gap:4px;padding:6px 8px;border-radius:8px}
+	.my-rv .acts button:hover{background:var(--lilac-50);color:var(--ink)}
+	.my-rv .acts button.del:hover{background:var(--danger-bg);color:var(--danger)}
+	.my-rv .acts svg{width:15px;height:15px}
+	.rv-wait{margin-bottom:22px}
+	.rv-wait h3{display:flex;align-items:center;gap:8px;font-size:16px;margin-bottom:4px}
+	.rv-wait h3 svg{width:18px;height:18px;color:var(--purple)}
+	.rv-wait h3 .n{background:var(--purple);color:#fff;border-radius:var(--pill);font-size:11.5px;min-width:22px;height:22px;display:inline-grid;place-items:center;padding:0 6px}
+	.rv-wait > p{font-size:13px;margin-bottom:12px}
+	.rv-wait-item{border-style:dashed;border-color:var(--tag-border)}
+	.rv-wait-item .h{margin-bottom:0}
+	.rv-wait-item .h small{display:flex;align-items:center;gap:6px}
+	.rv-wait-item .h .btn{margin-inline-start:auto}
 	.msg-chips{display:flex;gap:10px;flex-wrap:wrap}
 	.msg-chip{position:relative;cursor:pointer}
 	.msg-chip input{position:absolute;opacity:0}

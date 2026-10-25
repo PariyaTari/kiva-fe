@@ -25,8 +25,9 @@ function Block({ block }: { block: BlogContentBlock }) {
 						<Icon name="sparkle" />
 					</span>
 					<div>
-						<b>{block.title ?? "نکته کیوا"}</b>
-						<p>{block.text}</p>
+						<b>{block.title || "نکته کیوا"}</b>
+						{/* like a paragraph: plain `text` or sanitised `html` (contract 1.21.0) */}
+						{block.html ? <p dangerouslySetInnerHTML={{ __html: block.html }} /> : <p>{block.text}</p>}
 					</div>
 				</div>
 			);
@@ -50,8 +51,16 @@ function Block({ block }: { block: BlogContentBlock }) {
 		}
 		case "IMAGE":
 			return block.image ? (
-				<figure style={{ margin: "28px 0", borderRadius: "var(--r-lg)", overflow: "hidden" }}>
-					<MediaImage src={block.image.url} alt={block.image.alt} cover />
+				<figure style={{ margin: "28px 0" }}>
+					<div style={{ borderRadius: "var(--r-lg)", overflow: "hidden" }}>
+						<MediaImage src={block.image.url} alt={block.image.alt ?? block.text} cover />
+					</div>
+					{/* the block's optional `text` is the caption (contract 1.21.0) */}
+					{block.text && (
+						<figcaption className="muted" style={{ fontSize: 12.5, marginTop: 8, textAlign: "center" }}>
+							{block.text}
+						</figcaption>
+					)}
 				</figure>
 			) : null;
 		case "LIST":

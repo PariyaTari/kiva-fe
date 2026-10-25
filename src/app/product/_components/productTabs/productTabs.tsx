@@ -9,6 +9,7 @@ import { toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import { ProductEndpoints } from "../../_api/productEndpoints";
 import { ProductDetail } from "../../_types/product.type";
+import { ReviewPurchaseRef } from "@/types/review.type";
 import Reviews from "../reviews/reviews";
 
 export type ProductTab = "desc" | "spec" | "rev" | "ship";
@@ -26,10 +27,12 @@ type ProductTabsProps = {
 	product: ProductDetail;
 	tab: ProductTab;
 	onTab: (tab: ProductTab) => void;
+	/** The purchase a new review is linked to («نظر بده» of «نظرات من»). */
+	reviewPurchase?: ReviewPurchaseRef | null;
 };
 
 /** `.pd-tabs` — description, specs, reviews, shipping & returns. */
-export default function ProductTabs({ product, tab, onTab }: ProductTabsProps) {
+export default function ProductTabs({ product, tab, onTab, reviewPurchase }: ProductTabsProps) {
 	const hydrated = useAuthStore((s) => s.hydrated);
 
 	// the author's pending reviews come back only with the token → wait for the session
@@ -37,6 +40,7 @@ export default function ProductTabs({ product, tab, onTab }: ProductTabsProps) {
 		queryKey: ["product", product.id, "reviews"],
 		queryFn: () => withMappedError(() => ProductEndpoints.listReviews(product.id, { page: 1, size: REVIEWS_PAGE_SIZE })),
 		enabled: hydrated,
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	return (
@@ -105,7 +109,7 @@ export default function ProductTabs({ product, tab, onTab }: ProductTabsProps) {
 			</div>
 
 			<div className={classNames("tab-panel", { on: tab === "rev" })} id="t-rev">
-				<Reviews productId={product.id} slug={product.slug} reviews={reviews} />
+				<Reviews productId={product.id} slug={product.slug} reviews={reviews} purchase={reviewPurchase} />
 			</div>
 
 			<div className={classNames("tab-panel", { on: tab === "ship" })} id="t-ship">

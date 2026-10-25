@@ -13,13 +13,14 @@ import { toast } from "@/store/notification.store";
 import { useUiStore } from "@/store/ui.store";
 import { ColorKey } from "@/types/catalog.type";
 import { ResultError } from "@/types/result";
+import { ReviewPurchaseRef } from "@/types/review.type";
 import { toErrorView } from "@/utils/apiError";
 import { toPersianDigits } from "@/utils/digits";
 import { flyToCart } from "@/utils/flyToCart";
 import { withMappedError } from "@/utils/withMappedError";
 import { ProductEndpoints } from "../../_api/productEndpoints";
 import { ProductVariant } from "../../_types/product.type";
-import { ERROR_BEHAVIOUR, isStockAlertLimitError, isStockAlertStaleError, STOCK_ALERT_ANSWERS } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isProductNotFoundError, isStockAlertLimitError, isStockAlertStaleError, STOCK_ALERT_ANSWERS } from "../../_utils/apiError";
 import AskModal from "../askModal/askModal";
 import Gallery from "../gallery/gallery";
 import MobileBuyBar from "../mobileBuyBar/mobileBuyBar";
@@ -42,12 +43,14 @@ type ProductViewProps = {
 	slug: string;
 	/** `?color=` of the link (product cards, search) — the colour the page opens with. */
 	initialColor?: string;
+	/** `?order=&item=` of «نظر بده» («نظرات من») — the purchase a new review is linked to. */
+	reviewPurchase?: ReviewPurchaseRef | null;
 };
 
 type AddVariables = { variantId: number; quantity: number; colorName: string };
 
 /** Product page — design `product.html`. */
-export default function ProductView({ slug, initialColor }: ProductViewProps) {
+export default function ProductView({ slug, initialColor, reviewPurchase }: ProductViewProps) {
 	const queryClient = useQueryClient();
 	const pathname = usePathname();
 	const hydrated = useAuthStore((s) => s.hydrated);
@@ -72,6 +75,7 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 		queryKey: ["product", "detail", slug],
 		queryFn: () => withMappedError(() => ProductEndpoints.getProduct(slug)),
 		enabled: hydrated,
+		meta: { showNotificationOnRefetch: true },
 	});
 
 	const data = product.data;
@@ -127,7 +131,7 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 		},
 	});
 
-	if (product.error?.statusCode === 404) notFound();
+	if (isProductNotFoundError(product.error)) notFound();
 
 	// no data yet: still reading the session, or the first request is out (server-prefetched data renders right away)
 	if (!data && (!hydrated || product.isLoading)) return <ProductSkeleton />;
@@ -243,7 +247,7 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 							onReviews={openReviews}
 						/>
 					</div>
-					<ProductTabs product={data} tab={tab} onTab={setTab} />
+					<ProductTabs product={data} tab={tab} onTab={setTab} reviewPurchase={reviewPurchase} />
 				</div>
 				<RelatedProducts productId={data.id} />
 			</main>

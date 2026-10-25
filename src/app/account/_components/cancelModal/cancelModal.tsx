@@ -22,19 +22,19 @@ type CancelModalProps = {
 	order: OrderSummary;
 	open: boolean;
 	onClose: () => void;
-	/** «درخواست تغییر رنگ یا مدل» instead of cancelling. */
-	onRequestChange: () => void;
+	// BACKEND-PENDING(media-feedback): «درخواست تغییر رنگ یا مدل» instead of cancelling (`POST …/media-feedback`) is [پیشنهادی]
+	// onRequestChange: () => void;
 };
 
 const NOTE_MAX = 500;
-/** Reasons after which changing the colour / model is offered instead (when the order allows it). */
-const CHANGE_INSTEAD: CancelReason[] = ["NOT_AS_PICTURED", "CHANGED_MIND"];
+// BACKEND-PENDING(media-feedback): reasons after which changing the colour / model is offered instead (when the order allows it)
+// const CHANGE_INSTEAD: CancelReason[] = ["NOT_AS_PICTURED", "CHANGED_MIND"];
 
 /**
  * Cancel with a reason (`POST /me/orders/{code}/cancel`) — design `order-cancel.html`. Only while the order's state hasn't changed
  * (no photo sent yet); the refund is manual — a colleague calls for the IBAN (contract 1.12.0).
  */
-export default function CancelModal({ order, open, onClose, onRequestChange }: CancelModalProps) {
+export default function CancelModal({ order, open, onClose /* BACKEND-PENDING(media-feedback): , onRequestChange */ }: CancelModalProps) {
 	const queryClient = useQueryClient();
 	const paid = !UNPAID.includes(order.status);
 	const [reason, setReason] = useState<CancelReason | null>(null);
@@ -78,7 +78,8 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 	};
 
 	const reasons = CANCEL_REASONS.filter((r) => r.key !== "NOT_AS_PICTURED" || !!order.preShipmentMedia?.count);
-	const suggestChange = !!order.actions?.canRequestChange && !!reason && CHANGE_INSTEAD.includes(reason);
+	// BACKEND-PENDING(media-feedback)
+	// const suggestChange = !!order.actions?.canRequestChange && !!reason && CHANGE_INSTEAD.includes(reason);
 	const amount = formatPrice(order.payable);
 	const refund = result?.view === "done" ? result.res.refund : null;
 
@@ -197,6 +198,7 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 									</label>
 								))}
 							</div>
+							{/* BACKEND-PENDING(media-feedback):
 							<div className={classNames("note cream m-err", { on: suggestChange })} style={{ marginTop: 12 }}>
 								<Icon name="palette" />
 								<span>
@@ -206,6 +208,7 @@ export default function CancelModal({ order, open, onClose, onRequestChange }: C
 									</button>
 								</span>
 							</div>
+							*/}
 						</div>
 						<div className={classNames("m-sec field", { error: !!noteError })}>
 							<label htmlFor={`cNote-${order.code}`}>

@@ -13,14 +13,17 @@ import { toPersianDigits } from "@/utils/digits";
 import { formatDate, formatPrice } from "@/utils/format";
 import { hasInvoice, NO_PROGRESS, UNPAID } from "../../_utils/orderActions";
 import CancelModal from "../cancelModal/cancelModal";
-import ChangeRequestModal from "../changeRequestModal/changeRequestModal";
+// BACKEND-PENDING(media-feedback): «همونه؟ / عوضش کن» (`POST /me/orders/{code}/media-feedback`) is still [پیشنهادی] in the contract (1.22.0) — off until the backend builds it; uncomment to bring it back
+// import ChangeRequestModal from "../changeRequestModal/changeRequestModal";
 import InvoiceButton from "../invoiceButton/invoiceButton";
 import OrderDetails from "../orderDetails/orderDetails";
 import OrderStateBar from "../orderStateBar/orderStateBar";
 import OrderStepper from "../orderStepper/orderStepper";
 import PayModal from "../payModal/payModal";
-import PhotoCheck, { photoCheckState } from "../photoCheck/photoCheck";
-import ReorderButton from "../reorderButton/reorderButton";
+// BACKEND-PENDING(media-feedback)
+// import PhotoCheck, { photoCheckState } from "../photoCheck/photoCheck";
+// BACKEND-PENDING(reorder): «خرید دوباره» (`POST /me/orders/{code}/reorder`) is still [پیشنهادی] in the contract (1.22.0) — off until the backend builds it; uncomment to bring it back
+// import ReorderButton from "../reorderButton/reorderButton";
 import ReserveCountdown from "../reserveCountdown/reserveCountdown";
 import ReturnStatusBox from "../returnStatusBox/returnStatusBox";
 
@@ -52,7 +55,8 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 	/** The hold ended; the group moves to `PROCESSING` shortly (`active = false`, contract 1.7.0). */
 	const holdEnded = status === "RESERVED" && order.reservation?.active === false;
 	const shipment = order.shipment;
-	const photo = photoCheckState(order);
+	// BACKEND-PENDING(media-feedback): the photos stay in «جزئیات سفارش»; the card's «همونه؟» box comes back with the endpoint
+	// const photo = photoCheckState(order);
 	const progress = !NO_PROGRESS.includes(status);
 	const balanceDue = order.balanceDue ?? 0;
 
@@ -138,9 +142,10 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 						<OrderStateBar
 							icon="clock"
 							title="مهلت پرداخت این سفارش تموم شد"
-							text="کیف‌ها به فروشگاه برگشتن. اگه هنوز می‌خوایشون، با یه کلیک دوباره به سبدت اضافه می‌شن."
+							// BACKEND-PENDING(reorder): with «خرید دوباره» back — «اگه هنوز می‌خوایشون، با یه کلیک دوباره به سبدت اضافه می‌شن.»
+							text="کیف‌ها به فروشگاه برگشتن. اگه هنوز می‌خوایشون، از فروشگاه دوباره به سبدت اضافه‌شون کن."
 						>
-							<ReorderButton order={order} className="btn-dark btn-sm" />
+							{/* BACKEND-PENDING(reorder): <ReorderButton order={order} className="btn-dark btn-sm" /> */}
 						</OrderStateBar>
 					) : status === "CANCELLED" ? (
 						<OrderStateBar
@@ -149,7 +154,7 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 							title="این سفارش لغو شد"
 							text="اگه پرداخت کرده بودی، همکارهامون برای برگردوندن پولت باهات تماس می‌گیرن؛ وضعیتش توی جزئیات سفارش هست."
 						>
-							<ReorderButton order={order} className="btn-white btn-sm" />
+							{/* BACKEND-PENDING(reorder): <ReorderButton order={order} className="btn-white btn-sm" /> */}
 						</OrderStateBar>
 					) : reservation ? (
 						<div className="reserve-bar">
@@ -175,9 +180,9 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 								<small>سفارش‌های رزروت به‌زودی با هم آماده‌ی ارسال می‌شن؛ قبلش عکس کیف‌ها رو برات می‌فرستیم.</small>
 							</span>
 						</div>
-					) : photo ? (
+					) : /* BACKEND-PENDING(media-feedback): photo ? (
 						<PhotoCheck order={order} state={photo} onRequestChange={() => openModal("change")} />
-					) : null}
+					) : */ null}
 					{ret && <ReturnStatusBox ret={ret} order={order} />}
 					<div className="thumbs-row">
 						{order.itemsPreview.map((item, i) => (
@@ -231,6 +236,14 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 									<Icon name="refresh" /> درخواست مرجوعی
 								</Link>
 							)}
+							{/* BACKEND-PENDING(review-pending): a delivered bag without a review (`canReview`; not in the design) leads to «منتظر نظر تو»
+							of «نظرات من», which is off while `GET /me/reviews/pending-products` is [پیشنهادی]
+							{actions?.canReview && (
+								<Link className="btn btn-white btn-sm" href="/account/reviews">
+									<Icon name="chat" /> نظر بده
+								</Link>
+							)}
+							*/}
 							{status === "SHIPPED" ? (
 								<span className="hint end">
 									<Icon name="info" /> ارسال شده؛ بعد از تحویل تا ۷ روز می‌تونی مرجوعش کنی
@@ -251,9 +264,17 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 			{/* outside the article: its reveal transform would become the fixed modal's containing block */}
 			{modal.last === "pay" && <PayModal key={modal.seq} order={order} open={modal.open === "pay"} onClose={closeModal} />}
 			{modal.last === "cancel" && (
-				<CancelModal key={modal.seq} order={order} open={modal.open === "cancel"} onClose={closeModal} onRequestChange={() => openModal("change")} />
+				<CancelModal
+					key={modal.seq}
+					order={order}
+					open={modal.open === "cancel"}
+					onClose={closeModal}
+					/* BACKEND-PENDING(media-feedback): onRequestChange={() => openModal("change")} */
+				/>
 			)}
+			{/* BACKEND-PENDING(media-feedback):
 			{modal.last === "change" && <ChangeRequestModal key={modal.seq} order={order} open={modal.open === "change"} onClose={closeModal} />}
+			*/}
 		</>
 	);
 }
