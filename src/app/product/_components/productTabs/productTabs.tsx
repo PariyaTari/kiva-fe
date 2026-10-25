@@ -109,7 +109,7 @@ export default function ProductTabs({ product, tab, onTab }: ProductTabsProps) {
 			</div>
 
 			<div className={classNames("tab-panel", { on: tab === "ship" })} id="t-ship">
-				<ShippingInfo />
+				<ShippingInfo returnDays={product.policies?.returnWindowDays ?? 7} />
 			</div>
 		</div>
 	);
@@ -130,8 +130,8 @@ const SHIPPING_LINES: { icon: "truck" | "box" | "timer" | "camera"; title: strin
 	},
 ];
 
-/** «ارسال و بازگشت» — store-wide copy of the design. */
-function ShippingInfo() {
+/** «ارسال و بازگشت» — store-wide copy of the design; the return window is the product's (`policies.returnWindowDays`, default 7). */
+function ShippingInfo({ returnDays }: { returnDays: number }) {
 	return (
 		<div className="desc">
 			<h4>روش‌های ارسال</h4>
@@ -147,7 +147,7 @@ function ShippingInfo() {
 			</ul>
 			<h4>بازگشت کالا</h4>
 			<p>
-				اگه کیفی که رسید با عکس‌ها فرق داشت یا ایراد تولیدی داشت، تا ۷ روز بعد از تحویل می‌تونی بدون هزینه برش گردونی.{" "}
+				اگه کیفی که رسید با عکس‌ها فرق داشت یا ایراد تولیدی داشت، تا {toPersianDigits(returnDays)} روز بعد از تحویل می‌تونی بدون هزینه برش گردونی.{" "}
 				<Link className="btn-link" href="/faq#return">
 					جزئیات بیشتر
 				</Link>

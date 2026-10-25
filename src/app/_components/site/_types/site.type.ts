@@ -11,7 +11,9 @@ export interface SearchSuggestProduct {
 	price: PriceInfo;
 	/** Set when the query named a colour — image & link open in that colour. */
 	matchedColorKey?: ColorKey | null;
-	imageUrl: string;
+	/** Small photo of the matched (or default) colour; `null` for a bag without photos. */
+	imageUrl: string | null;
+	/** With `?color=` only when `matchedColorKey` is set. */
 	url: string;
 }
 
@@ -28,5 +30,6 @@ export interface SearchSuggestResponse {
 export interface SearchHints {
 	categories: CategoryRef[];
 	colors: Color[];
+	/** A hand-made list of the site's content (no search log is kept). */
 	popularQueries: string[];
 }

@@ -23,9 +23,11 @@ export interface BlogPostSummary {
 	id: number;
 	slug: string;
 	title: string;
+	/** The post's own summary, else the first 160 characters of `lead` or of the first paragraph. */
 	excerpt: string;
 	category: BlogCategory;
-	cover: MediaAsset;
+	/** `null` → the illustrated cover on `coverBackground`. */
+	cover: MediaAsset | null;
 	/** Background of the illustrated cover (shown while the image loads). */
 	coverBackground?: string | null;
 	readingMinutes: number;

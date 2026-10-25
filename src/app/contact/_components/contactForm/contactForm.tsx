@@ -19,8 +19,8 @@ import { ContactMessagePayload, ContactTopic } from "../../_types/contact.type";
 import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
 
 const MAX = 600;
-type Field = "fullName" | "phone" | "message";
-const FIELD_IDS: Record<Field, string> = { fullName: "cName", phone: "cPh", message: "cMsg" };
+type Field = "fullName" | "phone" | "orderCode" | "message";
+const FIELD_IDS: Record<Field, string> = { fullName: "cName", phone: "cPh", orderCode: "cOrd", message: "cMsg" };
 
 /** `.c-form#formWrap` «برامون بنویس» — topic chips, name / mobile (prefilled for members), order code when it matters, message. */
 export default function ContactForm({ initialTopic }: { initialTopic?: string }) {
@@ -51,10 +51,11 @@ export default function ContactForm({ initialTopic }: { initialTopic?: string })
 		onError: (e) => {
 			const fieldErrors: Partial<Record<Field, string>> = {};
 			e.errorDetails?.forEach((d) => {
-				if (d.field === "fullName" || d.field === "phone" || d.field === "message") fieldErrors[d.field] = d.message;
+				if (d.field && d.field in FIELD_IDS) fieldErrors[d.field as Field] = d.message;
 			});
 			if (Object.keys(fieldErrors).length) setErrors(fieldErrors);
-			else toast(e.description, { type: "error" });
+			// 5 messages an hour per connection / a day per mobile — wait, not a failure of the form
+			else toast(e.description, { type: e.code === "RATE_LIMITED" ? "warning" : "error", duration: e.code === "RATE_LIMITED" ? 7000 : undefined });
 		},
 	});
 
@@ -175,7 +176,11 @@ export default function ContactForm({ initialTopic }: { initialTopic?: string })
 									placeholder="KV-215566"
 									maxLength={20}
 									value={orderCode}
-									onChange={(e) => setOrderCode(e.target.value)}
+									error={errors.orderCode}
+									onChange={(e) => {
+										setOrderCode(e.target.value);
+										clearError("orderCode");
+									}}
 								/>
 							)}
 							<Textarea

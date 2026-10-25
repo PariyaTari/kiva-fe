@@ -85,6 +85,7 @@ export default function ProductsView() {
 		if (chip.key === "price") Object.assign(next, { minPrice: null, maxPrice: null });
 		if (chip.key === "onSale") next.onSale = false;
 		if (chip.key === "inStock") next.inStock = false;
+		if (chip.key === "campaign") next.campaign = null;
 		navigate(next);
 	};
 

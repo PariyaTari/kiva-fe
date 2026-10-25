@@ -32,8 +32,14 @@ export const SiteEndpoints = {
 		return res.data;
 	},
 
+	/** Always `200` with the same message — new, already a member or back after leaving (it never tells which). */
 	subscribeNewsletter: async (email: string) => {
 		const res = await httpClient.call<MessageResponse>({ method: "POST", url: "newsletter/subscriptions", data: { email, source: "footer" } });
 		return res.data;
+	},
+
+	/** The link of the welcome e-mail (`/newsletter/unsubscribe?token=nl_…`). An unknown or already-used token is a `204` too. */
+	unsubscribeNewsletter: async (token: string) => {
+		await httpClient.call<void>({ method: "POST", url: "newsletter/subscriptions/unsubscribe", data: { token } });
 	},
 };

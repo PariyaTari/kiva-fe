@@ -4,7 +4,7 @@ import MediaImage from "@/app/_components/shop/mediaImage/mediaImage";
 import { OrderSummary, ReturnRequest } from "@/types/order.type";
 import { toPersianDigits } from "@/utils/digits";
 import { formatPrice } from "@/utils/format";
-import { clockTime, dayLong, dayShort, PAYER_TAG, REFUND_DESTINATION, RETURN_REASONS, RETURN_STEP } from "../../_utils/orderActions";
+import { clockTime, dayLong, dayShort, PAYER_TAG, REFUND_DESTINATION, refundNeedsCall, RETURN_REASONS, RETURN_STEP } from "../../_utils/orderActions";
 import MiniSteps from "../miniSteps/miniSteps";
 
 /** «تماس با پشتیبانی» at the end of a refused / closed / failed note. */
@@ -20,7 +20,10 @@ export default function ReturnStatusBox({ ret, order }: { ret: ReturnRequest; or
 	const rejected = ret.status === "REJECTED";
 	const closed = ret.status === "CLOSED";
 	const refund = ret.refund;
-	const destination = REFUND_DESTINATION[refund?.method ?? ret.refundMethod ?? "ORIGINAL_PAYMENT"];
+	const method = refund?.method ?? ret.refundMethod ?? "ORIGINAL_PAYMENT";
+	const destination = REFUND_DESTINATION[method];
+	// no IBAN is stored, a return's either (contract 1.21.0): a colleague calls for it before the transfer
+	const call = refund ? refundNeedsCall(refund) : method === "BANK_TRANSFER";
 	const amount = refund ? `${formatPrice(refund.amount)} تومان` : "مبلغش";
 	const pickup = ret.status === "PICKUP_SCHEDULED" ? ret.pickup : null;
 	const reason = RETURN_REASONS.find((r) => r.key === ret.reason)?.label;
@@ -93,12 +96,12 @@ export default function ReturnStatusBox({ ret, order }: { ret: ReturnRequest; or
 						<b>{ret.status === "PICKUP_SCHEDULED" ? "دریافت از درِ خونه:" : "راهنمای ارسال:"}</b>{" "}
 						{ret.instructions ?? (
 							<>
-								کیف رو با بسته‌بندی اصلی و همه‌ی متعلقاتش به انبار کیوا بفرست؛ نشانی و کد پس‌کرایه برات پیامک شد
-								{ret.shippingPaidBy === "KIVA" ? " و هزینه‌ش با کیواست" : ""}. شماره‌ی درخواست{" "}
+								کیف رو با بسته‌بندی اصلی و همه‌ی متعلقاتش به انبار کیوا بفرست
+								{ret.shippingPaidBy === "KIVA" ? "؛ هزینه‌ش با کیواست" : ""}. شماره‌ی درخواست{" "}
 								<b className="ltr" style={{ display: "inline-block" }}>
 									{ret.code}
 								</b>{" "}
-								رو روی بسته بنویس.
+								رو روی بسته بنویس و کد رهگیری مرسوله رو برای پشتیبانی بفرست.
 							</>
 						)}
 					</span>
@@ -117,9 +120,11 @@ export default function ReturnStatusBox({ ret, order }: { ret: ReturnRequest; or
 				<div className="note">
 					<Icon name="box" />
 					<span>
-						{refund
-							? `کیف به دستمون رسید و بررسی شد؛ ${amount} داره به ${destination} برمی‌گرده${refund.expectedBy ? ` و تا ${dayShort(refund.expectedBy)} می‌رسه` : ""}.`
-							: `کیف به دستمون رسید و بررسی شد؛ به‌زودی ${amount} به ${destination} برمی‌گرده.`}
+						{call
+							? `کیف به دستمون رسید و بررسی شد؛ همکارهامون${refund?.expectedBy ? ` تا ${dayShort(refund.expectedBy)}` : ""} برای واریز ${amount} باهات تماس می‌گیرن و شماره شبا رو می‌پرسن.`
+							: refund
+								? `کیف به دستمون رسید و بررسی شد؛ ${amount} داره به ${destination} برمی‌گرده${refund.expectedBy ? ` و تا ${dayShort(refund.expectedBy)} می‌رسه` : ""}.`
+								: `کیف به دستمون رسید و بررسی شد؛ به‌زودی ${amount} به ${destination} برمی‌گرده.`}
 						{refund?.statusNote && ` ${refund.statusNote}`}
 					</span>
 				</div>
@@ -145,7 +150,18 @@ export default function ReturnStatusBox({ ret, order }: { ret: ReturnRequest; or
 				<div className="note danger">
 					<Icon name="info" />
 					<span>
-						<b>درخواستت تأیید نشد{ret.rejectionReason ? ":" : "."}</b> {ret.rejectionReason} اگه فکر می‌کنی اشتباه شده، با پشتیبانی در تماس باش. {supportLink}
+						<b>درخواستت تأیید نشد{ret.rejectionReason ? ":" : "."}</b> {ret.rejectionReason}{" "}
+						{/* after a rejection the order can be asked again while its window is open (contract 1.21.0) */}
+						{order.actions?.canReturn ? (
+							<>
+								تا مهلت مرجوعی تموم نشده، می‌تونی دوباره (مثلاً با عکس بهتر) درخواست بدی.{" "}
+								<Link className="btn-link" href={`/account/orders/${encodeURIComponent(order.code)}/return`} style={{ fontSize: "inherit" }}>
+									درخواست دوباره
+								</Link>
+							</>
+						) : (
+							<>اگه فکر می‌کنی اشتباه شده، با پشتیبانی در تماس باش. {supportLink}</>
+						)}
 					</span>
 				</div>
 			) : closed ? (

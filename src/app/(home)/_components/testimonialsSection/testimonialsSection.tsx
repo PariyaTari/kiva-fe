@@ -76,36 +76,39 @@ export default function TestimonialsSection({ testimonials }: { testimonials: Te
 					</div>
 					<ScrollNav target={row} step={0.9} />
 				</Reveal>
-				<div className="testi-wrap">
-					<Reveal as="aside" className="t-sum" aria-label="خلاصه رضایت">
-						<div className="t-score">
-							<b>{decimal(summary.averageRating)}</b>
-							<span>از {toPersianDigits(summary.scale)}</span>
-						</div>
-						<div className="stars" aria-label="۵ ستاره">
-							<Stars value={5} outlined={false} />
-						</div>
-						<p>بر اساس {formatPrice(summary.totalCount)} نظر و پیام ثبت‌شده</p>
-						<div className="t-bars">
-							{summary.metrics.map((m) => (
-								<div key={m.key} className="t-bar" style={{ "--w": `${m.percent}%` } as React.CSSProperties}>
-									<div>
-										<span>{m.label}</span>
-										<b>{toPersianDigits(m.percent)}٪</b>
+				{/* the summary is set by hand in the panel — until it is, the cards take the whole row */}
+				<div className="testi-wrap" style={summary ? undefined : { gridTemplateColumns: "1fr" }}>
+					{summary && (
+						<Reveal as="aside" className="t-sum" aria-label="خلاصه رضایت">
+							<div className="t-score">
+								<b>{decimal(summary.averageRating)}</b>
+								<span>از {toPersianDigits(summary.scale)}</span>
+							</div>
+							<div className="stars" aria-label="۵ ستاره">
+								<Stars value={5} outlined={false} />
+							</div>
+							<p>بر اساس {formatPrice(summary.totalCount)} نظر و پیام ثبت‌شده</p>
+							<div className="t-bars">
+								{summary.metrics.map((m) => (
+									<div key={m.key} className="t-bar" style={{ "--w": `${m.percent}%` } as React.CSSProperties}>
+										<div>
+											<span>{m.label}</span>
+											<b>{toPersianDigits(m.percent)}٪</b>
+										</div>
+										<i />
 									</div>
-									<i />
-								</div>
-							))}
-						</div>
-						<div className="t-src">
-							پیام‌ها از
-							<span>
-								{summary.sources.map((s) => (
-									<MessengerIcon key={s} channel={s} />
 								))}
-							</span>
-						</div>
-					</Reveal>
+							</div>
+							<div className="t-src">
+								پیام‌ها از
+								<span>
+									{summary.sources.map((s) => (
+										<MessengerIcon key={s} channel={s} />
+									))}
+								</span>
+							</div>
+						</Reveal>
+					)}
 					<Reveal className="h-scroll t-row" delay={0.1} id="tRow" ref={row}>
 						{items.map((t) => (
 							<article key={t.id} className="tcard">
@@ -113,7 +116,7 @@ export default function TestimonialsSection({ testimonials }: { testimonials: Te
 									<span className="av">{t.customerInitial}</span>
 									<div>
 										<b>{t.customerName}</b>
-										<small>{t.city}</small>
+										{t.city && <small>{t.city}</small>}
 									</div>
 									<span className="src">
 										<MessengerIcon channel={t.source} />
@@ -123,11 +126,11 @@ export default function TestimonialsSection({ testimonials }: { testimonials: Te
 								<div className="tc-msg">
 									<p>{t.message}</p>
 									<time>
-										{toPersianDigits(t.messageTime)} <Icon name="check" />
+										{t.messageTime && toPersianDigits(t.messageTime)} <Icon name="check" />
 									</time>
 								</div>
 								<div className="tc-f">
-									<Link className="th" href={`/product/${t.product.slug}?color=${t.color.key}`} aria-label={t.product.name}>
+									<Link className="th" href={`/product/${t.product.slug}${t.color ? `?color=${t.color.key}` : ""}`} aria-label={t.product.name}>
 										<MediaImage src={t.product.imageUrl} alt={t.product.name} />
 									</Link>
 									<div>

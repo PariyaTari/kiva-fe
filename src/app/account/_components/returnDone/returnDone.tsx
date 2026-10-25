@@ -14,6 +14,8 @@ type ReturnDoneProps = {
 
 /** «درخواست مرجوعیت ثبت شد» — the `RT-…` code to keep and the three next steps. */
 export default function ReturnDone({ ret, amount, method }: ReturnDoneProps) {
+	const destination = ret.refund?.method ?? ret.refundMethod ?? method;
+
 	return (
 		<div className="container rt-done">
 			<div className="card m-done">
@@ -39,7 +41,7 @@ export default function ReturnDone({ ret, amount, method }: ReturnDoneProps) {
 					<div>
 						<span className="nn">۲</span>
 						<span>
-							بعد از تأیید، راهنمای ارسال کیف به انبار کیوا برات فرستاده می‌شه؛{" "}
+							بعد از تأیید، راهنمای ارسال کیف به انبار کیوا رو توی «سفارش‌های من» می‌بینی؛{" "}
 							{ret.shippingPaidBy === "CUSTOMER"
 								? "هزینه‌ی ارسال برگشت با خودته."
 								: ret.shippingPaidBy === "KIVA"
@@ -50,8 +52,9 @@ export default function ReturnDone({ ret, amount, method }: ReturnDoneProps) {
 					<div>
 						<span className="nn">۳</span>
 						<span>
-							بعد از رسیدن و بررسی کیف، {formatPrice(ret.refund?.amount ?? amount)} تومان به{" "}
-							{REFUND_DESTINATION[ret.refund?.method ?? ret.refundMethod ?? method]} برمی‌گرده.
+							بعد از رسیدن و بررسی کیف، {formatPrice(ret.refund?.amount ?? amount)} تومان به {REFUND_DESTINATION[destination]} برمی‌گرده
+							{/* no IBAN is taken on the form (contract 1.21.0) */}
+							{destination === "BANK_TRANSFER" ? "؛ همکارهامون برای گرفتن شماره شبا باهات تماس می‌گیرن." : "."}
 						</span>
 					</div>
 				</div>

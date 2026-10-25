@@ -11,10 +11,10 @@ export const clockTime = (t: string | number) => formatDate(t, { hour: "2-digit"
 
 /** Order states without the 4-step stepper and the tracking box (design `A.ST` index −1). */
 export const NO_PROGRESS: OrderStatus[] = ["PENDING_PAYMENT", "PAYMENT_FAILED", "EXPIRED", "CANCELLED"];
-/** Unpaid orders — their invoice is issued after payment. */
+/** Unpaid orders — their receipt is issued after payment. */
 export const UNPAID: OrderStatus[] = ["PENDING_PAYMENT", "PAYMENT_FAILED"];
-/** Paid and alive — the card offers the invoice. */
-export const hasInvoice = (status: OrderStatus) => !NO_PROGRESS.includes(status);
+/** Paid once — the card offers the purchase receipt; a cancelled order has one too (only paid orders are cancelled). */
+export const hasInvoice = (status: OrderStatus) => !UNPAID.includes(status) && status !== "EXPIRED";
 
 /** «کراس‌بادی نیلا» for one bag, «۲ کالا» for more (design `A.itemsLabel`). */
 export function itemsLabel(order: Pick<OrderSummary, "itemsPreview" | "itemsCount">) {
@@ -41,7 +41,7 @@ export const RETURN_REASONS: { key: ReturnReason; label: string; hint: string; p
 	{ key: "WRONG_ITEM", label: "کیف اشتباهی رسید", hint: "مدل یا رنگی که سفارش دادی نیست", payer: "KIVA" },
 	{ key: "DAMAGED_IN_TRANSIT", label: "توی راه آسیب دیده", hint: "بسته یا کیف موقع ارسال آسیب دیده", payer: "KIVA" },
 	{ key: "CHANGED_MIND", label: "نظرم عوض شد", hint: "کیف سالمه ولی دیگه نمی‌خوامش", payer: "CUSTOMER" },
-	{ key: "OTHER", label: "دلیل دیگه", hint: "توی توضیحات بنویس چی شده", payer: null },
+	{ key: "OTHER", label: "دلیل دیگه", hint: "توی توضیحات بنویس چی شده", payer: "CUSTOMER" },
 ];
 
 export const PAYER_TAG: Record<"KIVA" | "CUSTOMER" | "null", { tone: string; label: string }> = {
@@ -65,10 +65,10 @@ export const REFUND_STATUS: Record<Refund["status"], { tone: string; label: stri
 };
 
 /**
- * A pending refund of a cancellation / change request goes to an IBAN a colleague asks for on the phone (`BANK_TRANSFER`);
- * a return's refund already has its card or IBAN from the return form.
+ * A pending `BANK_TRANSFER` refund waits for a colleague's call for the IBAN — no IBAN is ever stored, a return's refund
+ * included (contract 1.21.0). `ORIGINAL_PAYMENT` goes back to the paying card by hand.
  */
-export const refundNeedsCall = (r: Refund) => r.status === "PENDING" && r.method === "BANK_TRANSFER" && !r.returnId;
+export const refundNeedsCall = (r: Refund) => r.status === "PENDING" && r.method === "BANK_TRANSFER";
 
 /** Paid so far minus the refunds that didn't fail — what cancelling the whole order gives back. */
 export const refundableTotal = (order: Pick<OrderDetail, "totals" | "refunds">) =>

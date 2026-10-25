@@ -13,6 +13,11 @@ export interface ProductFilters {
 	maxPrice: number | null;
 	onSale: boolean;
 	inStock: boolean;
+	/**
+	 * Slug of the running campaign — «همه تخفیف‌های جشنواره» (`Campaign.seeAllUrl`): only the discounted bags of its set. A
+	 * campaign that isn't running (or doesn't exist) gives an empty list, not an error.
+	 */
+	campaign: string | null;
 }
 
 export interface ProductListParams extends ProductFilters {

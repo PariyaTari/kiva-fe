@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import classNames from "classnames";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/app/_components/icon/icons";
 import { WishlistEndpoints } from "@/app/wishlist/_api/wishlistEndpoints";
 import { useAuthStore } from "@/store/auth.store";
 import { toast } from "@/store/notification.store";
-import { useUiStore } from "@/store/ui.store";
 import { ColorKey } from "@/types/catalog.type";
 import { withMappedError } from "@/utils/withMappedError";
 
@@ -21,12 +21,15 @@ type WishlistToggleProps = {
 	onToggled?: (wishlisted: boolean) => void;
 };
 
-/** Heart button — guests get the «اول وارد شو» prompt (design `K.wish.toggle`). */
+/**
+ * Heart button (design `K.wish.toggle`). A guest goes straight to login and comes back to the same page — the hearts live
+ * on the account only (the contract's in-browser guest hearts aren't used).
+ */
 export default function WishlistToggle({ productId, colorKey, className, ariaLabel = "افزودن به علاقه‌مندی‌ها", onToggled }: WishlistToggleProps) {
 	const queryClient = useQueryClient();
+	const router = useRouter();
 	const hydrated = useAuthStore((s) => s.hydrated);
 	const signedIn = useAuthStore((s) => !!s.accessToken);
-	const promptLogin = useUiStore((s) => s.promptLogin);
 	// bump to replay the `.pop` animation on every click
 	const [popKey, setPopKey] = useState(0);
 
@@ -55,7 +58,8 @@ export default function WishlistToggle({ productId, colorKey, className, ariaLab
 
 	const handleClick = () => {
 		if (!signedIn) {
-			promptLogin("برای ذخیره در علاقه‌مندی‌ها اول وارد حساب کاربریت شو.");
+			// read at click time: `useSearchParams` here would need a Suspense boundary on every page with a card
+			router.push(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
 			return;
 		}
 		setPopKey((k) => k + 1);

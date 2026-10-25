@@ -97,6 +97,7 @@ export interface OrderActions {
 	canReturn?: boolean;
 	canPay?: boolean;
 	canAddToReservation?: boolean;
+	/** `DELIVERED` with at least one line not `reviewed` whose product is still published. */
 	canReview?: boolean;
 }
 
@@ -135,6 +136,7 @@ export interface OrderItem {
 	unitPrice: Money;
 	unitCompareAtPrice?: Money | null;
 	lineTotal: Money;
+	/** The user has a live (`PENDING` / `APPROVED`) review of this line's **product**. */
 	reviewed?: boolean;
 	returnableUntil?: string | null;
 }
@@ -161,15 +163,17 @@ export interface OrderTotals {
 	currency?: "IRT";
 }
 
+/** The address as it was when the order was placed. An order of a deleted account is anonymous: only province and city stay. */
 export interface AddressSnapshot {
 	provinceName: string;
 	cityName: string;
-	addressLine: string;
+	addressLine: string | null;
 	plaque?: string | null;
 	unit?: string | null;
-	postalCode: string;
-	recipientName: string;
-	recipientPhone: string;
+	postalCode: string | null;
+	recipientName: string | null;
+	recipientPhone: string | null;
+	/** «استان، شهر» alone for an anonymous order. */
 	fullText: string;
 }
 
@@ -209,7 +213,8 @@ export interface PreShipmentMedia {
 	status: "WAITING" | "SENT" | "APPROVED" | "CHANGE_REQUESTED";
 	channel: PhotoMessengerChannel;
 	channelName: string;
-	phone: string;
+	/** `null` only on an anonymous order (deleted account; `username` and `note` too). */
+	phone: string | null;
 	/** The shopper's id in that messenger, if given at checkout — the operator sends there. */
 	username?: string | null;
 	note?: string | null;
@@ -272,6 +277,7 @@ export interface OrderDetail extends OrderSummary {
 	customerNote?: string | null;
 	gift?: { wrap: boolean; message: string } | null;
 	returns?: ReturnRequest[];
+	/** The purchase receipt (not an official tax invoice) — for an order that was paid once, cancelled or returned too; else `null`. */
 	invoiceUrl?: string | null;
 	/** Every refund of the order (cancellation, change requests, returns), oldest first. */
 	refunds?: Refund[];
@@ -336,23 +342,27 @@ export interface MediaFeedbackPayload {
 
 export type ReturnStatus = "REQUESTED" | "APPROVED" | "REJECTED" | "PICKUP_SCHEDULED" | "RECEIVED" | "REFUNDED" | "CLOSED";
 
-/** The first four are KIVA's fault — KIVA pays the return shipping. */
+/**
+ * The first four are KIVA's fault — the suggested payer of the return shipping is KIVA and at least one photo or video is
+ * required. `CHANGED_MIND` and `OTHER`: the shopper pays; `OTHER` needs a description. The operator may change the payer.
+ */
 export type ReturnReason = "NOT_AS_PICTURED" | "MANUFACTURING_DEFECT" | "WRONG_ITEM" | "DAMAGED_IN_TRANSIT" | "CHANGED_MIND" | "OTHER";
 
+/** One return per order (unless it was `REJECTED`); no IBAN is taken — for `BANK_TRANSFER` a colleague calls for it. */
 export interface CreateReturnPayload {
+	/** Every line coming back, at once (max 20, each `orderItemId` once). */
 	items: { orderItemId: number; quantity: number }[];
 	reason: ReturnReason;
-	description?: string;
-	/** Ids from `POST /me/uploads` (max 6). */
+	/** Required for `OTHER`. */
+	description?: string | null;
+	/** `RETURN_EVIDENCE` uploads of this user from `POST /me/uploads` (max 6) — at least one for KIVA's-fault reasons. */
 	mediaIds?: string[];
 	refundMethod?: RefundMethod;
-	/** Only for `BANK_TRANSFER`: `IR` + 24 digits. */
-	iban?: string | null;
 }
 
 export interface ReturnRequest {
 	id: number;
-	/** `RT-1012`. */
+	/** `RT-` + (1000 + `id`). */
 	code: string;
 	orderCode: OrderCode;
 	status: ReturnStatus;
@@ -361,13 +371,16 @@ export interface ReturnRequest {
 	description?: string | null;
 	items: { orderItemId: number; name: string; color: Color; quantity: number }[];
 	media?: MediaAsset[];
+	/** Set from the request on: the reason's suggestion, until the operator changes it on approval. */
 	shippingPaidBy?: "KIVA" | "CUSTOMER";
+	/** How to send the parcel, from the approval on (the operator's text or the payer's default); `null` while `REQUESTED` / `REJECTED`. */
 	instructions?: string | null;
 	refundMethod?: RefundMethod;
 	/** Only for `REJECTED`. */
 	rejectionReason?: string | null;
 	/** KIVA collects the parcel (`PICKUP_SCHEDULED`); `null` when the shopper sends it. */
 	pickup?: ReturnPickup | null;
+	/** The latest refund of this return (a `FAILED` one too, with its `statusNote`); `null` until one is recorded. */
 	refund?: Refund | null;
 	createdAt: string;
 	decidedAt?: string | null;

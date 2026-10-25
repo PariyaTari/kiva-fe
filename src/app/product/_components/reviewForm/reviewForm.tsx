@@ -11,9 +11,13 @@ import { User } from "@/types/user.type";
 import { convertPersianToEnglishString, toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import { ProductEndpoints } from "../../_api/productEndpoints";
+import { isReviewExistsError } from "../../_utils/apiError";
 
 const STAR = "M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5z";
 const EMAIL = /^\S+@\S+\.\S+$/;
+/** `CreateReviewRequest`: name up to 40, text 10 to 1000 after trim. */
+const NAME_MAX = 40;
+const TEXT_MAX = 1000;
 
 type ReviewValues = { rating: string; name: string; contact: string; text: string };
 
@@ -22,7 +26,7 @@ const SCHEMA: ValidationSchema<ReviewValues> = {
 		const en = convertPersianToEnglishString(v).trim();
 		return mobileRegex.test(en) || EMAIL.test(en) ? undefined : "شماره موبایل یا ایمیل معتبر وارد کن";
 	},
-	text: (v) => (v.trim().length >= 10 ? undefined : "حداقل ۱۰ حرف بنویس"),
+	text: (v) => (v.trim().length < 10 ? "حداقل ۱۰ حرف بنویس" : v.trim().length > TEXT_MAX ? `حداکثر ${toPersianDigits(TEXT_MAX)} حرف` : undefined),
 };
 
 type ReviewFormProps = {
@@ -48,10 +52,15 @@ export default function ReviewForm({ productId, user }: ReviewFormProps) {
 					text: values.text.trim(),
 				}),
 			),
-		meta: { showNotification: true },
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["product", productId, "reviews"] });
 			toast("نظرت ثبت شد و بعد از تأیید نمایش داده می‌شه", { icon: "chat" });
+		},
+		onError: (e) => {
+			// one live review per product (pending or approved) — it can be edited or deleted in «نظرات من»
+			if (isReviewExistsError(e)) return toast(e.description, { icon: "chat", duration: 6000, action: { label: "نظرات من", href: "/account/reviews" } });
+			// a field the client checks didn't cover (e.g. a control character) — the server's own line for it
+			toast(e.errorDetails?.[0]?.message ?? e.description, { type: e.code === "RATE_LIMITED" ? "warning" : "error" });
 		},
 	});
 
@@ -77,9 +86,16 @@ export default function ReviewForm({ productId, user }: ReviewFormProps) {
 					</Fragment>
 				))}
 			</div>
-			<Input wrapperStyle={{ marginTop: 12 }} id="rvName" label="نام" placeholder="مثلاً سارا" {...form.getFieldProps("name")} />
+			<Input wrapperStyle={{ marginTop: 12 }} id="rvName" label="نام" placeholder="مثلاً سارا" maxLength={NAME_MAX} {...form.getFieldProps("name")} />
 			<Input wrapperStyle={{ marginTop: 12 }} id="rvContact" label="شماره موبایل یا ایمیل" direction="ltr" {...form.getFieldProps("contact")} />
-			<Textarea wrapperStyle={{ marginTop: 12 }} id="rvText" label="متن نظر" placeholder="از کیفیت، رنگ و اندازه بگو…" {...form.getFieldProps("text")} />
+			<Textarea
+				wrapperStyle={{ marginTop: 12 }}
+				id="rvText"
+				label="متن نظر"
+				placeholder="از کیفیت، رنگ و اندازه بگو…"
+				maxLength={TEXT_MAX}
+				{...form.getFieldProps("text")}
+			/>
 			<button type="submit" className="btn btn-primary btn-block" style={{ marginTop: 14 }} disabled={create.isPending}>
 				ثبت نظر
 			</button>

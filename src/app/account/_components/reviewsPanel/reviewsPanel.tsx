@@ -75,7 +75,7 @@ export default function ReviewsPanel() {
 								<div className="stars">
 									<Stars value={r.rating} fillOn />
 								</div>
-								<p>{r.text}</p>
+								<p style={{ whiteSpace: "pre-line" }}>{r.text}</p>
 								{r.reply ? (
 									<div className="reply">
 										<b>

@@ -90,7 +90,16 @@ export default function BlogView() {
 						</div>
 						<div className="b-search">
 							<Icon name="search" />
-							<input className="input" id="bq" type="search" placeholder="جستجو در مقاله‌ها…" aria-label="جستجو در مقاله‌ها" value={term} onChange={(e) => setTerm(e.target.value)} />
+							<input
+								className="input"
+								id="bq"
+								type="search"
+								placeholder="جستجو در مقاله‌ها…"
+								aria-label="جستجو در مقاله‌ها"
+								maxLength={100}
+								value={term}
+								onChange={(e) => setTerm(e.target.value)}
+							/>
 						</div>
 					</div>
 				</div>

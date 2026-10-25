@@ -7,8 +7,9 @@ export interface WishlistItem {
 	product: ProductSummary;
 	addedAt: string;
 	preferredColorKey?: ColorKey | null;
+	/** The colour's price when it was first saved. */
 	priceAtAdd?: Money;
-	/** «از وقتی ذخیره کردی ۱۵٪ ارزون‌تر شده». */
+	/** «از وقتی ذخیره کردی ۱۵٪ ارزون‌تر شده» — only when it got at least 1% cheaper. */
 	priceDrop?: { amount: Money; percent: number; label: string } | null;
 }
 
@@ -24,11 +25,13 @@ export interface Wishlist {
 	count: number;
 	/** For «افزودن همه موجودها به سبد (۲)». */
 	inStockCount: number;
+	/** The live link; `null` when none was made yet or sharing is switched off (`WISHLIST_SHARE_DISABLED` on `POST`). */
 	share?: WishlistShare | null;
 }
 
 /** `GET /wishlists/shared/{token}` — someone else's list (public, read-only). */
 export interface SharedWishlist {
+	/** The owner's first name, else «یکی از دوستان کیوا». */
 	ownerDisplayName?: string;
 	items: ProductSummary[];
 }

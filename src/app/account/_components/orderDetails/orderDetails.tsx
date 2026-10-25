@@ -154,11 +154,21 @@ function Details({ order, onOpenMedia }: { order: OrderDetail; onOpenMedia: (ind
 					<h4>
 						<Icon name="pin" /> تحویل گیرنده
 					</h4>
-					<b>{address.recipientName}</b> — {toPersianDigits(address.recipientPhone)}
-					<br />
+					{/* an anonymous order (deleted account) keeps only province and city */}
+					{address.recipientName && (
+						<>
+							<b>{address.recipientName}</b>
+							{address.recipientPhone && ` — ${toPersianDigits(address.recipientPhone)}`}
+							<br />
+						</>
+					)}
 					{address.fullText}
-					<br />
-					کد پستی: {toPersianDigits(address.postalCode)}
+					{address.postalCode && (
+						<>
+							<br />
+							کد پستی: {toPersianDigits(address.postalCode)}
+						</>
+					)}
 				</div>
 				<div className="card">
 					<h4>
@@ -215,10 +225,10 @@ function Details({ order, onOpenMedia }: { order: OrderDetail; onOpenMedia: (ind
 									،{" "}
 								</>
 							) : null}
-							{toPersianDigits(media.phone)})
+							{media.phone && toPersianDigits(media.phone)})
 						</p>
 					)}
-					{/* paid orders only — the backend renders the PDF */}
+					{/* the purchase receipt of an order paid once (cancelled / returned too) — the backend renders the PDF */}
 					{order.invoiceUrl && <InvoiceButton code={order.code} variant="link" />}
 				</div>
 			</div>

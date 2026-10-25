@@ -14,6 +14,8 @@ export const HERO_ART: { bag: BagKey; color: string } = { bag: "hobo", color: "l
 /** How many cards the «جدیدترین‌ها» row and the testimonials carousel get. */
 export const NEW_ARRIVALS_COUNT = 8;
 export const TESTIMONIALS_COUNT = 8;
+/** Deals of the running campaign on the home page — `/campaigns/active` sends up to 24 (contract 1.21.0). */
+export const SALE_COUNT = 4;
 
 export const HERO: HomePage["hero"] = {
 	eyebrow: "امضای کیوا: عکس قبل از ارسال",

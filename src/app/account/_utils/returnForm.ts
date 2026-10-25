@@ -1,6 +1,6 @@
 import { MediaAsset } from "@/types/catalog.type";
 import { OrderDetail, OrderItem, RefundMethod } from "@/types/order.type";
-import { convertPersianToEnglishString, toPersianDigits } from "@/utils/digits";
+import { ResultError } from "@/types/result";
 
 /** One photo / video tile of the return form (`POST /me/uploads`). */
 export interface UploadTile {
@@ -19,6 +19,8 @@ export interface UploadTile {
 }
 
 export const MAX_UPLOADS = 6;
+/** Longest video `POST /me/uploads` takes (`VIDEO_TOO_LONG`). */
+export const VIDEO_MAX_SEC = 60;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const VIDEO_TYPES = ["video/mp4"];
 const MB = 1024 * 1024;
@@ -26,6 +28,18 @@ const MB = 1024 * 1024;
 /** The tile texts of the design: «حجمش بیشتر از ۸ مگه» / «فرمتش پشتیبانی نمی‌شه». */
 export const UPLOAD_TYPE_ERROR = "فرمتش پشتیبانی نمی‌شه";
 export const sizeError = (isVideo: boolean) => (isVideo ? "حجمش بیشتر از ۵۰ مگه" : "حجمش بیشتر از ۸ مگه");
+export const VIDEO_LENGTH_ERROR = "ویدیو بیشتر از ۶۰ ثانیه‌ست";
+
+/** The tile text of a failed upload — the design's short lines, or the server's own for what the client can't check (e.g. a too small photo). */
+export function uploadErrorText(e: ResultError, isVideo: boolean) {
+	const fieldCode = e.errorDetails?.find((d) => d.field === "file")?.code;
+	if (e.code === "UPLOAD_TOO_LARGE" || fieldCode === "UPLOAD_TOO_LARGE") return sizeError(isVideo);
+	if (e.code === "UPLOAD_TYPE_NOT_ALLOWED" || fieldCode === "UPLOAD_TYPE_NOT_ALLOWED") return UPLOAD_TYPE_ERROR;
+	if (fieldCode === "VIDEO_TOO_LONG") return VIDEO_LENGTH_ERROR;
+	// 20 uploads an hour per shopper
+	if (e.code === "RATE_LIMITED") return "سقف آپلود این ساعت پر شده";
+	return e.errorDetails?.find((d) => d.field === "file")?.message ?? "آپلود نشد";
+}
 
 /** Checked before sending, like the API: jpg/png/webp up to 8MB, mp4 up to 50MB. `null` = fine. */
 export function uploadProblem(file: File): string | null {
@@ -37,28 +51,18 @@ export function uploadProblem(file: File): string | null {
 
 export const isVideoFile = (file: File) => VIDEO_TYPES.includes(file.type);
 
-/** `06017000000012345…` → «۰۶ ۰۱۷۰ ۰۰۰۰ ۰۰۱۲ ۳۴۵…» (the 24 digits after `IR`). */
-export function formatIban(digits: string) {
-	return toPersianDigits(`${digits.slice(0, 2)} ${(digits.slice(2).match(/.{1,4}/g) ?? []).join(" ")}`.trim());
-}
-
-/** What the shopper typed in the IBAN box → up to 24 Latin digits. */
-export const ibanDigits = (value: string) => convertPersianToEnglishString(value).replace(/\D/g, "").slice(0, 24);
-
 export const REFUND_METHODS: { key: RefundMethod; icon: string; title: string }[] = [
 	{ key: "ORIGINAL_PAYMENT", icon: "card", title: "به همون کارت" },
 	{ key: "BANK_TRANSFER", icon: "bank", title: "واریز به شماره شبا" },
 ];
 
-/** How many of a line can still be returned (requests that weren't rejected already hold some). */
+/** An order takes one return request — another only after a rejection (contract 1.21.0). */
+export const hasOpenReturn = (order: Pick<OrderDetail, "returns">) => !!order.returns?.some((r) => r.status !== "REJECTED");
+
+/** How many of a line can be returned: all of it while the window is open and the order has no other return. */
 export function returnableQuantity(order: OrderDetail, item: OrderItem, now: number) {
-	if (!item.returnableUntil || new Date(item.returnableUntil).getTime() <= now) return 0;
-	const held = (order.returns ?? [])
-		.filter((r) => r.status !== "REJECTED")
-		.flatMap((r) => r.items)
-		.filter((i) => i.orderItemId === item.id)
-		.reduce((n, i) => n + i.quantity, 0);
-	return Math.max(0, item.quantity - held);
+	if (!item.returnableUntil || new Date(item.returnableUntil).getTime() <= now || hasOpenReturn(order)) return 0;
+	return item.quantity;
 }
 
 /** Last day of the return window of the order (latest `returnableUntil` of its lines). */

@@ -17,7 +17,8 @@ type ReviewHelpfulProps = {
 
 /**
  * «این نظر به دردت خورد؟» under a published review (`PUT /reviews/{id}/helpful`; not in the design — the blog's
- * `.helpful` row in a smaller size). Signed-in shoppers only; a second vote replaces the first.
+ * `.helpful` row in a smaller size). Signed-in shoppers only. One toggle: «مفید نبود» isn't counted (contract 1.21.0), so a
+ * second press takes the vote back (`helpful: false`) instead of a «نه» button.
  */
 export default function ReviewHelpful({ review, productId }: ReviewHelpfulProps) {
 	const queryClient = useQueryClient();
@@ -31,29 +32,32 @@ export default function ReviewHelpful({ review, productId }: ReviewHelpfulProps)
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: ["product", productId, "reviews"] }),
 	});
 
-	const saved = review.myHelpfulVote ?? null;
-	// while sending, show the new answer — and its effect on the count (the saved «آره» is already counted)
-	const mine = vote.isPending ? (vote.variables ?? null) : saved;
-	const count = (review.helpfulCount ?? 0) + (vote.isPending ? Number(vote.variables === true) - Number(saved === true) : 0);
+	const saved = review.myHelpfulVote === true;
+	// while sending, show the new answer — and its effect on the count (the saved vote is already counted)
+	const mine = vote.isPending ? vote.variables === true : saved;
+	const count = (review.helpfulCount ?? 0) + (vote.isPending ? Number(mine) - Number(saved) : 0);
 
-	const answer = (helpful: boolean) => {
+	const toggle = () => {
 		if (!signedIn) {
 			promptLogin("برای اینکه رأیت ثبت بشه، اول وارد حساب کاربریت شو.");
 			return;
 		}
-		if (mine === helpful || vote.isPending) return;
-		vote.mutate(helpful);
+		if (vote.isPending) return;
+		vote.mutate(!saved);
 	};
 
 	return (
 		<div className="rv-help">
 			<span>به دردت خورد؟</span>
-			<button type="button" className={classNames({ on: mine === true })} aria-pressed={mine === true} onClick={() => answer(true)}>
+			<button
+				type="button"
+				className={classNames({ on: mine })}
+				aria-pressed={mine}
+				title={mine ? "برای پس گرفتن رأیت دوباره بزن" : undefined}
+				onClick={toggle}
+			>
 				<Icon name="smile" /> آره
 				{count > 0 && <span className="n">{toPersianDigits(count)}</span>}
-			</button>
-			<button type="button" className={classNames({ on: mine === false })} aria-pressed={mine === false} onClick={() => answer(false)}>
-				نه
 			</button>
 		</div>
 	);

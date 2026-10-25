@@ -35,7 +35,7 @@ const FA = "۰۱۲۳۴۵۶۷۸۹";
 const fa = (v) => String(v).replace(/\d/g, (d) => FA[d]);
 const price = (n) => fa(Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "٬"));
 const toEn = (v) => String(v ?? "").replace(/[۰-۹]/g, (d) => FA.indexOf(d)).replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
-const normQ = (s) => toEn(s).replace(/ي/g, "ی").replace(/ك/g, "ک").replace(/‌+/g, "‌").trim();
+const normQ = (s) => toEn(s).replace(/[يى]/g, "ی").replace(/ك/g, "ک").replace(/\u200c/g, " ").replace(/\s+/g, " ").trim();
 const iso = (t) => new Date(t).toISOString();
 const jdate = (t, o) => new Intl.DateTimeFormat("fa-IR-u-ca-persian", { timeZone: TZ, ...(o || { year: "numeric", month: "2-digit", day: "2-digit" }) }).format(new Date(t));
 const tehranDate = (t) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(t));
@@ -137,7 +137,8 @@ function detail(p, ctx, colorKey) {
 	const cat = catOf(p);
 	const S = D.SPEC[p.bag];
 	const st = stockInfo(p);
-	const alert = ctx.user && stockAlerts.find((a) => a.phone === ctx.user.phone && a.productId === p.id && a.status === "ACTIVE");
+	const alerted = (vid) => !!ctx.user && stockAlerts.some((a) => a.phone === ctx.user.phone && a.productId === p.id && a.variantId === vid && a.status === "ACTIVE");
+	const anyColour = ctx.user && stockAlerts.find((a) => a.phone === ctx.user.phone && a.productId === p.id && a.variantId == null && a.status === "ACTIVE");
 	const specTable = [
 		{ key: "MATERIAL", label: "جنس", value: p.mat },
 		{ key: "DIMENSIONS", label: "ابعاد (طول × ارتفاع × عرض)", value: `${S.dim} سانتی‌متر` },
@@ -169,7 +170,7 @@ function detail(p, ctx, colorKey) {
 		variants: p.colors.map((k, i) => ({
 			id: variantId(p, k), sku: `KV-${1000 + p.id}-${k.slice(0, 3).toUpperCase()}`, color: color(k), isDefault: i === 0,
 			price: priceInfo(p), stock: st, hasVideo: !!p.video,
-			stockAlertSubscribed: ctx.user && st.status === "OUT_OF_STOCK" ? !!alert : null,
+			stockAlertSubscribed: alerted(variantId(p, k)),
 			media: [
 				...VIEWS.map((x, j) => ({ ...media(p, k, x.v), view: x.view, viewLabel: x.label, sortOrder: j, isPrimary: j === 0, isUnedited: true })),
 				...(p.video ? [{ id: `vid_${p.id}_${k}`, type: "VIDEO", url: `${ORIGIN}/media/video/${p.id}-${k}.mp4`, thumbnailUrl: img(p, k, 2), posterUrl: img(p, k, 2), durationSec: 24, mimeType: "video/mp4", alt: `ویدیوی ${p.n}`, view: "STYLE", viewLabel: "ویدیو", sortOrder: 9, isPrimary: false, isUnedited: true }] : []),
@@ -185,7 +186,7 @@ function detail(p, ctx, colorKey) {
 		],
 		tags: ["مینیمال", "روزمره"],
 		campaign: null,
-		stockAlert: ctx.user ? { subscribed: !!alert, alertId: alert ? alert.id : null } : null,
+		stockAlert: { subscribed: !!anyColour, alertId: anyColour ? anyColour.id : null },
 		shareUrl: `https://kiva.ir/p/KV-${1000 + p.id}`,
 		seo: { title: `${p.n} | کیوا`, description: descOf(p).slice(0, 160), canonicalUrl: `https://kiva.ir/product/${p.slug}` },
 		publishedAt: iso(Date.now() - p.age * DAY),
@@ -213,7 +214,7 @@ function productFilter(q, skip) {
 		q: q.q ? normQ(q.q) : "", cats: csv(q.category), colors: csv(q.color),
 		min: q.minPrice ? Number(q.minPrice) : null, max: q.maxPrice ? Number(q.maxPrice) : null,
 		onSale: bool(q.onSale), inStock: bool(q.inStock), isNew: bool(q.isNew), hasVideo: bool(q.hasVideo),
-		ids: csv(q.ids).map(Number),
+		ids: csv(q.ids).map(Number), campaign: q.campaign || "",
 	};
 	const fn = (p) =>
 		matchQ(p, f.q) &&
@@ -221,7 +222,9 @@ function productFilter(q, skip) {
 		(skip === "color" || !f.colors.length || p.colors.some((c) => f.colors.includes(c))) &&
 		(skip === "price" || ((f.min == null || p.price >= f.min) && (f.max == null || p.price <= f.max))) &&
 		(!f.onSale || p.old > 0) && (!f.inStock || p.stock > 0) && (!f.isNew || p.isNew) && (!f.hasVideo || p.video) &&
-		(!f.ids.length || f.ids.includes(p.id));
+		(!f.ids.length || f.ids.includes(p.id)) &&
+		// a campaign that isn't running is an empty list, not an error
+		(!f.campaign || (f.campaign === CAMPAIGN_SLUG && p.old > 0));
 	return { f, fn };
 }
 function facets(q) {
@@ -342,7 +345,7 @@ function seedUser(u) {
 	const rt = {
 		id: RETURN_SEQ, code: `RT-${RETURN_SEQ}`, orderCode: returned.code, status: "APPROVED", reason: "NOT_AS_PICTURED", description: "رنگش با عکس قبل از ارسال فرق داشت.",
 		items: [{ orderItemId: 1, productId: 2, color: "black", quantity: 1 }], media: [], shippingPaidBy: "KIVA", refundMethod: "ORIGINAL_PAYMENT",
-		instructions: "کیف رو با بسته‌بندی اصلی و همه‌ی متعلقاتش، با تیپاکس به انبار کیوا بفرست؛ نشانی و کد پس‌کرایه برات پیامک شد و هزینه‌ش با کیواست. شماره‌ی درخواست RT-1012 رو روی بسته بنویس.",
+		instructions: "کیف رو با بسته‌بندی اصلی و همه‌ی متعلقاتش، با تیپاکس به انبار کیوا بفرست؛ هزینه‌ش با کیواست. شماره‌ی درخواست RT-1012 رو روی بسته بنویس و کد رهگیری رو برای پشتیبانی بفرست.",
 		refund: null, createdAt: now - 26 * HOUR, decidedAt: now - 21 * HOUR,
 	};
 	returned.returns.push(rt);
@@ -403,6 +406,16 @@ const tooMany = (ctx, code, message, seconds) => {
 	ctx.headers["Retry-After"] = String(seconds);
 	fail(429, code, message, { meta: { retryAfterSeconds: seconds } });
 };
+/** Sliding-window limit per key — `429 RATE_LIMITED` with the seconds until the oldest hit leaves the window. */
+const hits = new Map();
+const limit = (ctx, key, max, windowMs, message) => {
+	const recent = (hits.get(key) || []).filter((t) => t > Date.now() - windowMs);
+	if (recent.length >= max) tooMany(ctx, "RATE_LIMITED", message, Math.ceil((recent[0] + windowMs - Date.now()) / 1000));
+	hits.set(key, [...recent, Date.now()]);
+};
+const ipOf = (ctx) => ctx.req.socket.remoteAddress || "-";
+/** Test switches of the backend's feature flags (`POST /__mock/flags`). */
+const flags = { wishlistShare: true };
 /** One code per number and purpose every 120 s; the demo number is always over the limit. */
 function canSendCode(ctx, purpose, phone) {
 	if (phone === RATE_LIMITED_PHONE) tooMany(ctx, "RATE_LIMITED", "زیاد امتحان کردی.", 3 * 3600);
@@ -637,14 +650,14 @@ const returnDeadline = (o) => deliveredAt(o) + RETURN_DAYS * DAY;
 const RETURN_ENDED = ["REJECTED", "CLOSED"];
 /** The order's latest request that didn't end without a refund. */
 const liveReturn = (o) => [...(o.returns || [])].reverse().find((r) => !RETURN_ENDED.includes(r.status));
-/** How many of line `j` can still be returned. */
-const remainingQty = (o, j) => o.items[j].qty - (o.returns || []).filter((r) => !RETURN_ENDED.includes(r.status)).flatMap((r) => r.items).filter((i) => i.orderItemId === j + 1).reduce((n, i) => n + i.quantity, 0);
+/** One return per order — another only after a rejection (contract 1.21.0). */
+const hasOpenReturn = (o) => (o.returns || []).some((r) => r.status !== "REJECTED");
 /** Every refund of the order: cancellation, change requests, returns — oldest first. */
 const refundsOf = (o) =>
 	[o.refund, ...(o.changeRefunds || []), ...(o.returns || []).map((r) => r.refund)].filter(Boolean).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 /** Paid so far minus the refunds that didn't fail — what cancelling gives back (contract 1.12.0). */
 const refundable = (o) => Math.max(0, o.totals.total - refundsOf(o).filter((r) => r.status !== "FAILED").reduce((n, r) => n + r.amount, 0));
-const canReturn = (o) => o.status === 3 && !o.cancelledAt && Date.now() < returnDeadline(o) && o.items.some((_, j) => remainingQty(o, j) > 0);
+const canReturn = (o) => o.status === 3 && !o.cancelledAt && Date.now() < returnDeadline(o) && !hasOpenReturn(o);
 function statusOf(o) {
 	if (o.cancelledAt) return { status: "CANCELLED", statusLabel: "لغو شده", statusTone: "DANGER" };
 	if (isExpired(o)) return { status: "EXPIRED", statusLabel: "منقضی شد", statusTone: "DANGER" };
@@ -755,7 +768,8 @@ function orderDetail(o) {
 		},
 		timeline: progressOf(o).steps.filter((x) => x.at).map((x, i) => ({ status: ["PROCESSING", "PHOTO_SENT", "SHIPPED", "DELIVERED"][i], label: x.label, at: x.at, note: null })),
 		customerNote: null, gift: null, returns: (o.returns || []).map(returnView), refunds: refundsOf(o),
-		invoiceUrl: o.paid !== false && !o.cancelledAt ? `/api/v1/me/orders/${o.code}/invoice` : null,
+		// the purchase receipt of an order paid once — cancelled ones too
+		invoiceUrl: o.paid !== false ? `/api/v1/me/orders/${o.code}/invoice` : null,
 		shipmentCarrierUrl: s.trackingUrl,
 	};
 }
@@ -799,10 +813,13 @@ const testimonials = () => D.TESTIMONIALS.map((t, i) => {
 		product: { id: p.id, slug: p.slug, sku: `KV-${1000 + p.id}`, name: p.n, imageUrl: img(p, t.col), colorKey: t.col }, color: color(t.col), screenshotUrl: null,
 	};
 });
-const saleProducts = (ctx) => D.PRODUCTS.filter((p) => p.old && p.stock).sort((a, b) => offPct(b) - offPct(a)).slice(0, 4).map((p) => summary(p, ctx));
+const CAMPAIGN_SLUG = "paeez-1405";
+const CAMPAIGN_TITLE = "جشنواره پاییزه";
+// the set is every published product (no `productIds`): discounted, with a colour in stock — up to 24 (the home page shows 4)
+const saleProducts = (ctx) => D.PRODUCTS.filter((p) => p.old && p.stock).sort((a, b) => offPct(b) - offPct(a) || b.sold - a.sold).slice(0, 24).map((p) => summary(p, ctx));
 const campaign = (ctx) => ({
-	id: 5, slug: "paeez-1405", title: "جشنواره پاییزه", subtitle: "تا پایان جشنواره فرصت داری:", icon: "fire",
-	startsAt: iso(Date.now() - 6 * DAY), endsAt: iso(friday()), serverTime: iso(Date.now()), products: saleProducts(ctx), seeAllUrl: "/products?onSale=true", isActive: true,
+	id: 5, slug: CAMPAIGN_SLUG, title: CAMPAIGN_TITLE, subtitle: "تا پایان جشنواره فرصت داری:", icon: "fire",
+	startsAt: iso(Date.now() - 6 * DAY), endsAt: iso(friday()), serverTime: iso(Date.now()), products: saleProducts(ctx), seeAllUrl: `/products?campaign=${CAMPAIGN_SLUG}`, isActive: true,
 });
 const isOpenNow = () => {
 	const d = new Date(new Date().toLocaleString("en-US", { timeZone: TZ }));
@@ -954,14 +971,33 @@ route("POST", "/contact/messages", (ctx) => {
 	if (!b.fullName || String(b.fullName).trim().length < 3) errors.push({ field: "fullName", code: "MIN_LENGTH", message: "نامت رو وارد کن" });
 	if (!validPhone(b.phone)) errors.push({ field: "phone", code: "PHONE_INVALID", message: "موبایل ۱۱ رقمی وارد کن" });
 	if (!b.message || String(b.message).trim().length < 10) errors.push({ field: "message", code: "MIN_LENGTH", message: "حداقل ۱۰ حرف بنویس" });
+	if (b.orderCode && !/^KV-\d+$/i.test(toEn(b.orderCode).trim())) errors.push({ field: "orderCode", code: "ORDER_CODE_INVALID", message: "شماره سفارش مثل KV-215566 است" });
 	if (errors.length) validation(errors);
+	limit(ctx, `contact:${ipOf(ctx)}`, 5, 3600e3, "توی یه ساعت ۵ تا پیام فرستادی؛ کمی بعد دوباره بفرست یا تماس بگیر.");
+	limit(ctx, `contact:${toEn(b.phone)}`, 5, DAY, "امروز ۵ تا پیام با این شماره فرستادی؛ فردا دوباره بفرست یا تماس بگیر.");
 	ctx.status = 201;
-	return { ticketCode: `CT-${Math.floor(1000 + Math.random() * 9000)}`, createdAt: iso(Date.now()), message: "پیامت رسید! به زودی از طریق پیامک باهات تماس می‌گیریم." };
+	return { ticketCode: `CT-${Math.floor(100000 + Math.random() * 900000)}`, createdAt: iso(Date.now()), message: "پیامت رسید! به زودی از طریق پیامک باهات تماس می‌گیریم." };
 });
+const newsletter = new Map();
 route("POST", "/newsletter/subscriptions", (ctx) => {
-	if (!/^\S+@\S+\.\S+$/.test(String(ctx.body?.email || ""))) validation([{ field: "email", code: "EMAIL_INVALID", message: "یه ایمیل درست وارد کن" }]);
-	ctx.status = 201;
+	const email = String(ctx.body?.email || "").trim().toLowerCase();
+	if (!/^\S+@\S+\.\S+$/.test(email)) validation([{ field: "email", code: "EMAIL_INVALID", message: "یه ایمیل درست وارد کن" }]);
+	limit(ctx, `news:${ipOf(ctx)}`, 5, 3600e3, "زیاد امتحان کردی؛ کمی بعد دوباره عضو شو.");
+	const sub = newsletter.get(email);
+	// new or back after leaving → the welcome e-mail with its unsubscribe link (printed here instead)
+	if (!sub?.active) {
+		const token = `nl_${randomUUID().replace(/-/g, "")}`;
+		newsletter.set(email, { token, active: true });
+		console.log(`[mock] newsletter welcome to ${email}: ${FE_ORIGIN}/newsletter/unsubscribe?token=${token}`);
+	}
 	return { message: "عضو خبرنامه کیوا شدی!" };
+});
+route("POST", "/newsletter/subscriptions/unsubscribe", (ctx) => {
+	const token = String(ctx.body?.token || "");
+	if (!/^nl_[0-9A-Za-z]{32}$/.test(token)) validation([{ field: "token", code: "UNSUBSCRIBE_TOKEN_INVALID", message: "لینک لغو عضویت درست نیست." }]);
+	// unknown / already used: `204` too
+	for (const sub of newsletter.values()) if (sub.token === token) sub.active = false;
+	ctx.status = 204;
 });
 
 // auth
@@ -1028,6 +1064,11 @@ route("POST", "/__mock/products/:id", (ctx) => {
 	if (ctx.body?.active != null) p.inactive = !ctx.body.active;
 	if (ctx.body?.photo != null) p.noPhoto = !ctx.body.photo;
 	return { id: p.id, stock: p.stock, active: !p.inactive, photo: !p.noPhoto };
+});
+/** Test aid: the backend's feature flags — `{ wishlistShare: false }` switches list sharing off (`WISHLIST_SHARE_DISABLED`). */
+route("POST", "/__mock/flags", (ctx) => {
+	if (typeof ctx.body?.wishlistShare === "boolean") flags.wishlistShare = ctx.body.wishlistShare;
+	return { ...flags };
 });
 /** Test aid: a gateway's state — `UP`, `OFF` (refused before anything is made) or `NO_ANSWER` (made, then the bank didn't answer). */
 route("POST", "/__mock/gateways/:code", (ctx) => {
@@ -1097,7 +1138,12 @@ route("POST", "/__mock/returns/:code", (ctx) => {
 	const now = Date.now();
 	r.status = b.status ?? r.status;
 	if (r.status !== "REQUESTED") r.decidedAt ??= now;
-	if (r.status === "REJECTED") r.rejectionReason = b.rejectionReason ?? r.rejectionReason ?? null;
+	if (r.status === "REJECTED") Object.assign(r, { rejectionReason: b.rejectionReason ?? r.rejectionReason ?? null, instructions: null });
+	// approved: the operator's text, else the payer's default
+	else if (r.status !== "REQUESTED")
+		r.instructions = b.instructions ?? r.instructions ?? (r.shippingPaidBy === "KIVA"
+			? "کیف رو با بسته‌بندی اصلی آماده کن؛ مأمور تیپاکس برای جمع‌آوری باهات هماهنگ می‌کنه و هزینه‌ش با کیواست."
+			: "بسته رو با پست یا تیپاکس به انبار کیوا (تهران، خیابان آزادی، پلاک ۱۲) بفرست و کد رهگیری رو برای پشتیبانی بفرست.");
 	if (r.status === "PICKUP_SCHEDULED") r.pickup = { carrier: "TIPAX", carrierName: "تیپاکس", scheduledFor: iso(now + DAY), trackingCode: null, note: null, ...r.pickup, ...b.pickup };
 	if (["RECEIVED", "REFUNDED"].includes(r.status) || (r.status === "CLOSED" && b.received)) r.receivedAt ??= now;
 	if (r.status === "CLOSED") Object.assign(r, { closedAt: now, closeReason: b.closeReason ?? r.closeReason ?? null });
@@ -1116,6 +1162,7 @@ route("GET", "/categories/:slug", (ctx) => categoryView(D.CATEGORIES.find((c) =>
 route("GET", "/colors", () => D.COLORS.map((c) => ({ ...c, productCount: D.PRODUCTS.filter((p) => p.colors.includes(c.key)).length })));
 route("GET", "/products", (ctx) => {
 	const q = ctx.query;
+	if (q.campaign && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(q.campaign)) validation([{ field: "campaign", code: "SLUG_INVALID", message: "نشانی جشنواره درست نیست." }]);
 	const sort = SORTS[q.sort] ? q.sort : "newest";
 	const { f, fn } = productFilter(q);
 	let list = D.PRODUCTS.filter(fn).sort(SORTS[sort]);
@@ -1130,7 +1177,8 @@ route("GET", "/products", (ctx) => {
 	if ((f.min != null && f.min > PMIN) || (f.max != null && f.max < PMAX)) applied.push({ key: "price", value: null, label: `${price(f.min ?? PMIN)} تا ${price(f.max ?? PMAX)} تومان`, swatchHex: null });
 	if (f.onSale) applied.push({ key: "onSale", value: null, label: "تخفیف‌خورده", swatchHex: null });
 	if (f.inStock) applied.push({ key: "inStock", value: null, label: "موجود", swatchHex: null });
-	const title = one ? one.name : f.onSale && !f.cats.length ? "تخفیف‌خورده‌ها" : "فروشگاه کیوا";
+	if (f.campaign) applied.push({ key: "campaign", value: f.campaign, label: f.campaign === CAMPAIGN_SLUG ? CAMPAIGN_TITLE : f.campaign, swatchHex: null });
+	const title = one ? one.name : f.campaign === CAMPAIGN_SLUG ? `تخفیف‌های ${CAMPAIGN_TITLE}` : f.onSale && !f.cats.length ? "تخفیف‌خورده‌ها" : "فروشگاه کیوا";
 	return {
 		items: items.map((p) => summary(p, ctx, p.colors.find((c) => f.colors.includes(c)))), meta,
 		title, subtitle: "همه‌ی کیف‌ها با عکس و ویدیوی واقعی؛ رنگت رو انتخاب کن تا عکس همون رنگ رو ببینی.",
@@ -1146,12 +1194,17 @@ route("GET", "/products/:id/related", (ctx) => {
 	return D.PRODUCTS.filter((x) => x.id !== p.id).sort((a, b) => (b.cat === p.cat) - (a.cat === p.cat) || b.sold - a.sold).slice(0, limit).map((x) => summary(x, ctx));
 });
 route("POST", "/products/:id/stock-alerts", (ctx) => {
+	const u = needUser(ctx);
 	const p = findProduct(ctx.params.id);
-	const phone = ctx.user?.phone || toEn(ctx.body?.phone).replace(/\D/g, "");
-	if (!validPhone(phone)) validation([{ field: "phone", code: "PHONE_INVALID", message: "موبایل معتبر وارد کن" }]);
-	if (p.stock) fail(422, "PRODUCT_IN_STOCK", "این محصول همین الان موجوده!");
-	if (stockAlerts.some((a) => a.phone === phone && a.productId === p.id && a.status === "ACTIVE")) fail(409, "STOCK_ALERT_EXISTS", "قبلاً ثبت کردی؛ هر وقت موجود شد بهت پیامک می‌دیم.");
-	const a = { id: ++ALERT_SEQ, phone, productId: p.id, variantId: ctx.body?.variantId ?? null, status: "ACTIVE", createdAt: Date.now(), notifiedAt: null };
+	const vid = ctx.body?.variantId == null ? null : Number(ctx.body.variantId);
+	if (vid != null && !p.colors.some((k) => variantId(p, k) === vid)) validation([{ field: "variantId", code: "VARIANT_NOT_FOUND", message: "این رنگ برای این کیف نیست." }]);
+	// every colour of a mock product shares its stock
+	if (p.stock) fail(422, "PRODUCT_IN_STOCK", vid == null ? "یکی از رنگ‌هاش همین الان موجوده!" : "این رنگ همین الان موجوده!", vid == null ? { meta: { inStockColorKeys: p.colors } } : undefined);
+	const active = stockAlerts.filter((a) => a.phone === u.phone && a.status === "ACTIVE");
+	if (active.some((a) => a.productId === p.id && a.variantId === vid)) fail(409, "STOCK_ALERT_EXISTS", "قبلاً ثبت کردی؛ هر وقت موجود شد بهت پیامک می‌دیم.");
+	if (active.length >= 30) fail(422, "STOCK_ALERT_LIMIT_REACHED", "۳۰ تا اطلاع‌رسانی فعال داری؛ برای این یکی، اول یکی از قبلی‌ها رو لغو کن.", { meta: { limit: 30 } });
+	limit(ctx, `alert:${u.phone}`, 10, 3600e3, "توی یه ساعت زیاد ثبت کردی؛ کمی بعد دوباره امتحان کن.");
+	const a = { id: ++ALERT_SEQ, phone: u.phone, productId: p.id, variantId: vid, status: "ACTIVE", createdAt: Date.now(), notifiedAt: null };
 	stockAlerts.push(a);
 	ctx.status = 201;
 	return alertView(a);
@@ -1164,17 +1217,23 @@ function alertView(a) {
 		id: a.id, product: { id: p.id, slug: p.slug, sku: `KV-${1000 + p.id}`, name: p.n, imageUrl: img(p, k || p.colors[0]), colorKey: k },
 		variantId: a.variantId, color: k ? color(k) : null, channel: "SMS", phoneMasked: `${a.phone.slice(0, 4)}***${a.phone.slice(-4)}`,
 		status: a.status, createdAt: iso(a.createdAt), notifiedAt: a.notifiedAt ? iso(a.notifiedAt) : null,
-		message: a.status === "NOTIFIED" ? "موجود شد و پیامکش رو برات فرستادیم" : "هر وقت موجود شد، بهت پیامک می‌دیم",
+		message: { ACTIVE: "هر وقت موجود شد، بهت پیامک می‌دیم", NOTIFIED: "موجود شد و بهت خبر دادیم", CANCELLED: "اشتراک لغو شد" }[a.status],
 	};
 }
 route("GET", "/me/stock-alerts", (ctx) => {
 	const u = needUser(ctx);
-	return stockAlerts.filter((a) => a.phone === u.phone && a.status !== "CANCELLED").sort((a, b) => b.createdAt - a.createdAt).map(alertView);
+	// active ones and the ones notified in the last 90 days, newest first, at most 100
+	return stockAlerts
+		.filter((a) => a.phone === u.phone && (a.status === "ACTIVE" || (a.status === "NOTIFIED" && a.notifiedAt > Date.now() - 90 * DAY)))
+		.sort((a, b) => b.createdAt - a.createdAt)
+		.slice(0, 100)
+		.map(alertView);
 });
 route("DELETE", "/me/stock-alerts/:id", (ctx) => {
 	const u = needUser(ctx);
-	const a = stockAlerts.find((x) => x.id === Number(ctx.params.id) && x.phone === u.phone && x.status !== "CANCELLED") || fail(404, "STOCK_ALERT_NOT_FOUND", "این اطلاع‌رسانی پیدا نشد.");
-	a.status = "CANCELLED";
+	const a = stockAlerts.find((x) => x.id === Number(ctx.params.id) && x.phone === u.phone) || fail(404, "STOCK_ALERT_NOT_FOUND", "این اطلاع‌رسانی پیدا نشد.");
+	// a finished one of your own stays as it is
+	if (a.status === "ACTIVE") a.status = "CANCELLED";
 	ctx.status = 204;
 });
 route("PUT", "/reviews/:id/helpful", (ctx) => {
@@ -1185,7 +1244,8 @@ route("PUT", "/reviews/:id/helpful", (ctx) => {
 	if (!review) fail(404, "REVIEW_NOT_FOUND", "این نظر پیدا نشد.");
 	if (typeof ctx.body?.helpful !== "boolean") validation([{ field: "helpful", code: "REQUIRED", message: "رأیت رو انتخاب کن" }]);
 	if (!helpfulVotes.has(id)) helpfulVotes.set(id, new Map());
-	helpfulVotes.get(id).set(u.phone, ctx.body.helpful);
+	if (ctx.body.helpful) helpfulVotes.get(id).set(u.phone, true);
+	else helpfulVotes.get(id).delete(u.phone);
 	const now = reviewsOf(p, ctx).find((r) => r.id === id);
 	return { helpfulCount: now.helpfulCount, myVote: now.myHelpfulVote };
 });
@@ -1211,11 +1271,20 @@ route("POST", "/products/:id/reviews", (ctx) => {
 	const p = findProduct(ctx.params.id);
 	const b = ctx.body || {};
 	const errors = [];
-	if (!b.text || String(b.text).trim().length < 10) errors.push({ field: "text", code: "MIN_LENGTH", message: "حداقل ۱۰ حرف بنویس" });
+	const text = String(b.text || "").trim();
+	if (text.length < 10) errors.push({ field: "text", code: "TEXT_TOO_SHORT", message: "حداقل ۱۰ حرف بنویس" });
+	if (text.length > 1000) errors.push({ field: "text", code: "TEXT_TOO_LONG", message: "حداکثر ۱۰۰۰ حرف" });
+	if (b.rating == null) errors.push({ field: "rating", code: "FIELD_REQUIRED", message: "امتیازت رو انتخاب کن" });
+	else if (!(Number.isInteger(Number(b.rating)) && b.rating >= 1 && b.rating <= 5)) errors.push({ field: "rating", code: "RATING_INVALID", message: "امتیاز بین ۱ تا ۵ است" });
+	if (String(b.authorName || "").trim().length > 40) errors.push({ field: "authorName", code: "TEXT_TOO_LONG", message: "اسم حداکثر ۴۰ حرف" });
+	if ((b.orderCode == null) !== (b.orderItemId == null)) errors.push({ field: b.orderCode == null ? "orderCode" : "orderItemId", code: "FIELD_REQUIRED", message: "کد سفارش و ردیف با هم لازم‌اند" });
 	const contact = toEn(b.contact || "").trim();
 	if (contact && !validPhone(contact) && !/^\S+@\S+\.\S+$/.test(contact)) errors.push({ field: "contact", code: "INVALID", message: "شماره موبایل یا ایمیل معتبر وارد کن" });
 	if (errors.length) validation(errors);
-	if (pendingReviews.some((r) => r.productId === p.id && r.phone === u.phone)) fail(409, "REVIEW_ALREADY_EXISTS", "برای این محصول یه نظر در انتظار تأیید داری.");
+	// a live review (pending or approved) of this product — after a rejection a new one is fine
+	if (pendingReviews.some((r) => r.productId === p.id && r.phone === u.phone) || u.reviews.some((r) => r.productId === p.id && r.status !== "REJECTED"))
+		fail(409, "REVIEW_ALREADY_EXISTS", "برای این کیف یه نظر ثبت کردی؛ از «نظرات من» می‌تونی ویرایشش کنی.");
+	if (u.reviews.filter((r) => r.createdAt > Date.now() - DAY).length >= 5) tooMany(ctx, "RATE_LIMITED", "امروز ۵ تا نظر نوشتی؛ فردا دوباره بنویس.", 3600);
 	const name = String(b.authorName || "").trim() || "کاربر کیوا";
 	const view = { id: ++REVIEW_SEQ, productId: p.id, authorName: name, authorInitial: name[0], rating: Number(b.rating) || 5, title: null, text: String(b.text).trim(), createdAt: iso(Date.now()), status: "PENDING", statusLabel: "در انتظار تأیید", isVerifiedBuyer: false, purchasedColor: null, reply: null, helpfulCount: 0, myHelpfulVote: null, media: [], isMine: true };
 	pendingReviews.push({ productId: p.id, phone: u.phone, view });
@@ -1227,8 +1296,10 @@ route("POST", "/products/:id/reviews", (ctx) => {
 // search
 route("GET", "/search/suggest", (ctx) => {
 	const q = normQ(ctx.query.q || "");
-	if (!q) validation([{ field: "q", code: "REQUIRED", message: "عبارت جستجو رو وارد کن" }]);
-	const words = q.split(/\s+/).filter(Boolean);
+	if (!q) validation([{ field: "q", code: "SEARCH_QUERY_EMPTY", message: "عبارت جستجو رو وارد کن" }]);
+	if (q.length > 100) validation([{ field: "q", code: "SEARCH_QUERY_TOO_LONG", message: "عبارت جستجو حداکثر ۱۰۰ حرف" }]);
+	if (ctx.query.limit != null && !(Number(ctx.query.limit) >= 1 && Number(ctx.query.limit) <= 20)) validation([{ field: "limit", code: "LIMIT_INVALID", message: "limit بین ۱ تا ۲۰" }]);
+	const words = q.split(/\s+/).filter(Boolean).slice(0, 6);
 	const hl = (s) => { let out = esc(s); words.forEach((w) => { out = out.split(esc(w)).join(`<mark>${esc(w)}</mark>`); }); return out; };
 	const found = D.PRODUCTS.filter((p) => matchQ(p, q));
 	const limit = Math.min(20, Number(ctx.query.limit) || 8);
@@ -1287,7 +1358,11 @@ route("POST", "/cart/items/:itemId/move-to-wishlist", (ctx) => {
 	const c = resolveCart(ctx);
 	const line = c.items.find((i) => i.id === ctx.params.itemId) || fail(404, "CART_ITEM_NOT_FOUND", "این کالا توی سبدت نیست.");
 	const { p, k } = variantById(line.variantId);
-	if (!u.wishlist.some((w) => w.productId === p.id)) u.wishlist.unshift({ productId: p.id, addedAt: Date.now(), colorKey: k, priceAtAdd: p.price });
+	const saved = u.wishlist.find((w) => w.productId === p.id);
+	// a full list: nothing changes, the line stays in the cart
+	if (!saved && u.wishlist.length >= 200) fail(422, "WISHLIST_LIMIT_REACHED", "علاقه‌مندی‌هات پره (۲۰۰ کیف)؛ اول چندتاش رو حذف کن.", { meta: { limit: 200 } });
+	if (saved) saved.colorKey = k;
+	else u.wishlist.unshift({ productId: p.id, addedAt: Date.now(), colorKey: k, priceAtAdd: p.price });
 	c.items = c.items.filter((i) => i !== line);
 	return mutation(c, ctx, { message: `${p.n} به علاقه‌مندی‌ها منتقل شد` });
 });
@@ -1777,33 +1852,51 @@ route("POST", "/me/orders/:code/media-feedback", (ctx) => {
 const KIVA_FAULT = ["NOT_AS_PICTURED", "MANUFACTURING_DEFECT", "WRONG_ITEM", "DAMAGED_IN_TRANSIT"];
 route("POST", "/me/orders/:code/returns", (ctx) => {
 	const u = needUser(ctx);
-	const o = myOrder(ctx);
 	const b = ctx.body || {};
-	if (o.status !== 3 || o.cancelledAt) fail(422, "ORDER_NOT_RETURNABLE", "این سفارش هنوز تحویل نشده؛ بعد از تحویل تا ۷ روز می‌تونی درخواست مرجوعی بدی.");
-	if (Date.now() >= returnDeadline(o)) fail(422, "RETURN_WINDOW_EXPIRED", `مهلت ۷ روزه‌ی بازگشت این سفارش ${jdate(returnDeadline(o), { weekday: "long", day: "numeric", month: "long" })} تموم شد. اگه کیفت ایراد داره، با پشتیبانی در تماس باش تا بررسی‌اش کنیم.`);
-	if (!o.items.some((_, j) => remainingQty(o, j) > 0)) fail(422, "ORDER_NOT_RETURNABLE", "برای همه‌ی کیف‌های این سفارش قبلاً درخواست مرجوعی ثبت شده.");
+	// 1 · shape, all at once
 	const errors = [];
 	const lines = Array.isArray(b.items) ? b.items : [];
-	if (!lines.length) errors.push({ field: "items", code: "REQUIRED", message: "حداقل یه کیف رو انتخاب کن" });
+	if (!lines.length) errors.push({ field: "items", code: "FIELD_REQUIRED", message: "حداقل یه کیف رو انتخاب کن" });
+	if (lines.length > 20) errors.push({ field: "items", code: "TOO_MANY_ITEMS", message: "حداکثر ۲۰ ردیف" });
 	lines.forEach((l, i) => {
-		const j = Number(l.orderItemId) - 1;
-		if (!o.items[j]) errors.push({ field: `items[${i}].orderItemId`, code: "NOT_FOUND", message: "این کیف توی سفارش نیست" });
-		else if (!(Number(l.quantity) >= 1 && Number(l.quantity) <= remainingQty(o, j))) errors.push({ field: `items[${i}].quantity`, code: "RANGE", message: "تعداد درست نیست" });
+		if (lines.findIndex((x) => x.orderItemId === l.orderItemId) !== i) errors.push({ field: `items.${i}.orderItemId`, code: "LIST_ITEM_DUPLICATE", message: "این کیف دوبار اومده" });
+		if (!(Number(l.quantity) >= 1 && Number(l.quantity) <= 20)) errors.push({ field: `items.${i}.quantity`, code: "QUANTITY_INVALID", message: "تعداد درست نیست" });
 	});
 	const KNOWN = [...KIVA_FAULT, "CHANGED_MIND", "OTHER"];
 	if (!KNOWN.includes(b.reason)) errors.push({ field: "reason", code: "REQUIRED", message: "دلیل مرجوعی رو انتخاب کن" });
-	if (b.description && String(b.description).length > 1000) errors.push({ field: "description", code: "MAX_LENGTH", message: "توضیح حداکثر ۱۰۰۰ حرف باشه" });
+	if (b.description && String(b.description).length > 1000) errors.push({ field: "description", code: "TEXT_TOO_LONG", message: "توضیح حداکثر ۱۰۰۰ حرف باشه" });
 	const mediaIds = Array.isArray(b.mediaIds) ? b.mediaIds : [];
-	if (mediaIds.length > 6 || mediaIds.some((id) => uploads.get(id)?.phone !== u.phone)) errors.push({ field: "mediaIds", code: "INVALID", message: "فایل‌های پیوست معتبر نیستن" });
+	if (mediaIds.length > 6) errors.push({ field: "mediaIds", code: "TOO_MANY_ITEMS", message: "حداکثر ۶ فایل" });
+	mediaIds.forEach((m, i) => { if (!/^med_[0-9A-Za-z]{22}$/.test(String(m))) errors.push({ field: `mediaIds.${i}`, code: "MEDIA_ID_INVALID", message: "شناسه‌ی فایل درست نیست" }); });
 	const refundMethod = b.refundMethod || "ORIGINAL_PAYMENT";
-	if (!["ORIGINAL_PAYMENT", "BANK_TRANSFER"].includes(refundMethod)) errors.push({ field: "refundMethod", code: "ENUM", message: "روش برگشت وجه معتبر نیست" });
-	if (refundMethod === "BANK_TRANSFER" && !/^IR\d{24}$/.test(String(b.iban || ""))) errors.push({ field: "iban", code: "PATTERN", message: "شماره شبا باید ۲۴ رقم باشه" });
+	if (!["ORIGINAL_PAYMENT", "BANK_TRANSFER"].includes(refundMethod)) errors.push({ field: "refundMethod", code: "REFUND_METHOD_INVALID", message: "روش برگشت وجه معتبر نیست" });
 	if (errors.length) validation(errors);
+	// 2 · the order; 3 · the uploads (each one this user's `RETURN_EVIDENCE`)
+	const o = myOrder(ctx);
+	const missing = mediaIds.map((m, i) => (uploads.get(m)?.phone === u.phone && uploads.get(m)?.purpose === "RETURN_EVIDENCE" ? null : { field: `mediaIds.${i}`, code: "MEDIA_NOT_FOUND", message: "این فایل پیدا نشد؛ دوباره آپلودش کن" })).filter(Boolean);
+	if (missing.length) validation(missing);
+	// 4 · returnable: delivered, and no other return that wasn't rejected
+	if (o.status !== 3 || o.cancelledAt) fail(422, "ORDER_NOT_RETURNABLE", "این سفارش هنوز تحویل نشده؛ بعد از تحویل می‌تونی درخواست مرجوعی بدی.");
+	if (hasOpenReturn(o)) fail(422, "ORDER_NOT_RETURNABLE", "برای این سفارش قبلاً درخواست مرجوعی ثبت شده و هر سفارش یه درخواست مرجوعی داره.");
+	// 5 · the window
+	if (Date.now() >= returnDeadline(o))
+		fail(422, "RETURN_WINDOW_EXPIRED", `مهلت بازگشت این سفارش ${jdate(returnDeadline(o), { weekday: "long", day: "numeric", month: "long" })} تموم شد. اگه کیفت ایراد داره، با پشتیبانی در تماس باش تا بررسی‌اش کنیم.`, { meta: { returnableUntil: iso(returnDeadline(o)) } });
+	// 6 · the lines; 7 · the evidence
+	const later = [];
+	lines.forEach((l, i) => {
+		const j = Number(l.orderItemId) - 1;
+		if (!o.items[j]) later.push({ field: `items.${i}.orderItemId`, code: "ORDER_ITEM_NOT_FOUND", message: "این کیف توی سفارش نیست" });
+		else if (Number(l.quantity) > o.items[j].qty) later.push({ field: `items.${i}.quantity`, code: "RETURN_QUANTITY_EXCEEDS", message: `از این کیف ${fa(o.items[j].qty)} عدد خریدی`, meta: { maxQuantity: o.items[j].qty } });
+	});
+	if (KIVA_FAULT.includes(b.reason) && !mediaIds.length) later.push({ field: "mediaIds", code: "EVIDENCE_REQUIRED", message: "برای این دلیل حداقل یه عکس یا ویدیو از کیف بفرست." });
+	if (b.reason === "OTHER" && !String(b.description || "").trim()) later.push({ field: "description", code: "DESCRIPTION_REQUIRED", message: "توضیح بده چی شده" });
+	if (later.length) validation(later);
 	const id = ++RETURN_SEQ;
 	const r = {
-		id, code: `RT-${id}`, orderCode: o.code, status: "REQUESTED", reason: b.reason, description: b.description || null,
+		id, code: `RT-${id}`, orderCode: o.code, status: "REQUESTED", reason: b.reason, description: String(b.description || "").trim() || null,
 		items: lines.map((l) => { const it = o.items[Number(l.orderItemId) - 1]; return { orderItemId: Number(l.orderItemId), productId: it.id, color: it.color, quantity: Number(l.quantity) }; }),
-		media: mediaIds.map((m) => uploads.get(m).asset), shippingPaidBy: b.reason === "CHANGED_MIND" ? "CUSTOMER" : KIVA_FAULT.includes(b.reason) ? "KIVA" : undefined,
+		// the reason's suggestion (`OTHER` too: the shopper), until the operator changes it on approval
+		media: mediaIds.map((m) => uploads.get(m).asset), shippingPaidBy: KIVA_FAULT.includes(b.reason) ? "KIVA" : "CUSTOMER",
 		refundMethod, instructions: null, refund: null, createdAt: Date.now(), decidedAt: null,
 	};
 	o.returns.push(r);
@@ -1814,13 +1907,13 @@ route("POST", "/me/orders/:code/returns", (ctx) => {
 route("GET", "/me/returns", (ctx) => [...needUser(ctx).returns].sort((a, b) => b.createdAt - a.createdAt).map(returnView));
 route("GET", "/me/orders/:code/invoice", (ctx) => {
 	const o = myOrder(ctx);
-	if (o.paid === false || o.cancelledAt) fail(404, "NOT_FOUND", "فاکتور این سفارش هنوز صادر نشده.");
-	return { raw: invoicePdf(o), type: "application/pdf", filename: `${o.code}.pdf` };
+	if (o.paid === false) fail(422, "INVOICE_NOT_AVAILABLE", "این سفارش هنوز پرداخت نشده؛ رسید خرید بعد از پرداخت صادر می‌شه.");
+	return { raw: invoicePdf(o), type: "application/pdf", filename: `kiva-${o.code}.pdf` };
 });
 /** A small valid one-page PDF (Latin text only — the real one comes from the backend). */
 function invoicePdf(o) {
 	const lines = [
-		`KIVA - Invoice ${o.code}`, `Order date: ${tehranDate(o.placedAt)}`, "",
+		`KIVA - Purchase receipt ${o.code}${o.cancelledAt ? " - CANCELLED" : ""}`, `Order date: ${tehranDate(o.placedAt)}`, "",
 		...o.items.map((i) => { const p = getP(i.id); return `${p.slug} (${i.color}) x${i.qty}   ${p.price * i.qty} IRT`; }),
 		"", `Shipping: ${o.totals.ship} IRT`, `Total paid: ${o.totals.total} IRT`,
 	];
@@ -1842,14 +1935,17 @@ function invoicePdf(o) {
 route("POST", "/me/uploads", (ctx) => {
 	const u = needUser(ctx);
 	const file = ctx.multipart?.file;
-	if (!file || !["RETURN_EVIDENCE", "REVIEW_PHOTO"].includes(ctx.multipart.fields.purpose)) validation([{ field: "file", code: "REQUIRED", message: "فایلی فرستاده نشد" }]);
+	if (!file) validation([{ field: "file", code: "FIELD_REQUIRED", message: "فایلی فرستاده نشد" }]);
+	const purpose = ctx.multipart.fields.purpose;
+	if (!["RETURN_EVIDENCE", "REVIEW_PHOTO"].includes(purpose)) validation([{ field: "purpose", code: "MEDIA_PURPOSE_INVALID", message: "نوع آپلود درست نیست" }]);
 	const video = file.type === "video/mp4";
 	if (!video && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) fail(415, "UPLOAD_TYPE_NOT_ALLOWED", "فقط عکس jpg، png، webp یا ویدیو mp4 قبول می‌شه.");
 	if (file.size > (video ? 50 : 8) * 1024 * 1024) fail(413, "UPLOAD_TOO_LARGE", video ? "حجم ویدیو بیشتر از ۵۰ مگابایته." : "حجم عکس بیشتر از ۸ مگابایته.");
-	const id = rid("up");
+	limit(ctx, `upload:${u.phone}`, 20, 3600e3, "توی یه ساعت ۲۰ تا فایل فرستادی؛ کمی بعد دوباره امتحان کن.");
+	const id = `med_${randomUUID().replace(/-/g, "").slice(0, 22)}`;
 	// the mock keeps no bytes — a bag picture stands in for the file
 	const asset = { id, type: video ? "VIDEO" : "IMAGE", url: `${ORIGIN}/media/bag/tote/lilac.svg?up=${id}`, thumbnailUrl: `${ORIGIN}/media/bag/tote/lilac.svg?up=${id}`, alt: file.name, mimeType: file.type };
-	uploads.set(id, { phone: u.phone, asset });
+	uploads.set(id, { phone: u.phone, purpose, asset });
 	ctx.status = 201;
 	return asset;
 });
@@ -1931,14 +2027,19 @@ const wishItem = (w, ctx) => {
 route("GET", "/me/wishlist", (ctx) => {
 	const u = needUser(ctx);
 	const items = u.wishlist.map((w) => wishItem(w, ctx));
-	return { ...paginate(items, ctx.query, 48), count: items.length, inStockCount: u.wishlist.filter((w) => getP(w.productId).stock).length, share: u.share || null };
+	return { ...paginate(items, ctx.query, 48), count: items.length, inStockCount: u.wishlist.filter((w) => getP(w.productId).stock).length, share: flags.wishlistShare ? u.share || null : null };
 });
 route("DELETE", "/me/wishlist", (ctx) => { needUser(ctx).wishlist = []; ctx.status = 204; });
 route("GET", "/me/wishlist/ids", (ctx) => { const u = needUser(ctx); return { productIds: u.wishlist.map((w) => w.productId), count: u.wishlist.length }; });
 route("PUT", "/me/wishlist/items/:id", (ctx) => {
 	const u = needUser(ctx);
 	const p = findProduct(ctx.params.id);
-	if (!u.wishlist.some((w) => w.productId === p.id)) u.wishlist.unshift({ productId: p.id, addedAt: Date.now(), colorKey: ctx.body?.colorKey || null, priceAtAdd: p.price });
+	const colorKey = ctx.body?.colorKey ?? null;
+	if (colorKey != null && !p.colors.includes(colorKey)) validation([{ field: "colorKey", code: "COLOR_NOT_FOUND", message: "این رنگ برای این کیف نیست." }]);
+	const saved = u.wishlist.find((w) => w.productId === p.id);
+	if (!saved && u.wishlist.length >= 200) fail(422, "WISHLIST_LIMIT_REACHED", "علاقه‌مندی‌هات پره (۲۰۰ کیف)؛ اول چندتاش رو حذف کن.", { meta: { limit: 200 } });
+	if (saved) saved.colorKey = colorKey ?? saved.colorKey;
+	else u.wishlist.unshift({ productId: p.id, addedAt: Date.now(), colorKey, priceAtAdd: p.price });
 	return { productId: p.id, wishlisted: true, count: u.wishlist.length, message: "به علاقه‌مندی‌ها اضافه شد" };
 });
 route("DELETE", "/me/wishlist/items/:id", (ctx) => {
@@ -1966,19 +2067,24 @@ route("POST", "/me/wishlist/add-to-cart", (ctx) => {
 });
 route("POST", "/me/wishlist/share", (ctx) => {
 	const u = needUser(ctx);
-	u.share = u.share || { token: rid("wl"), createdAt: iso(Date.now()) };
+	if (!flags.wishlistShare) fail(422, "WISHLIST_SHARE_DISABLED", "اشتراک‌گذاری لیست علاقه‌مندی فعلاً خاموشه.");
+	u.share = u.share || { token: `wl_${randomUUID().replace(/-/g, "")}`, createdAt: iso(Date.now()) };
 	return { ...u.share, url: `${FE_ORIGIN}/wishlist/shared/${u.share.token}` };
 });
 route("GET", "/wishlists/shared/:token", (ctx) => {
-	const u = [...users.values()].find((x) => x.share?.token === ctx.params.token) || fail(404, "NOT_FOUND", "این لیست پیدا نشد یا دیگه به اشتراک گذاشته نمی‌شه.");
-	return { ownerDisplayName: u.firstName || "دوست کیوا", items: u.wishlist.map((w) => summary(getP(w.productId), ctx, w.colorKey)) };
+	limit(ctx, `shared:${ipOf(ctx)}`, 30, 60e3, "زیاد امتحان کردی؛ یه دقیقه بعد دوباره باز کن.");
+	const u = (flags.wishlistShare && [...users.values()].find((x) => x.share?.token === ctx.params.token)) || fail(404, "NOT_FOUND", "این لیست پیدا نشد یا دیگه به اشتراک گذاشته نمی‌شه.");
+	return { ownerDisplayName: u.firstName || "یکی از دوستان کیوا", items: u.wishlist.map((w) => summary(getP(w.productId), ctx, w.colorKey)) };
 });
 
 // blog
 route("GET", "/blog/categories", () => blogCats());
 route("GET", "/blog/posts", (ctx) => {
 	const { category, q, page } = ctx.query;
-	const match = (p) => (!category || p.catSlug === category) && (!q || (p.t + p.ex).includes(normQ(q)));
+	if (q && normQ(q).length > 100) validation([{ field: "q", code: "SEARCH_QUERY_TOO_LONG", message: "عبارت جستجو حداکثر ۱۰۰ حرف" }]);
+	if (ctx.query.size != null && !(Number(ctx.query.size) >= 1 && Number(ctx.query.size) <= 30)) validation([{ field: "size", code: "PAGE_SIZE_INVALID", message: "size بین ۱ تا ۳۰" }]);
+	const words = q ? normQ(q).split(" ").filter(Boolean) : [];
+	const match = (p) => (!category || p.catSlug === category) && words.every((w) => normQ(p.t + " " + p.ex).includes(w));
 	const featuredPost = D.POSTS[0];
 	const featured = (Number(page) || 1) === 1 && match(featuredPost) ? postSummary(featuredPost, "big") : null;
 	const list = D.POSTS.slice(1).filter(match).map((p) => postSummary(p));
@@ -2012,7 +2118,12 @@ route("GET", "/blog/posts/:id/related", (ctx) => {
 	const p = findPost(ctx.params.id);
 	return D.POSTS.filter((x) => x.id !== p.id).sort((a, b) => (b.cat === p.cat) - (a.cat === p.cat)).slice(0, Number(ctx.query.limit) || 3).map((x) => postSummary(x));
 });
-route("POST", "/blog/posts/:id/feedback", (ctx) => { findPost(ctx.params.id); ctx.status = 204; });
+route("POST", "/blog/posts/:id/feedback", (ctx) => {
+	findPost(ctx.params.id);
+	if (typeof ctx.body?.helpful !== "boolean") validation([{ field: "helpful", code: "FIELD_REQUIRED", message: "مفید بود یا نه؟" }]);
+	limit(ctx, `blogvote:${ipOf(ctx)}`, 30, 3600e3, "زیاد رأی دادی؛ کمی بعد دوباره امتحان کن.");
+	ctx.status = 204;
+});
 
 // ───────────────────────────── server ─────────────────────────────
 function sendMedia(res, path, query) {

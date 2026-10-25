@@ -18,7 +18,7 @@ import { copyText } from "@/utils/clipboard";
 import { toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import { WishlistEndpoints } from "../../_api/wishlistEndpoints";
-import { ERROR_BEHAVIOUR } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isShareDisabledError } from "../../_utils/apiError";
 
 /** Length of the design's `.wcard.out` shrink before the card is really removed. */
 const LEAVE_MS = 420;
@@ -29,6 +29,8 @@ export default function WishlistView() {
 	const hydrated = useAuthStore((s) => s.hydrated);
 	const signedIn = useAuthStore((s) => !!s.accessToken);
 	const [leaving, setLeaving] = useState<number[]>([]);
+	/** Sharing is switched off on the server (`WISHLIST_SHARE_DISABLED`) — the box goes away. */
+	const [shareOff, setShareOff] = useState(false);
 
 	// shared with the account's wishlist panel; hearts and removals invalidate ["wishlist"]
 	const wishlist = useQuery({
@@ -66,8 +68,11 @@ export default function WishlistView() {
 
 	const share = useMutation({
 		mutationFn: () => withMappedError(() => WishlistEndpoints.share()),
-		meta: { showNotification: true },
 		onSuccess: (res) => copyText(res.url, "لینک لیست کپی شد"),
+		onError: (e) => {
+			if (isShareDisabledError(e)) setShareOff(true);
+			toast(e.description, { type: isShareDisabledError(e) ? "info" : "error", icon: isShareDisabledError(e) ? "info" : undefined });
+		},
 	});
 
 	const drop = (productId: number) => {
@@ -154,18 +159,20 @@ export default function WishlistView() {
 					</div>
 				))}
 			</div>
-			<Reveal className="box-cream share-box">
-				<span className="ic">
-					<Icon name="share" />
-				</span>
-				<div>
-					<b>لیستت رو با دوستات به اشتراک بذار</b>
-					<p>شاید یکی خواست برات هدیه بخره</p>
-				</div>
-				<button type="button" className={classNames("btn btn-dark btn-sm", { loading: share.isPending })} id="share" onClick={() => share.mutate()}>
-					کپی لینک لیست
-				</button>
-			</Reveal>
+			{!shareOff && (
+				<Reveal className="box-cream share-box">
+					<span className="ic">
+						<Icon name="share" />
+					</span>
+					<div>
+						<b>لیستت رو با دوستات به اشتراک بذار</b>
+						<p>شاید یکی خواست برات هدیه بخره</p>
+					</div>
+					<button type="button" className={classNames("btn btn-dark btn-sm", { loading: share.isPending })} id="share" onClick={() => share.mutate()}>
+						کپی لینک لیست
+					</button>
+				</Reveal>
+			)}
 		</>
 	);
 }

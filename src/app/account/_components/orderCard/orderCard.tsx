@@ -219,7 +219,7 @@ export default function OrderCard({ order, ret }: OrderCardProps) {
 					{UNPAID.includes(status) ? (
 						<div className="ord-acts">
 							<span className="hint">
-								<Icon name="receipt" /> فاکتور بعد از پرداخت صادر می‌شه
+								<Icon name="receipt" /> رسید خرید بعد از پرداخت صادر می‌شه
 							</span>
 							{cancelButton}
 						</div>

@@ -103,7 +103,8 @@ export default function Reviews({ productId, slug, reviews }: ReviewsProps) {
 								<Stars value={r.rating} />
 							</span>
 						</div>
-						<p>{r.text}</p>
+						{/* plain text with its line breaks (contract 1.21.0) */}
+						<p style={{ whiteSpace: "pre-line" }}>{r.text}</p>
 						{r.reply && (
 							<div className="reply">
 								<b>

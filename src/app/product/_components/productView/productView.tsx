@@ -19,7 +19,7 @@ import { flyToCart } from "@/utils/flyToCart";
 import { withMappedError } from "@/utils/withMappedError";
 import { ProductEndpoints } from "../../_api/productEndpoints";
 import { ProductVariant } from "../../_types/product.type";
-import { ERROR_BEHAVIOUR, STOCK_ALERT_ANSWERS } from "../../_utils/apiError";
+import { ERROR_BEHAVIOUR, isStockAlertLimitError, isStockAlertStaleError, STOCK_ALERT_ANSWERS } from "../../_utils/apiError";
 import AskModal from "../askModal/askModal";
 import Gallery from "../gallery/gallery";
 import MobileBuyBar from "../mobileBuyBar/mobileBuyBar";
@@ -117,9 +117,14 @@ export default function ProductView({ slug, initialColor }: ProductViewProps) {
 			queryClient.invalidateQueries({ queryKey: ["product", "detail", slug] });
 			toast(alert.message ?? "هر وقت موجود شد، بهت پیامک می‌دیم", { icon: "bell", action: { label: "همه‌ی اطلاع‌رسانی‌ها", href: "/account/stock-alerts" } });
 		},
-		// «already subscribed» / «it's in stock» are answers, not failures
-		onError: (error: ResultError) =>
-			STOCK_ALERT_ANSWERS.includes(error.code) ? toast(error.description, { icon: "bell" }) : toast(error.description, { type: "error" }),
+		onError: (error: ResultError) => {
+			if (isStockAlertStaleError(error)) queryClient.invalidateQueries({ queryKey: ["product", "detail", slug] });
+			// «already subscribed» / «it's in stock» are answers, not failures
+			if (STOCK_ALERT_ANSWERS.includes(error.code)) return toast(error.description, { icon: "bell" });
+			if (isStockAlertLimitError(error))
+				return toast(error.description, { type: "warning", duration: 6000, action: { label: "اطلاع‌رسانی‌های من", href: "/account/stock-alerts" } });
+			toast(error.description, { type: error.code === "RATE_LIMITED" ? "warning" : "error" });
+		},
 	});
 
 	if (product.error?.statusCode === 404) notFound();

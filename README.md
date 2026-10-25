@@ -55,24 +55,26 @@ NEXT_PUBLIC_API_URL="http://localhost:8080/api/v1/"
 | انقضای توکن | `POST /api/v1/__mock/expire-access-tokens` همه‌ی access tokenها را فوراً منقضی می‌کند (برای تست تمدید، مثلاً با دو تب) |
 | موجودی و درگاه (خارج از قرارداد) | `POST /api/v1/__mock/products/{id}` با `{ stock?, active?, photo? }` (تمام شدن / بیرون رفتن از فروشگاه ← ردیف غیرقابل خرید سبد؛ `photo: false` ← عکس `null`) · `POST /api/v1/__mock/gateways/{ZARINPAL\|SAMAN\|MELLAT}` با `{ state: "UP" \| "OFF" \| "NO_ANSWER" }` (`OFF`: درگاه در دسترس نیست، چیزی ساخته نمی‌شود؛ `NO_ANSWER`: سفارش/تراکنش ساخته می‌شود و `422` با `meta.orderCode` + `meta.paymentId`) |
 | کارهای پنل (خارج از قرارداد) | `POST /api/v1/__mock/orders/{code}/change-request/resolution` با `{ decision: "APPLY" \| "REJECT", variantId?, note? }` (رسیدگی به درخواست تغییر) · `POST /api/v1/__mock/orders/{code}/photos` (عکس تازه بعد از رسیدگی) · `POST /api/v1/__mock/returns/{RT-…}` با `{ status, pickup?, rejectionReason?, closeReason?, refund? }` (بردن مرجوعی به هر مرحله) |
+| پرچم‌های بک‌اند (خارج از قرارداد) | `POST /api/v1/__mock/flags` با `{ wishlistShare: false }` (اشتراک‌گذاری لیست خاموش ← `422 WISHLIST_SHARE_DISABLED`، `share = null`، لینک‌ها `404`) |
 
 ## صفحات
 
 | مسیر | توضیح |
 |---|---|
 | `/` | صفحه‌ی اصلی |
-| `/products` | فروشگاه؛ فیلترها در URL |
+| `/products` | فروشگاه؛ فیلترها در URL (`?campaign=` = تخفیف‌های جشنواره‌ی فعال) |
 | `/product/[slug]` | محصول؛ slug، id یا `KV-…`، با `?color=` |
 | `/cart` | سبد؛ رزرو ۴ روزه، کد تخفیف |
 | `/checkout`، `/checkout/result?paymentId=` | تکمیل خرید و نتیجه‌ی پرداخت |
 | `/login?next=` | ورود و ثبت‌نام با OTP |
-| `/account/{orders,tracking,addresses,wishlist,stock-alerts,reviews,profile}` | حساب کاربری. روی کارت سفارش: پرداخت، لغو، تأیید عکس یا درخواست تغییر، خرید دوباره، فاکتور، مرجوعی. در پروفایل: تغییر شماره |
+| `/account/{orders,tracking,addresses,wishlist,stock-alerts,reviews,profile}` | حساب کاربری. روی کارت سفارش: پرداخت، لغو، تأیید عکس یا درخواست تغییر، خرید دوباره، رسید خرید، مرجوعی. در پروفایل: تغییر شماره |
 | `/account/orders/[code]/return` | درخواست مرجوعی |
 | `/wishlist`، `/wishlist/shared/[token]` | علاقه‌مندی‌ها و لیست اشتراکی |
 | `/track?order=` | پیگیری سفارش و کدهای رهگیری روزانه |
 | `/blog`، `/blog/[slug]` | مجله |
 | `/faq`، `/contact?topic=`، `/about` | سوالات متداول، تماس، درباره ما |
 | `/pages/[slug]` | صفحه‌ی ثابت، مثلاً `/pages/terms` |
+| `/newsletter/unsubscribe?token=` | لغو عضویت خبرنامه از لینک ایمیل خوش‌آمد (mock لینک را در کنسول چاپ می‌کند) |
 
 جزئیات هر صفحه در [`docs/FEATURES.md`](docs/FEATURES.md) است.
 

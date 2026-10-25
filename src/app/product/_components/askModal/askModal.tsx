@@ -8,6 +8,7 @@ import { MessengerIcon } from "@/app/_components/icon/messengerIcon";
 import Modal from "@/app/_components/ui/modal/modal";
 import { ColorKey } from "@/types/catalog.type";
 import { toErrorView } from "@/utils/apiError";
+import { copyText } from "@/utils/clipboard";
 import { toPersianDigits } from "@/utils/digits";
 import { withMappedError } from "@/utils/withMappedError";
 import { ProductEndpoints } from "../../_api/productEndpoints";
@@ -66,6 +67,21 @@ export default function AskModal({ open, onClose, productId, color }: AskModalPr
 						<Icon name="info" />
 						<span>
 							{inquiry.data.productName} — رنگ {inquiry.data.colorName} — کد {toPersianDigits(inquiry.data.productCode)}
+							{/* filling the message in is up to the messenger app (contract 1.21.0) — the text can be pasted by hand */}
+							{inquiry.data.prefilledText && (
+								<>
+									<br />
+									اگه متن پیام خودش نیومد، کپی‌اش کن و بفرست.{" "}
+									<button
+										type="button"
+										className="btn-link"
+										style={{ fontSize: "inherit" }}
+										onClick={() => copyText(inquiry.data?.prefilledText ?? "", "متن پیام کپی شد")}
+									>
+										کپی متن پیام
+									</button>
+								</>
+							)}
 						</span>
 					</div>
 				</>

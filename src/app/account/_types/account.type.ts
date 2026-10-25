@@ -82,7 +82,8 @@ export interface TrackingDayGroup {
 export interface MyReviewListResponse {
 	items: Review[];
 	meta: PageMeta;
-	counts?: { total: number; pending: number; approved: number };
+	/** Over all of the user's reviews (rejected ones too). */
+	counts?: { total: number; pending: number; approved: number; rejected: number };
 }
 
 /** `POST /me/orders/{code}/reorder` — same shape as «افزودن همه به سبد» of the wishlist. */

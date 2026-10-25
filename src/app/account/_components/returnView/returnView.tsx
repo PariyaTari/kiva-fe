@@ -15,7 +15,18 @@ import { withMappedError } from "@/utils/withMappedError";
 import { AccountEndpoints } from "../../_api/accountEndpoints";
 import { ERROR_BEHAVIOUR, isNotReturnableError } from "../../_utils/apiError";
 import { dayLong, RETURN_REASONS } from "../../_utils/orderActions";
-import { isVideoFile, MAX_UPLOADS, returnableQuantity, returnDeadline, sizeError, UPLOAD_TYPE_ERROR, UploadTile, uploadProblem } from "../../_utils/returnForm";
+import {
+	hasOpenReturn,
+	isVideoFile,
+	MAX_UPLOADS,
+	returnableQuantity,
+	returnDeadline,
+	uploadErrorText,
+	uploadProblem,
+	UploadTile,
+	VIDEO_LENGTH_ERROR,
+	VIDEO_MAX_SEC,
+} from "../../_utils/returnForm";
 import ReturnDone from "../returnDone/returnDone";
 import ReturnGate from "../returnGate/returnGate";
 import ReturnHero from "../returnHero/returnHero";
@@ -48,11 +59,16 @@ function closedText(order: OrderDetail, deadline: number | null, now: number) {
 	if (order.status === "DELIVERED" && deadline && deadline <= now)
 		return {
 			expired: true,
-			text: `${deliveredAt ? `کیف‌های این سفارش ${dayLong(deliveredAt)} تحویل شدن و ` : ""}مهلت ۷ روزه‌ی بازگشت ${dayLong(deadline)} تموم شد. اگه کیفت ایراد داره، با پشتیبانی در تماس باش تا بررسی‌اش کنیم.`,
+			text: `${deliveredAt ? `کیف‌های این سفارش ${dayLong(deliveredAt)} تحویل شدن و ` : ""}مهلت بازگشت ${dayLong(deadline)} تموم شد. اگه کیفت ایراد داره، با پشتیبانی در تماس باش تا بررسی‌اش کنیم.`,
 		};
-	if (order.returns?.length) return { expired: false, text: "برای همه‌ی کیف‌های این سفارش قبلاً درخواست مرجوعی ثبت شده. وضعیتش رو توی «سفارش‌های من» ببین." };
+	// one request per order; only a rejected one can be asked again (contract 1.21.0)
+	if (hasOpenReturn(order))
+		return {
+			expired: false,
+			text: "برای این سفارش قبلاً درخواست مرجوعی ثبت شده و هر سفارش یه درخواست مرجوعی داره. وضعیتش رو توی «سفارش‌های من» ببین.",
+		};
 	if (!["DELIVERED", "RETURN_REQUESTED", "RETURNED", "REFUNDED"].includes(order.status))
-		return { expired: false, text: "این سفارش هنوز تحویل نشده؛ بعد از تحویل تا ۷ روز می‌تونی درخواست مرجوعی بدی." };
+		return { expired: false, text: "این سفارش هنوز تحویل نشده؛ بعد از تحویل می‌تونی درخواست مرجوعی بدی." };
 	return { expired: false, text: "مرجوعی برای این سفارش فعال نیست؛ وضعیتش رو توی «سفارش‌های من» ببین." };
 }
 
@@ -73,8 +89,7 @@ export default function ReturnView({ code }: { code: OrderCode }) {
 	const [descriptionError, setDescriptionError] = useState<string | null>(null);
 	const [tiles, setTiles] = useState<UploadTile[]>([]);
 	const [method, setMethod] = useState<RefundMethod>("ORIGINAL_PAYMENT");
-	const [iban, setIban] = useState("");
-	const [ibanError, setIbanError] = useState<string | null>(null);
+	const [evidenceError, setEvidenceError] = useState<string | null>(null);
 	const [blockErrors, setBlockErrors] = useState({ items: false, reason: false });
 	/** Set when the server says the window closed / the order isn't returnable. */
 	const [closed, setClosed] = useState<{ expired: boolean; text: string } | null>(null);
@@ -112,12 +127,15 @@ export default function ReturnView({ code }: { code: OrderCode }) {
 	const upload = useMutation({
 		mutationFn: (tile: UploadTile) =>
 			withMappedError(() => AccountEndpoints.uploadFile(tile.file, "RETURN_EVIDENCE", (progress) => patchTile(tile.id, { progress }), tile.controller?.signal)),
-		onSuccess: (asset, tile) => patchTile(tile.id, { status: "ok", progress: 100, asset }),
-		onError: (e, tile) =>
-			patchTile(tile.id, {
-				status: "err",
-				error: e.code === "UPLOAD_TOO_LARGE" ? sizeError(tile.isVideo) : e.code === "UPLOAD_TYPE_NOT_ALLOWED" ? UPLOAD_TYPE_ERROR : "آپلود نشد",
-			}),
+		onSuccess: (asset, tile) => {
+			patchTile(tile.id, { status: "ok", progress: 100, asset });
+			setEvidenceError(null);
+		},
+		onError: (e, tile) => {
+			// stopped on purpose (a video over a minute) — the tile already says why
+			if (tile.controller?.signal.aborted) return;
+			patchTile(tile.id, { status: "err", error: uploadErrorText(e, tile.isVideo) });
+		},
 	});
 
 	const create = useMutation({
@@ -131,8 +149,8 @@ export default function ReturnView({ code }: { code: OrderCode }) {
 			setDone({ ret, amount });
 			window.scrollTo(0, 0);
 		},
-		onError: (e) => {
-			// the window closed / everything is already requested — the page closes with the server's reason
+		onError: (e, payload) => {
+			// the window closed / the order has its one return already — the page closes with the server's reason
 			if (isNotReturnableError(e)) {
 				queryClient.invalidateQueries({ queryKey: ["me", "orders"] });
 				setClosed({ expired: e.code === "RETURN_WINDOW_EXPIRED", text: e.description });
@@ -140,13 +158,27 @@ export default function ReturnView({ code }: { code: OrderCode }) {
 			}
 			// field answers go on the field, like the client-side checks
 			const field = (name: string) => e.errorDetails?.find((d) => d.field === name || d.field?.startsWith(`${name}[`) || d.field?.startsWith(`${name}.`));
-			const ibanDetail = field("iban");
 			const descriptionDetail = field("description");
 			const itemsDetail = field("items");
-			if (ibanDetail) setIbanError(ibanDetail.message);
+			const mediaDetail = field("mediaIds");
 			if (descriptionDetail) setDescriptionError(descriptionDetail.message);
-			if (itemsDetail) setBlockErrors((b) => ({ ...b, items: true }));
-			const block = itemsDetail ? itemsRef.current : descriptionDetail ? proofRef.current : ibanDetail ? refundRef.current : null;
+			if (mediaDetail) {
+				setEvidenceError(mediaDetail.message);
+				// `mediaIds.{i}` not found (expired after 48 h unused) — that tile has to be uploaded again
+				e.errorDetails?.forEach((d) => {
+					const index = Number(d.field?.match(/^mediaIds[.[](\d+)/)?.[1] ?? NaN);
+					const id = payload.mediaIds?.[index];
+					const tile = id ? tiles.find((t) => t.asset?.id === id) : undefined;
+					if (tile) patchTile(tile.id, { status: "err", error: "دوباره آپلودش کن" });
+				});
+			}
+			if (itemsDetail) {
+				// a line isn't returnable / its quantity changed — the page re-reads the order
+				setBlockErrors((b) => ({ ...b, items: true }));
+				queryClient.invalidateQueries({ queryKey: ["me", "orders", "detail", code] });
+				toast(itemsDetail.message, { type: "error" });
+			}
+			const block = itemsDetail ? itemsRef.current : descriptionDetail || mediaDetail ? proofRef.current : null;
 			if (block) return block.scrollIntoView({ behavior: "smooth", block: "center" });
 			toast(e.description, { type: "error" });
 		},
@@ -190,22 +222,22 @@ export default function ReturnView({ code }: { code: OrderCode }) {
 		setTiles((list) => list.filter((t) => t.id !== id));
 	};
 
+	// the length is known once the preview has read the file — a video over a minute stops uploading (`VIDEO_TOO_LONG`)
+	const checkDuration = (id: string, durationSec: number) => {
+		if (durationSec <= VIDEO_MAX_SEC + 0.5) return patchTile(id, { durationSec });
+		tiles.find((t) => t.id === id)?.controller?.abort();
+		patchTile(id, { durationSec, status: "err", error: VIDEO_LENGTH_ERROR });
+	};
+
 	const submit = () => {
 		const errors = { items: !picked.length, reason: !reason };
 		const descriptionShort = reason === "OTHER" && description.trim().length < DESC_MIN;
-		const ibanBad = method === "BANK_TRANSFER" && iban.length !== 24;
+		// KIVA's-fault reasons need a photo or video; one still uploading counts (the next check waits for it)
+		const evidenceMissing = payer === "KIVA" && !tiles.some((t) => t.status !== "err");
 		setBlockErrors(errors);
 		setDescriptionError(descriptionShort ? "توضیح بده چی شده (حداقل ۱۰ حرف)" : null);
-		setIbanError(ibanBad ? "شماره شبا باید ۲۴ رقم باشه" : null);
-		const first = errors.items
-			? itemsRef.current
-			: errors.reason
-				? reasonRef.current
-				: descriptionShort
-					? proofRef.current
-					: ibanBad
-						? refundRef.current
-						: null;
+		setEvidenceError(evidenceMissing ? "برای این دلیل حداقل یه عکس یا ویدیو از کیف بفرست." : null);
+		const first = errors.items ? itemsRef.current : errors.reason ? reasonRef.current : descriptionShort || evidenceMissing ? proofRef.current : null;
 		if (first) {
 			window.scrollTo({ top: first.getBoundingClientRect().top + window.scrollY - 120 });
 			shake(first);
@@ -219,7 +251,6 @@ export default function ReturnView({ code }: { code: OrderCode }) {
 			description: description.trim() || undefined,
 			mediaIds: tiles.flatMap((t) => (t.status === "ok" && t.asset ? [t.asset.id] : [])),
 			refundMethod: method,
-			iban: method === "BANK_TRANSFER" ? `IR${iban}` : null,
 		});
 	};
 
@@ -287,23 +318,13 @@ export default function ReturnView({ code }: { code: OrderCode }) {
 									setDescriptionError(null);
 								}}
 								descriptionError={descriptionError}
+								evidenceError={evidenceError}
 								tiles={tiles}
 								onAdd={addFiles}
 								onRemove={removeFile}
-								onDuration={(id, durationSec) => patchTile(id, { durationSec })}
+								onDuration={checkDuration}
 							/>
-							<ReturnRefundBlock
-								blockRef={refundRef}
-								method={method}
-								onMethod={setMethod}
-								iban={iban}
-								onIban={(digits) => {
-									setIban(digits);
-									setIbanError(null);
-								}}
-								ibanError={ibanError}
-								cardMask={order.payment?.cardMask}
-							/>
+							<ReturnRefundBlock blockRef={refundRef} method={method} onMethod={setMethod} cardMask={order.payment?.cardMask} />
 						</div>
 						<ReturnSummary
 							orderCode={order.code}

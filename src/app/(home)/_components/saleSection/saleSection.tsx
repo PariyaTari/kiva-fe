@@ -14,10 +14,10 @@ export default function SaleSection({ sale, receivedAt }: { sale: Campaign; rece
 					<div className="sec-head">
 						<div>
 							<span className="eyebrow">
-								<Icon name={sale.icon} /> {sale.title}
+								<Icon name={sale.icon ?? "tag"} /> {sale.title}
 							</span>
 							<h2 id="saleT">محصولات تخفیف‌خورده</h2>
-							<p>{sale.subtitle}</p>
+							<p>{sale.subtitle ?? "تا پایان جشنواره فرصت داری"}</p>
 						</div>
 						<Countdown endsAt={sale.endsAt} serverTime={sale.serverTime} receivedAt={receivedAt} />
 					</div>

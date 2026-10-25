@@ -27,6 +27,7 @@ export interface ProductVariant {
 	/** Gallery in order; videos sit in the same list with `type = VIDEO`. */
 	media: ProductMedia[];
 	hasVideo?: boolean;
+	/** The signed-in user has an `ACTIVE` alert for this colour; a guest `false`. */
 	stockAlertSubscribed?: boolean | null;
 }
 
@@ -67,6 +68,9 @@ export interface ProductDetail extends ProductSummary {
 	policies?: ProductPolicies;
 	perks?: Perk[];
 	tags?: string[];
+	/** The running campaign the bag is discounted in (a countdown target), else `null` — not shown: the design has no place for it. */
+	campaign?: { slug: string; title: string; endsAt: string } | null;
+	/** The signed-in user's `ACTIVE` «any colour» alert for the product; a guest `{subscribed: false, alertId: null}`. */
 	stockAlert?: { subscribed: boolean; alertId?: number | null } | null;
 	shareUrl?: string;
 	seo?: SeoMeta;
@@ -75,7 +79,7 @@ export interface ProductDetail extends ProductSummary {
 export interface MessengerLink {
 	channel: string;
 	name: string;
-	/** Deep link with the prefilled text (`?text=`). */
+	/** Deep link with the prefilled text (`?text=`, or `&text=` when the channel's address has a `?`). */
 	url: string;
 	handle?: string;
 	/** «پاسخگویی ۹ تا ۲۱». */
@@ -87,7 +91,9 @@ export interface ProductInquiry {
 	productCode: string;
 	productName: string;
 	colorName: string;
+	/** Prefilling is up to the messenger app — shown for copying too. */
 	prefilledText?: string;
+	/** Rubika, Telegram and Bale only, in the settings' order (Instagram takes no prefilled text). */
 	channels: MessengerLink[];
 }
 

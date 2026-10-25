@@ -16,6 +16,7 @@ export const ProductsEndpoints = {
 				maxPrice: params.maxPrice ?? undefined,
 				onSale: params.onSale || undefined,
 				inStock: params.inStock || undefined,
+				campaign: params.campaign || undefined,
 				sort: params.sort,
 				page: params.page,
 				size: params.size,

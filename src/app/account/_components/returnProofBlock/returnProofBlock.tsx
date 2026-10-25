@@ -19,6 +19,8 @@ type ReturnProofBlockProps = {
 	onDescription: (value: string) => void;
 	/** Field error (too short for «دلیل دیگه», or the server's `description` error). */
 	descriptionError: string | null;
+	/** KIVA's-fault reasons need at least one photo or video (`EVIDENCE_REQUIRED`) — the client check or the server's line. */
+	evidenceError: string | null;
 	tiles: UploadTile[];
 	onAdd: (files: File[]) => void;
 	onRemove: (id: string) => void;
@@ -27,7 +29,7 @@ type ReturnProofBlockProps = {
 
 /** Block ۳ «عکس و توضیح» — description and up to six photo / video tiles that upload as soon as they're picked. */
 export default function ReturnProofBlock(props: ReturnProofBlockProps) {
-	const { blockRef, reason, payer, description, onDescription, descriptionError, tiles, onAdd, onRemove, onDuration } = props;
+	const { blockRef, reason, payer, description, onDescription, descriptionError, evidenceError, tiles, onAdd, onRemove, onDuration } = props;
 	const input = useRef<HTMLInputElement>(null);
 
 	return (
@@ -36,7 +38,9 @@ export default function ReturnProofBlock(props: ReturnProofBlockProps) {
 				<span className="n">۳</span> عکس و توضیح
 			</h3>
 			<p className="sub">
-				{payer === "KIVA" ? "از ایراد یا تفاوت عکس بگیر؛ بررسی‌اش خیلی سریع‌تر می‌شه." : "اگه چیزی هست که باید بدونیم، بنویس؛ عکس هم کمک می‌کنه."}
+				{payer === "KIVA"
+					? "از ایراد یا تفاوت حداقل یه عکس یا ویدیو بفرست؛ بدون اون نمی‌تونیم بررسی‌اش کنیم."
+					: "اگه چیزی هست که باید بدونیم، بنویس؛ عکس هم کمک می‌کنه."}
 			</p>
 			<div className={classNames("field", { error: !!descriptionError })}>
 				<label htmlFor="rDesc">
@@ -62,7 +66,7 @@ export default function ReturnProofBlock(props: ReturnProofBlockProps) {
 				<div className="m-lb" style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
 					عکس یا ویدیو{" "}
 					<span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>
-						(تا ۶ فایل)
+						{payer === "KIVA" ? "(حداقل یکی لازمه، تا ۶ فایل)" : "(تا ۶ فایل)"}
 					</span>
 				</div>
 				<div className="up-grid">
@@ -132,9 +136,15 @@ export default function ReturnProofBlock(props: ReturnProofBlockProps) {
 						e.target.value = "";
 					}}
 				/>
+				{evidenceError && (
+					<div className="note danger" style={{ marginTop: 12 }}>
+						<Icon name="alert" />
+						<span>{evidenceError}</span>
+					</div>
+				)}
 				<div className="up-hint">
 					<Icon name="info" />
-					<span>عکس تا ۸ مگابایت (jpg، png، webp) و ویدیو تا ۵۰ مگابایت (mp4).</span>
+					<span>عکس تا ۸ مگابایت (jpg، png، webp) و ویدیو تا ۵۰ مگابایت و ۶۰ ثانیه (mp4).</span>
 				</div>
 			</div>
 		</div>

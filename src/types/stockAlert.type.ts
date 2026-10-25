@@ -11,18 +11,17 @@ export interface StockAlert {
 	variantId?: number | null;
 	color?: Color | null;
 	channel?: "SMS";
-	/** `0912***6789`. */
+	/** The account's mobile, `0912***6789` — the SMS goes to whatever number the account has when it is sent. */
 	phoneMasked?: string;
 	status: StockAlertStatus;
 	createdAt?: string;
 	notifiedAt?: string | null;
-	/** «هر وقت موجود شد، بهت پیامک می‌دیم». */
+	/** Per status: «هر وقت موجود شد، بهت پیامک می‌دیم» / «موجود شد و بهت خبر دادیم» / «اشتراک لغو شد». */
 	message?: string;
 }
 
+/** Signed-in only since 1.21.0 — no phone of its own; one `ACTIVE` alert per (product, colour or «any colour»), at most 30. */
 export interface CreateStockAlertPayload {
-	/** Without it the alert fires for any colour. */
+	/** An active colour of the product that is out of stock; without it the alert fires for any colour. */
 	variantId?: number | null;
-	/** Required for guests. */
-	phone?: string;
 }

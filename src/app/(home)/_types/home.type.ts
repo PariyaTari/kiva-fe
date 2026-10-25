@@ -31,14 +31,16 @@ export interface Campaign {
 	id: number;
 	slug: string;
 	title: string;
-	subtitle: string;
-	icon: IconName;
+	subtitle: string | null;
+	icon: IconName | null;
 	startsAt: string;
 	/** Countdown target. */
 	endsAt: string;
 	/** Server clock — keeps the countdown honest on a skewed device clock. */
 	serverTime?: string;
+	/** Discounted bags with a colour in stock, biggest discount first — up to 24 from `/campaigns/active`, the home page shows 4. */
 	products: ProductSummary[];
+	/** Always `/products?campaign={slug}`. */
 	seeAllUrl: string;
 	isActive: boolean;
 }
@@ -55,20 +57,23 @@ export interface Testimonial {
 	id: number;
 	customerName: string;
 	customerInitial: string;
-	city: string;
+	city: string | null;
 	source: SocialChannel;
 	sourceName: string;
+	/** Plain text. */
 	message: string;
-	messageTime: string;
-	receivedAt: string;
+	/** `HH:mm` on the screenshot. */
+	messageTime: string | null;
+	receivedAt: string | null;
 	rating: number;
 	product: ProductRef;
-	color: Color;
+	color: Color | null;
 	screenshotUrl?: string | null;
 }
 
 export interface TestimonialListResponse {
-	summary: SatisfactionSummary;
+	/** Set by hand in the panel (not computed); `null` until it is. */
+	summary: SatisfactionSummary | null;
 	items: Testimonial[];
 	meta: PageMeta;
 }

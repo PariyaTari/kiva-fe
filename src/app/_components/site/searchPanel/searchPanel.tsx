@@ -15,7 +15,17 @@ import { formatPrice } from "@/utils/format";
 import { withMappedError } from "@/utils/withMappedError";
 import { ERROR_BEHAVIOUR } from "../_utils/apiError";
 
-const DEBOUNCE_MS = 160;
+/** The contract asks for at least 250 ms between typed requests. */
+const DEBOUNCE_MS = 250;
+/** `q` is checked after the server's normalisation: 1 to 100 characters. */
+const QUERY_MAX = 100;
+
+/** What the server would see: a half-space is a space, runs of spaces are one — a query of only those is empty (`SEARCH_QUERY_EMPTY`). */
+const normalizeQuery = (value: string) =>
+	value
+		.replace(/\u200c/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
 
 /** `.kv-search` — the top sheet with live results (`/search/suggest`) and category/colour hints. */
 export default function SearchPanel() {
@@ -30,7 +40,7 @@ export default function SearchPanel() {
 	const [query, setQuery] = useState("");
 
 	useEffect(() => {
-		const t = setTimeout(() => setQuery(term.trim()), DEBOUNCE_MS);
+		const t = setTimeout(() => setQuery(normalizeQuery(term)), DEBOUNCE_MS);
 		return () => clearTimeout(t);
 	}, [term]);
 
@@ -55,7 +65,7 @@ export default function SearchPanel() {
 	});
 
 	const goToResults = () => {
-		const q = term.trim();
+		const q = normalizeQuery(term);
 		if (!q) return;
 		closeAll();
 		router.push(`/products?q=${encodeURIComponent(q)}`);
@@ -63,7 +73,7 @@ export default function SearchPanel() {
 
 	const hintsError = toErrorView(ERROR_BEHAVIOUR, hints.error, "دریافت پیشنهادهای جستجو با خطا مواجه شد.");
 	const suggestError = toErrorView(ERROR_BEHAVIOUR, suggest.error, "جستجو با خطا مواجه شد.");
-	const results = term.trim() ? suggest.data : undefined;
+	const results = normalizeQuery(term) ? suggest.data : undefined;
 
 	return (
 		<div className={classNames("kv-search", { on: isOpen })} id="kvSearch" role="dialog" aria-label="جستجو" aria-hidden={!isOpen}>
@@ -76,6 +86,7 @@ export default function SearchPanel() {
 						type="search"
 						placeholder="اسم کیف، رنگ یا دسته‌بندی رو بنویس…"
 						autoComplete="off"
+						maxLength={QUERY_MAX}
 						value={term}
 						onChange={(e) => setTerm(e.target.value)}
 						onKeyDown={(e) => e.key === "Enter" && goToResults()}
@@ -137,7 +148,7 @@ export default function SearchPanel() {
 							{results.products.map((p, i) => (
 								<Link key={p.id} className="sres" style={{ animationDelay: `${i * 40}ms` }} href={p.url} onClick={closeAll}>
 									<span className="th">
-										<MediaImage src={p.imageUrl} alt={p.name} />
+										<MediaImage src={p.imageUrl} alt={p.name} placeholderColor={p.matchedColorKey ?? "lilac"} />
 									</span>
 									<span>
 										<h5 dangerouslySetInnerHTML={{ __html: p.nameHighlighted }} />

@@ -4,7 +4,7 @@ import { EMPTY_FILTERS } from "@/app/products/_utils/filters";
 import { mapError } from "@/httpClient/utils/mapError";
 import { HomeEndpoints } from "../_api/homeEndpoints";
 import { HomePage } from "../_types/home.type";
-import { FEATURES, HERO, HOW_IT_WORKS, NEW_ARRIVALS_COUNT, PROMOS, TESTIMONIALS_COUNT } from "./homeContent";
+import { FEATURES, HERO, HOW_IT_WORKS, NEW_ARRIVALS_COUNT, PROMOS, SALE_COUNT, TESTIMONIALS_COUNT } from "./homeContent";
 
 /** A section the backend can't serve right now is left out (logged) — the page and the other sections still render. */
 function valueOr<T, F>(result: PromiseSettledResult<T>, fallback: F, section: string): T | F {
@@ -26,13 +26,15 @@ export async function loadHomePage(): Promise<HomePage> {
 		HomeEndpoints.getTestimonials(1, TESTIMONIALS_COUNT),
 	]);
 
+	const campaign = valueOr(sale, null, "campaign");
+
 	return {
 		hero: HERO,
 		features: FEATURES,
 		categories: valueOr(categories, [], "categories"),
 		newArrivals: valueOr(newArrivals, null, "new arrivals")?.items ?? [],
 		promos: PROMOS,
-		sale: valueOr(sale, null, "campaign"),
+		sale: campaign && { ...campaign, products: campaign.products.slice(0, SALE_COUNT) },
 		testimonials: valueOr(testimonials, null, "testimonials"),
 		howItWorks: HOW_IT_WORKS,
 	};

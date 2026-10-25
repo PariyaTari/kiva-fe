@@ -15,6 +15,7 @@ export const EMPTY_FILTERS: ProductFilters = {
 	maxPrice: null,
 	onSale: false,
 	inStock: false,
+	campaign: null,
 };
 
 /** The design's four sort buttons (API sort keys). */
@@ -28,6 +29,8 @@ export const SORT_OPTIONS: { value: ProductSort; label: string }[] = [
 const SORTS = new Set<string>(["newest", "bestselling", "price_asc", "price_desc", "discount_desc", "rating_desc"]);
 const list = (v: string | null) => (v ? v.split(",").map((x) => x.trim()).filter(Boolean) : []);
 const num = (v: string | null) => (v && /^\d+$/.test(v) ? Number(v) : null);
+/** A malformed campaign slug is a `400` — it is dropped instead (like an unknown sort). */
+const slug = (v: string | null) => (v && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v) && v.length <= 60 ? v : null);
 
 /** `/products?category=a,b&color=…&minPrice=…&onSale=true&sort=…` → filter state. */
 export function parseFilters(search: URLSearchParams): { filters: ProductFilters; sort: ProductSort } {
@@ -41,6 +44,7 @@ export function parseFilters(search: URLSearchParams): { filters: ProductFilters
 			maxPrice: num(search.get("maxPrice")),
 			onSale: search.get("onSale") === "true",
 			inStock: search.get("inStock") === "true",
+			campaign: slug(search.get("campaign")),
 		},
 		sort: sort && SORTS.has(sort) ? (sort as ProductSort) : DEFAULT_SORT,
 	};
@@ -56,6 +60,7 @@ export function toSearch(filters: ProductFilters, sort: ProductSort): string {
 	if (filters.maxPrice != null) p.set("maxPrice", String(filters.maxPrice));
 	if (filters.onSale) p.set("onSale", "true");
 	if (filters.inStock) p.set("inStock", "true");
+	if (filters.campaign) p.set("campaign", filters.campaign);
 	if (sort !== DEFAULT_SORT) p.set("sort", sort);
 	const s = p.toString();
 	return s ? `?${s}` : "";
@@ -68,7 +73,8 @@ export const sameFilters = (a: ProductFilters, b: ProductFilters) => JSON.string
  * landing pages of their own; every other combination (colours, price, sort, search) points back to `/products`.
  */
 export function canonicalSearch(filters: ProductFilters): string {
-	const narrowed = filters.q || filters.color.length || filters.minPrice != null || filters.maxPrice != null || filters.inStock;
+	// a campaign's page lives only as long as the campaign — not a landing page of its own
+	const narrowed = filters.q || filters.color.length || filters.minPrice != null || filters.maxPrice != null || filters.inStock || filters.campaign;
 	if (narrowed) return "";
 	if (filters.category.length === 1 && !filters.onSale) return `?category=${encodeURIComponent(filters.category[0])}`;
 	if (!filters.category.length && filters.onSale) return "?onSale=true";

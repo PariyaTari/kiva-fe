@@ -101,6 +101,7 @@ export interface RatingSummary {
 	count: number;
 	/** From 5 stars down to 1. */
 	distribution: { stars: number; count: number; percent: number }[];
+	/** Rounded share of reviews by buyers; `null` for a product without reviews. */
 	verifiedBuyerPercent?: number | null;
 }
 
